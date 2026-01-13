@@ -1,0 +1,301 @@
+{
+  "root": "src",
+  "generatedAt": "2026-01-13T14:51:36.861Z",
+  "tree": [
+    {
+      "name": "app.js",
+      "type": "file",
+      "extension": ".js"
+    },
+    {
+      "name": "config",
+      "type": "directory",
+      "children": [
+        {
+          "name": "ad.js",
+          "type": "file",
+          "extension": ".js"
+        },
+        {
+          "name": "mysql.js",
+          "type": "file",
+          "extension": ".js"
+        },
+        {
+          "name": "oracle.js",
+          "type": "file",
+          "extension": ".js"
+        },
+        {
+          "name": "protheus.js",
+          "type": "file",
+          "extension": ".js"
+        }
+      ]
+    },
+    {
+      "name": "errors",
+      "type": "directory",
+      "children": [
+        {
+          "name": "ValidationError.js",
+          "type": "file",
+          "extension": ".js"
+        }
+      ]
+    },
+    {
+      "name": "middlewares",
+      "type": "directory",
+      "children": [
+        {
+          "name": "authMiddleware.js",
+          "type": "file",
+          "extension": ".js"
+        },
+        {
+          "name": "authorization.js",
+          "type": "file",
+          "extension": ".js"
+        }
+      ]
+    },
+    {
+      "name": "modules",
+      "type": "directory",
+      "children": [
+        {
+          "name": "consinco",
+          "type": "directory",
+          "children": [
+            {
+              "name": "controllers",
+              "type": "directory",
+              "children": []
+            },
+            {
+              "name": "routes.js",
+              "type": "file",
+              "extension": ".js"
+            },
+            {
+              "name": "services",
+              "type": "directory",
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "gpprh",
+          "type": "directory",
+          "children": [
+            {
+              "name": "controllers",
+              "type": "directory",
+              "children": [
+                {
+                  "name": "authController.js",
+                  "type": "file",
+                  "extension": ".js"
+                },
+                {
+                  "name": "gpprhController.js",
+                  "type": "file",
+                  "extension": ".js"
+                }
+              ]
+            },
+            {
+              "name": "domain",
+              "type": "directory",
+              "children": [
+                {
+                  "name": "Jobs",
+                  "type": "directory",
+                  "children": [
+                    {
+                      "name": "Jobs.js",
+                      "type": "file",
+                      "extension": ".js"
+                    },
+                    {
+                      "name": "job-status.enum.js",
+                      "type": "file",
+                      "extension": ".js"
+                    },
+                    {
+                      "name": "job-status.helper.js",
+                      "type": "file",
+                      "extension": ".js"
+                    },
+                    {
+                      "name": "job-status.meta.js",
+                      "type": "file",
+                      "extension": ".js"
+                    }
+                  ]
+                },
+                {
+                  "name": "User.js",
+                  "type": "file",
+                  "extension": ".js"
+                }
+              ]
+            },
+            {
+              "name": "provider",
+              "type": "directory",
+              "children": [
+                {
+                  "name": "GoogleAuthService.js",
+                  "type": "file",
+                  "extension": ".js"
+                },
+                {
+                  "name": "LDAPAuthenticator.js",
+                  "type": "file",
+                  "extension": ".js"
+                }
+              ]
+            },
+            {
+              "name": "repositories",
+              "type": "directory",
+              "children": [
+                {
+                  "name": "jobRepository.js",
+                  "type": "file",
+                  "extension": ".js"
+                },
+                {
+                  "name": "usersRepository.js",
+                  "type": "file",
+                  "extension": ".js"
+                }
+              ]
+            },
+            {
+              "name": "routes.js",
+              "type": "file",
+              "extension": ".js"
+            },
+            {
+              "name": "schema",
+              "type": "directory",
+              "children": [
+                {
+                  "name": "jobSchema.js",
+                  "type": "file",
+                  "extension": ".js"
+                }
+              ]
+            },
+            {
+              "name": "services",
+              "type": "directory",
+              "children": [
+                {
+                  "name": "GpprgService.js",
+                  "type": "file",
+                  "extension": ".js"
+                },
+                {
+                  "name": "JobService.js",
+                  "type": "file",
+                  "extension": ".js"
+                }
+              ]
+            },
+            {
+              "name": "validators",
+              "type": "directory",
+              "children": [
+                {
+                  "name": "jobValidator.js",
+                  "type": "file",
+                  "extension": ".js"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "protheus",
+          "type": "directory",
+          "children": [
+            {
+              "name": "controllers",
+              "type": "directory",
+              "children": [
+                {
+                  "name": "protheusController.js",
+                  "type": "file",
+                  "extension": ".js"
+                }
+              ]
+            },
+            {
+              "name": "queries",
+              "type": "directory",
+              "children": [
+                {
+                  "name": "costCenterRepository.js",
+                  "type": "file",
+                  "extension": ".js"
+                }
+              ]
+            },
+            {
+              "name": "routes.js",
+              "type": "file",
+              "extension": ".js"
+            },
+            {
+              "name": "services",
+              "type": "directory",
+              "children": [
+                {
+                  "name": "protheusService.js",
+                  "type": "file",
+                  "extension": ".js"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "server.js",
+      "type": "file",
+      "extension": ".js"
+    },
+    {
+      "name": "services",
+      "type": "directory",
+      "children": [
+        {
+          "name": "AuthService.js",
+          "type": "file",
+          "extension": ".js"
+        }
+      ]
+    },
+    {
+      "name": "utils",
+      "type": "directory",
+      "children": [
+        {
+          "name": "timeParser.js",
+          "type": "file",
+          "extension": ".js"
+        },
+        {
+          "name": "validateRequiredFields.js",
+          "type": "file",
+          "extension": ".js"
+        }
+      ]
+    }
+  ]
+}
