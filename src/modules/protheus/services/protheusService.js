@@ -1,43 +1,44 @@
 const { poolPromise } = require('../../../config/protheus');
-const { sqlCostCenter, sqlBranch, sqlBranchByCode } = require('../queries/costCenterRepository');
+const { sqlCostCenter, sqlBranch,sqlCompany } = require('../queries/costCenterRepository');
 
-async function getCostCenters() {
+async function getCostCenters(companyCode) {
   try {
     const pool = await poolPromise;
-    const result = await pool.request().query(sqlCostCenter());
+    const result = await pool.request().query(sqlCostCenter(companyCode));
+    if (result.recordset.length === 0) {
+      const err = new Error(`No data for company: ${companyCode}`);
+      err.name = 'NoDataError'; // <- aqui você define o nome
+      throw err;
+    }
     return result.recordset;
   } catch (err) {
-    console.error('Erro ao buscar centros de custo:', err);
     throw err;
   }
 }
 
-async function getBranches() {
+async function getBranches(companyCode) {
   try {
     const pool = await poolPromise;
-    const result = await pool.request().query(sqlBranch());
+    const result = await pool.request().query(sqlBranch(companyCode));
     return result.recordset;
   } catch (err) {
-    console.error('Erro ao buscar filiais:', err);
     throw err;
   }
 }
 
-async function getBranchByCode(code) {
+async function getCompanies() {
   try {
     const pool = await poolPromise;
-    const result = await pool.request()
-      .input('code', code)
-      .query(sqlBranchByCode());
-    return result.recordset[0] || null;
+    const result = await pool.request().query(sqlCompany());
+    return result.recordset;
   } catch (err) {
-    console.error('Erro ao buscar filial por código:', err);
     throw err;
   }
 }
+
 
 module.exports = {
   getCostCenters,
   getBranches,
-  getBranchByCode
+  getCompanies
 };
