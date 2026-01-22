@@ -63,8 +63,8 @@ async function updateJob(req, res) {
 // 🔹 FIND ALL JOBS
 async function findAllJob(req, res) {
   const service = new JobServices();
-  const result = await service.findAll();
-
+  const { codeCandidate } = req.params;
+  const result = await service.findAll(codeCandidate);
   return res.status(200).json({
     error: false,
     data: result
@@ -90,6 +90,17 @@ async function rulesJobStatus(req, res) {
     }
   });
 }
+// 🔹 RULES JOB STATUS
+async function jobLikes(req, res) {
+  const service = new JobServices();
+  const { job_id, candidate_id } = req.body;
+  const data = await service.postLike(job_id, candidate_id );
+
+  return res.status(200).json({
+    error: false,
+    data
+  });
+}
 
 module.exports = {
   listUsers,
@@ -97,5 +108,6 @@ module.exports = {
   updateJob,
   findAllJob,
   listJobStatusesController,
-  rulesJobStatus
+  rulesJobStatus,
+  jobLikes
 };

@@ -16,14 +16,15 @@ router.get('/me', authMiddleware, authController.me);
 // 2 - ROTAS DO BANCO GPPRH
 // 2.1 - ROTAS PRIVADAS:
 router.post('/job', authMiddleware, canAll(['JOB_CREATE']), GrppController.createJob);
-router.put('/job/:codeJob', authMiddleware, canAll(['JOB_UPDATE']), GrppController.updateJob);
+router.put('/job/', authMiddleware, canAll(['JOB_UPDATE']), GrppController.updateJob);
 router.get('/job/status', authMiddleware, canAll(['JOB_STATUS_VIEW']), GrppController.listJobStatusesController);
 router.get('/job-statuses', authMiddleware, canAll(['JOB_STATUS_VIEW']), GrppController.rulesJobStatus);
 
 router.get('/job-comments', authMiddleware, canAll(['CANDIDATE']), GrppController.rulesJobStatus);
-router.get('/job-likes', authMiddleware, canAll(['CANDIDATE']), GrppController.rulesJobStatus);
+router.post('/job-likes', authMiddleware, canAll(['CANDIDATE']), GrppController.jobLikes);
 
 // 2.2 -  ROTAS PUBLICAS:
 router.get('/job', GrppController.findAllJob);
+router.get('/job/:codeCandidate', GrppController.findAllJob);
 
 module.exports = router;

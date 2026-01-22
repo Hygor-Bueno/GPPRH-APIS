@@ -117,7 +117,7 @@ const googleLogin = async (req, res) => {
   );
 
   user.roles = 'CANDIDATE';
-
+  user.permissions = 'CANDIDATE';
   await createSession(res, user);
 
   return res.json({

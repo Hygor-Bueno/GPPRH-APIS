@@ -28,7 +28,6 @@ function canAny(requiredPermissions) {
 function canAll(requiredPermissions = []) {
   return (req, res, next) => {
     const userPermissions = req.user?.permissions || [];
-
     if (userPermissions.includes(MASTER_PERMISSION)) {
       return next();
     }
@@ -52,7 +51,7 @@ function canAll(requiredPermissions = []) {
   };
 }
 
-module.exports ={
-    canAll,
-    canAny
+module.exports = {
+  canAll,
+  canAny
 }

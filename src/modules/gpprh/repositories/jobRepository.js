@@ -3,7 +3,7 @@ const { SQL_FIELDS } = require('../schema/jobSchema');
 
 function sqlInsertJob(data) {
   const entries = verifyEntries(data);
-  const columns = entries.map(value=>value[0]).join(',');
+  const columns = entries.map(value => value[0]).join(',');
   const placeholders = entries.map(() => '?').join(',');
   return `INSERT INTO jobs (${columns}) VALUES (${placeholders})`;
 }
@@ -17,11 +17,39 @@ function sqlUpdateJob(data, whereField = 'id') {
   return sql;
 }
 
-function sqlSelectJob() {
-  return "SELECT * FROM gpprh.jobs  ORDER BY created_at DESC;";
+function sqlSelectJob(idCandidate = null) {
+  const likedByMe = idCandidate
+    ? `EXISTS (
+         SELECT 1
+         FROM gpprh.job_likes jl
+         WHERE jl.job_id = jb.id
+           AND jl.candidate_id = ${idCandidate}
+       )`
+    : `0`;
+  return `
+    SELECT
+        jb.*,
+        IFNULL(lk.likes, 0) AS likes,
+        IFNULL(cms.comments, 0) AS comments,
+        ${likedByMe} AS liked_by_me
+    FROM gpprh.jobs jb
+    LEFT JOIN (
+        SELECT job_id, COUNT(*) AS likes
+        FROM gpprh.job_likes
+        GROUP BY job_id
+    ) lk ON lk.job_id = jb.id
+    LEFT JOIN (
+        SELECT job_id, COUNT(*) AS comments
+        FROM gpprh.job_comments
+        GROUP BY job_id
+    ) cms ON cms.job_id = jb.id
+    WHERE jb.status = 'OPEN'
+    ORDER BY jb.created_at DESC;
+  `;
 }
 
-function sqlOriginStatus(jobId){
+
+function sqlOriginStatus(jobId) {
   return `SELECT status FROM jobs WHERE id = ${jobId};`
 }
 
@@ -43,4 +71,8 @@ function verifyEntries(data) {
   return entries;
 }
 
-module.exports = { sqlInsertJob, sqlSelectJob, buildInsertParams, sqlUpdateJob, sqlOriginStatus };
+function spToggleJobLike() {
+  return "call sp_toggle_job_like(?, ?);";
+}
+
+module.exports = { sqlInsertJob, sqlSelectJob, buildInsertParams, sqlUpdateJob, sqlOriginStatus, spToggleJobLike };
