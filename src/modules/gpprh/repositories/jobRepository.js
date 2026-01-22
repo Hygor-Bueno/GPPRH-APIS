@@ -18,7 +18,7 @@ function sqlUpdateJob(data, whereField = 'id') {
 }
 
 function sqlSelectJob() {
-  return "SELECT * FROM gpprh.jobs ORDER BY created_at DESC;";
+  return "SELECT * FROM gpprh.jobs  ORDER BY created_at DESC;";
 }
 
 function sqlOriginStatus(jobId){

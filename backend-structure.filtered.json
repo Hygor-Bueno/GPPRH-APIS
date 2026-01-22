@@ -195,7 +195,7 @@
               "type": "directory",
               "children": [
                 {
-                  "name": "GpprgService.js",
+                  "name": "GpprhService.js",
                   "type": "file",
                   "extension": ".js"
                 },

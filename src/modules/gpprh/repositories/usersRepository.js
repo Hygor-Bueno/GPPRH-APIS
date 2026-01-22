@@ -6,7 +6,17 @@ function spAdLoginUser() {
   return "call sp_ad_login_user(?, ?, ?);";
 }
 
+function sqlCandidate() {
+  return "select * from candidates where id = ?;";
+}
+
+function spCandidateLogin() {
+  return "call sp_candidate_login(?, ?);";
+}
+
 module.exports = {
   sqlUsers,
-  spAdLoginUser
+  sqlCandidate,
+  spAdLoginUser,
+  spCandidateLogin
 };

@@ -1,5 +1,7 @@
 const ldap = require('ldapjs');
 const adConfig = require('../../../config/ad');
+const { UnauthorizedError } = require('../../../errors/UnauthorizedError');
+const { AppError } = require('../../../errors/AppError');
 
 class LDAPAuthenticator {
   constructor(username, password) {
@@ -8,7 +10,6 @@ class LDAPAuthenticator {
     this.username = username;
     this.password = password;
     this.searchBase = adConfig.baseDN;
-
     this.bindDN = `${this.domain}\\${this.username}`;
   }
 
@@ -21,7 +22,7 @@ class LDAPAuthenticator {
     });
   }
 
-  async bind(client, dn, password) {
+  bind(client, dn, password) {
     return new Promise((resolve, reject) => {
       client.bind(dn, password, err => {
         if (err) return reject(err);
@@ -31,16 +32,23 @@ class LDAPAuthenticator {
   }
 
   async authenticateUser() {
-    /** ===============================
-     *  CLIENT 1 — BUSCA DO USUÁRIO
-     *  =============================== */
+    /**
+     * ===============================
+     * CLIENT 1 — SEARCH USER
+     * ===============================
+     */
     const searchClient = this.createClient();
 
     searchClient.on('error', err => {
-      console.error('LDAP search client error:', err);
+      console.error('[LDAP][SEARCH]', err);
     });
 
-    await this.bind(searchClient, this.bindDN, this.password);
+    // 🔐 bind inicial (valida usuário/senha)
+    try {
+      await this.bind(searchClient, this.bindDN, this.password);
+    } catch (err) {
+      throw new UnauthorizedError('Invalid username or password');
+    }
 
     const opts = {
       filter: `(sAMAccountName=${this.username})`,
@@ -91,30 +99,44 @@ class LDAPAuthenticator {
     searchClient.unbind();
 
     if (!user) {
-      throw new Error('Usuário não encontrado no AD');
+      throw new UnauthorizedError('User not found in Active Directory');
     }
 
-    /** ===============================
-     *  CLIENT 2 — VALIDA CREDENCIAL
-     *  =============================== */
+    /**
+     * ===============================
+     * CLIENT 2 — VALIDATE PASSWORD
+     * ===============================
+     */
     const authClient = this.createClient();
 
     authClient.on('error', err => {
-      console.error('LDAP auth client error:', err);
+      console.error('[LDAP][AUTH]', err);
     });
 
     try {
       await this.bind(authClient, user.dn, this.password);
     } catch (err) {
-      throw new Error('Credenciais inválidas');
+      throw new UnauthorizedError('Invalid username or password');
     } finally {
       authClient.unbind();
+    }
+
+    /**
+     * ===============================
+     * ACCOUNT STATUS VALIDATION
+     * ===============================
+     */
+    const isDisabled = user.userAccountControl & 2;
+
+    if (isDisabled) {
+      throw new AppError('User account is disabled', 403);
     }
 
     return {
       name: user.cn,
       guid: user.objectGUID,
-      isActive: !(user.userAccountControl & 2)
+      email: user.mail,
+      isActive: !isDisabled
     };
   }
 }

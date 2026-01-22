@@ -22,6 +22,22 @@ const protheusRoutes = require('./modules/protheus/routes');
 app.use('/protheus', protheusRoutes);
 
 const gpprhRoutes = require('./modules/gpprh/routes');
+const { errorHandler } = require('./middlewares/error.middleware');
 app.use('/gpprh', gpprhRoutes);
+
+/**
+ * 🔹 404 (rota não encontrada)
+ * Deve vir ANTES do errorHandler
+ */
+app.use((req, res, next) => {
+  const err = new Error(`Route ${req.originalUrl} not found`);
+  err.statusCode = 404;
+  next(err);
+});
+
+/**
+ * 🔹 Error middleware (SEMPRE por último)
+ */
+app.use(errorHandler);
 
 module.exports = app;
