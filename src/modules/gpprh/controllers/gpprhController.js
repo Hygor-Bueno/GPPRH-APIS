@@ -90,12 +90,42 @@ async function rulesJobStatus(req, res) {
     }
   });
 }
-// 🔹 RULES JOB STATUS
+
 async function jobLikes(req, res) {
   const service = new JobServices();
   const { job_id, candidate_id } = req.body;
   const data = await service.postLike(job_id, candidate_id );
 
+  return res.status(200).json({
+    error: false,
+    data
+  });
+}
+
+async function jobApplication(req, res) {
+  const service = new JobServices();
+  const { job_id, candidate_id } = req.body;
+  const data = await service.postJobApplication(job_id, candidate_id );
+  return res.status(200).json({
+    error: false,
+    data
+  });
+}
+
+async function jobComments(req, res) {
+  const service = new JobServices();
+  const { job_id, candidate_id, comment } = req.body;
+  const data = await service.postComments(job_id, candidate_id, comment);
+  return res.status(200).json({
+    error: false,
+    data
+  });
+}
+
+async function jobCommentsView(req, res) {
+  const service = new JobServices();
+  const { codeJob } = req.params;
+  const data = await service.getAllComments(codeJob);
   return res.status(200).json({
     error: false,
     data
@@ -109,5 +139,8 @@ module.exports = {
   findAllJob,
   listJobStatusesController,
   rulesJobStatus,
-  jobLikes
+  jobLikes,
+  jobApplication,
+  jobComments,
+  jobCommentsView
 };

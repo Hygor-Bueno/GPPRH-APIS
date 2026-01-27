@@ -20,8 +20,11 @@ router.put('/job/', authMiddleware, canAll(['JOB_UPDATE']), GrppController.updat
 router.get('/job/status', authMiddleware, canAll(['JOB_STATUS_VIEW']), GrppController.listJobStatusesController);
 router.get('/job-statuses', authMiddleware, canAll(['JOB_STATUS_VIEW']), GrppController.rulesJobStatus);
 
-router.get('/job-comments', authMiddleware, canAll(['CANDIDATE']), GrppController.rulesJobStatus);
+router.get('/job-status-rules', authMiddleware, canAll(['CANDIDATE']), GrppController.rulesJobStatus);
 router.post('/job-likes', authMiddleware, canAll(['CANDIDATE']), GrppController.jobLikes);
+router.post('/job-application', authMiddleware, canAll(['CANDIDATE']), GrppController.jobApplication);
+router.post('/job-comments', authMiddleware, canAll(['CANDIDATE']), GrppController.jobComments);
+router.get('/:codeJob/job-comments', authMiddleware, canAll(['CANDIDATE']), GrppController.jobCommentsView);
 
 // 2.2 -  ROTAS PUBLICAS:
 router.get('/job', GrppController.findAllJob);
