@@ -1,11 +1,28 @@
 {
   "root": "src",
-  "generatedAt": "2026-01-13T14:51:36.861Z",
+  "generatedAt": "2026-04-06T17:58:07.415Z",
   "tree": [
     {
       "name": "app.js",
       "type": "file",
       "extension": ".js"
+    },
+    {
+      "name": "application",
+      "type": "directory",
+      "children": [
+        {
+          "name": "auth",
+          "type": "directory",
+          "children": [
+            {
+              "name": "auth-session.service.js",
+              "type": "file",
+              "extension": ".js"
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "config",
@@ -30,6 +47,11 @@
           "name": "protheus.js",
           "type": "file",
           "extension": ".js"
+        },
+        {
+          "name": "sqlserver.js",
+          "type": "file",
+          "extension": ".js"
         }
       ]
     },
@@ -38,9 +60,46 @@
       "type": "directory",
       "children": [
         {
-          "name": "ValidationError.js",
+          "name": "app.error.js",
           "type": "file",
           "extension": ".js"
+        },
+        {
+          "name": "bad-request.error.js",
+          "type": "file",
+          "extension": ".js"
+        },
+        {
+          "name": "unauthorized.error.js",
+          "type": "file",
+          "extension": ".js"
+        },
+        {
+          "name": "validation.error.js",
+          "type": "file",
+          "extension": ".js"
+        }
+      ]
+    },
+    {
+      "name": "infra",
+      "type": "directory",
+      "children": [
+        {
+          "name": "auth",
+          "type": "directory",
+          "children": [
+            {
+              "name": "jwt.service.js",
+              "type": "file",
+              "extension": ".js"
+            },
+            {
+              "name": "ldap-auth.service.js",
+              "type": "file",
+              "extension": ".js"
+            }
+          ]
         }
       ]
     },
@@ -49,12 +108,22 @@
       "type": "directory",
       "children": [
         {
-          "name": "authMiddleware.js",
+          "name": "auth.middleware.js",
           "type": "file",
           "extension": ".js"
         },
         {
-          "name": "authorization.js",
+          "name": "error.middleware.js",
+          "type": "file",
+          "extension": ".js"
+        },
+        {
+          "name": "permission.middleware.js",
+          "type": "file",
+          "extension": ".js"
+        },
+        {
+          "name": "upload.middleware.js",
           "type": "file",
           "extension": ".js"
         }
@@ -86,7 +155,7 @@
           ]
         },
         {
-          "name": "gpprh",
+          "name": "global",
           "type": "directory",
           "children": [
             {
@@ -94,12 +163,22 @@
               "type": "directory",
               "children": [
                 {
-                  "name": "authController.js",
+                  "name": "auth.controller.js",
                   "type": "file",
                   "extension": ".js"
                 },
                 {
-                  "name": "gpprhController.js",
+                  "name": "clpp.controller.js",
+                  "type": "file",
+                  "extension": ".js"
+                },
+                {
+                  "name": "employee.controller.js",
+                  "type": "file",
+                  "extension": ".js"
+                },
+                {
+                  "name": "gipp-rh.controller.js",
                   "type": "file",
                   "extension": ".js"
                 }
@@ -110,14 +189,90 @@
               "type": "directory",
               "children": [
                 {
-                  "name": "Jobs",
+                  "name": "user.entity.js",
+                  "type": "file",
+                  "extension": ".js"
+                }
+              ]
+            },
+            {
+              "name": "repositories",
+              "type": "directory",
+              "children": [
+                {
+                  "name": "mysql",
+                  "type": "directory",
+                  "children": []
+                },
+                {
+                  "name": "sqlserver",
                   "type": "directory",
                   "children": [
                     {
-                      "name": "Jobs.js",
+                      "name": "gipp-rh.repository.js",
                       "type": "file",
                       "extension": ".js"
-                    },
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "routes.js",
+              "type": "file",
+              "extension": ".js"
+            },
+            {
+              "name": "services",
+              "type": "directory",
+              "children": [
+                {
+                  "name": "auth.service.js",
+                  "type": "file",
+                  "extension": ".js"
+                },
+                {
+                  "name": "employee.service.js",
+                  "type": "file",
+                  "extension": ".js"
+                },
+                {
+                  "name": "gipp-rh.service.js",
+                  "type": "file",
+                  "extension": ".js"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "gpprh",
+          "type": "directory",
+          "children": [
+            {
+              "name": "controllers",
+              "type": "directory",
+              "children": [
+                {
+                  "name": "auth.controller.js",
+                  "type": "file",
+                  "extension": ".js"
+                },
+                {
+                  "name": "gpprh.controller.js",
+                  "type": "file",
+                  "extension": ".js"
+                }
+              ]
+            },
+            {
+              "name": "domain",
+              "type": "directory",
+              "children": [
+                {
+                  "name": "jobs",
+                  "type": "directory",
+                  "children": [
                     {
                       "name": "job-status.enum.js",
                       "type": "file",
@@ -132,27 +287,42 @@
                       "name": "job-status.meta.js",
                       "type": "file",
                       "extension": ".js"
+                    },
+                    {
+                      "name": "job-status.transitions.js",
+                      "type": "file",
+                      "extension": ".js"
+                    },
+                    {
+                      "name": "job.contract.js",
+                      "type": "file",
+                      "extension": ".js"
+                    },
+                    {
+                      "name": "job.entity.js",
+                      "type": "file",
+                      "extension": ".js"
+                    },
+                    {
+                      "name": "job.fields.js",
+                      "type": "file",
+                      "extension": ".js"
                     }
                   ]
                 },
                 {
-                  "name": "User.js",
+                  "name": "user.entity.js",
                   "type": "file",
                   "extension": ".js"
                 }
               ]
             },
             {
-              "name": "provider",
+              "name": "providers",
               "type": "directory",
               "children": [
                 {
-                  "name": "GoogleAuthService.js",
-                  "type": "file",
-                  "extension": ".js"
-                },
-                {
-                  "name": "LDAPAuthenticator.js",
+                  "name": "google-auth.service.js",
                   "type": "file",
                   "extension": ".js"
                 }
@@ -163,12 +333,12 @@
               "type": "directory",
               "children": [
                 {
-                  "name": "jobRepository.js",
+                  "name": "job.repository.js",
                   "type": "file",
                   "extension": ".js"
                 },
                 {
-                  "name": "usersRepository.js",
+                  "name": "user.repository.js",
                   "type": "file",
                   "extension": ".js"
                 }
@@ -180,27 +350,16 @@
               "extension": ".js"
             },
             {
-              "name": "schema",
-              "type": "directory",
-              "children": [
-                {
-                  "name": "jobSchema.js",
-                  "type": "file",
-                  "extension": ".js"
-                }
-              ]
-            },
-            {
               "name": "services",
               "type": "directory",
               "children": [
                 {
-                  "name": "GpprhService.js",
+                  "name": "gpprh.service.js",
                   "type": "file",
                   "extension": ".js"
                 },
                 {
-                  "name": "JobService.js",
+                  "name": "job.service.js",
                   "type": "file",
                   "extension": ".js"
                 }
@@ -211,7 +370,7 @@
               "type": "directory",
               "children": [
                 {
-                  "name": "jobValidator.js",
+                  "name": "job.validator.js",
                   "type": "file",
                   "extension": ".js"
                 }
@@ -228,18 +387,18 @@
               "type": "directory",
               "children": [
                 {
-                  "name": "protheusController.js",
+                  "name": "protheus.controller.js",
                   "type": "file",
                   "extension": ".js"
                 }
               ]
             },
             {
-              "name": "queries",
+              "name": "repositories",
               "type": "directory",
               "children": [
                 {
-                  "name": "costCenterRepository.js",
+                  "name": "cost-center.repository.js",
                   "type": "file",
                   "extension": ".js"
                 }
@@ -255,7 +414,7 @@
               "type": "directory",
               "children": [
                 {
-                  "name": "protheusService.js",
+                  "name": "protheus.service.js",
                   "type": "file",
                   "extension": ".js"
                 }
@@ -271,27 +430,74 @@
       "extension": ".js"
     },
     {
-      "name": "services",
+      "name": "utils",
       "type": "directory",
       "children": [
         {
-          "name": "AuthService.js",
+          "name": "date-converter.js",
+          "type": "file",
+          "extension": ".js"
+        },
+        {
+          "name": "time-parser.js",
+          "type": "file",
+          "extension": ".js"
+        },
+        {
+          "name": "validate-required-fields.js",
           "type": "file",
           "extension": ".js"
         }
       ]
     },
     {
-      "name": "utils",
+      "name": "websocket",
       "type": "directory",
       "children": [
         {
-          "name": "timeParser.js",
+          "name": "connectionManager.js",
           "type": "file",
           "extension": ".js"
         },
         {
-          "name": "validateRequiredFields.js",
+          "name": "eventBus.js",
+          "type": "file",
+          "extension": ".js"
+        },
+        {
+          "name": "eventQueue.js",
+          "type": "file",
+          "extension": ".js"
+        },
+        {
+          "name": "events",
+          "type": "directory",
+          "children": [
+            {
+              "name": "chat.event.js",
+              "type": "file",
+              "extension": ".js"
+            },
+            {
+              "name": "notification.event.js",
+              "type": "file",
+              "extension": ".js"
+            }
+          ]
+        },
+        {
+          "name": "routes",
+          "type": "directory",
+          "children": [
+            {
+              "name": "event.routes.js",
+              "type": "file",
+              "extension": ".js"
+            }
+          ]
+        },
+        {
+          "name": "websocketServer.js",
           "type": "file",
           "extension": ".js"
         }

@@ -253,8 +253,8 @@ function sqlGetReceipt(employeeCode, branchCode, referenceInit, referenceTwo) {
     if (referenceInit) where.push(`c.reference between ${referenceInit} AND ${referenceTwo ? referenceTwo : referenceInit}`);
 
     const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
-    console.log(where);
-    return `
+    
+    const sql = `
             SELECT
             c.employee_code,
             emp.RA_NOME AS name,
@@ -291,6 +291,8 @@ function sqlGetReceipt(employeeCode, branchCode, referenceInit, referenceTwo) {
             c.branch_name
         ORDER BY c.reference DESC;
     `;
+    console.log(sql);
+    return sql;
 }
 module.exports = {
     sqlEmployeesCompensations,
