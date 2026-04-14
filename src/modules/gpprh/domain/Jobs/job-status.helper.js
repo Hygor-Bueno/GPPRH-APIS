@@ -8,6 +8,4 @@ function listJobStatuses() {
   }));
 }
 
-module.exports = {
-  listJobStatuses,
-};
+module.exports = { listJobStatuses };

@@ -7,10 +7,20 @@ const poolGpprh = mysql.createPool({
   password: process.env.MYSQL_PASSWORD,
   database: process.env.MYSQL_DATABASE,
   port: Number(process.env.MYSQL_PORT || 3306),
-
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
 });
 
-module.exports = poolGpprh;
+const poolGlobal = mysql.createPool({
+  host: process.env.MYSQL_GLOBAL_HOST,
+  user: process.env.MYSQL_GLOBAL_USER,
+  password: process.env.MYSQL_GLOBAL_PASSWORD,
+  database: process.env.MYSQL_GLOBAL_DATABASE,
+  port: Number(process.env.MYSQL_GLOBAL_PORT || 3306),
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+});
+
+module.exports = { poolGpprh, poolGlobal };

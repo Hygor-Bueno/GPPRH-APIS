@@ -5,4 +5,5 @@ const JobStatus = Object.freeze({
   CLOSED: 'CLOSED',
   CANCELLED: 'CANCELLED',
 });
+
 module.exports = { JobStatus };

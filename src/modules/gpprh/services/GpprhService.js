@@ -1,4 +1,4 @@
-const poolGpprh = require('../../../config/mysql');
+const { poolGpprh } = require('../../../config/mysql');
 const { sqlUsers, spAdLoginUser, sqlCandidate, spCandidateLogin } = require('../repositories/usersRepository');
 
 class GpprhService {

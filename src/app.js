@@ -10,7 +10,7 @@ app.use(cookieParser());
 
 // CORS - permitir credenciais (cookies)
 app.use(cors({
-  origin: ["http://localhost:3000", "https://vagas.gpprh.com.br"],
+  origin: ["http://localhost:3000", "http://localhost:5173", "https://vagas.gpprh.com.br"],
   methods: ["GET","POST","PUT","DELETE","OPTIONS"],
   allowedHeaders: ["Content-Type","Authorization"],
   credentials: true
@@ -18,6 +18,9 @@ app.use(cors({
 
 
 // Rotas dos módulos
+const globalRoutes = require('./modules/global/routes');
+app.use('/global', globalRoutes);
+
 const protheusRoutes = require('./modules/protheus/routes');
 app.use('/protheus', protheusRoutes);
 

@@ -1,0 +1,153 @@
+const {poolGpprh} = require('../../../config/mysql');
+const { sqlInsertJob, sqlSelectJob, buildInsertParams, sqlUpdateJob, buildUpdateParams, sqlOriginStatus, spToggleJobLike, spToggleJobApplication, sqlInsertJobComments, sqlSelectJobComments, sqlSelectJobApplication } = require('../repositories/job.repository');
+const { JobService } = require('../domain/jobs/job.entity');
+const { JOB_STATUS_META } = require('../domain/jobs/job-status.meta');
+const { AppError } = require('../../../errors/app.error');
+
+class JobServices {
+  async create(jobData, created_by) {
+    let conn;
+    try {
+      const job = new JobService({
+        ...jobData,
+        created_by
+      });
+
+      conn = await poolGpprh.getConnection();
+      const [result] = await conn.execute(
+        sqlInsertJob(job),
+        buildInsertParams(job)
+      );
+
+      return result;
+    } catch (error) {
+      throw new AppError(error.message, 400);
+    } finally {
+      if (conn) conn.release();
+    }
+  }
+
+  async update(jobData) {
+    let conn;
+    try {
+      const job = new JobService(jobData);
+      conn = await poolGpprh.getConnection();
+
+      const [req] = await conn.execute(
+        sqlOriginStatus(), [job.id]
+      );
+
+      const originalStatus = req[0]?.status;
+      originalStatus && job.validateStatusJob(originalStatus);
+
+      const [result] = await conn.execute(
+        sqlUpdateJob(job), buildUpdateParams(job)
+      );
+
+      return result;
+    } catch (error) {
+      throw new AppError(error.message, 409);
+    } finally {
+      if (conn) conn.release();
+    }
+  }
+
+  async postLike(job_id, candidate_id) {
+    let conn;
+    try {
+      conn = await poolGpprh.getConnection();
+      const [req] = await conn.execute(
+        spToggleJobLike(),
+        [job_id, candidate_id]
+      );
+      return req[0];
+    } catch (error) {
+      throw new AppError(error.message, 409);
+    } finally {
+      if (conn) conn.release();
+    }
+  }
+  
+  async postComments(job_id, candidate_id, comment) {
+    let conn;
+    try {
+      conn = await poolGpprh.getConnection();
+      const [req] = await conn.execute(
+        sqlInsertJobComments(),
+        [job_id, candidate_id, comment]
+      );
+      return req[0];
+    } catch (error) {
+      throw new AppError(error.message, 409);
+    } finally {
+      if (conn) conn.release();
+    }
+  }
+
+  async getAllComments(codeJob) {
+    let conn;
+    try {
+      conn = await poolGpprh.getConnection();
+      const [req] = await conn.execute(sqlSelectJobComments(), [codeJob]);
+      return req;
+    } catch (error) {
+      throw new AppError(error.message, 409);
+    } finally {
+      if (conn) conn.release();
+    }
+  }
+
+  async postJobApplication(job_id, candidate_id) {
+    let conn;
+    try {
+      conn = await poolGpprh.getConnection();
+      const [req] = await conn.execute(
+        spToggleJobApplication(),
+        [candidate_id, job_id]
+      );
+      return req[0];
+    } catch (error) {
+      throw new AppError(error.message, 409);
+    } finally {
+      if (conn) conn.release();
+    }
+  }
+
+  async getJobApplication(candidate_id) {
+    let conn;
+    try {
+      conn = await poolGpprh.getConnection();
+      const [req] = await conn.execute(
+        sqlSelectJobApplication(),
+        [candidate_id]
+      );
+      return req;
+    } catch (error) {
+      throw new AppError(error.message, 409);
+    } finally {
+      if (conn) conn.release();
+    }
+  }
+
+  async findAll(codeCandidate) {
+    let conn;
+    try {
+      conn = await poolGpprh.getConnection();
+      const [result] = await conn.execute(
+        sqlSelectJob(codeCandidate)
+      );
+      return result;
+    } catch (error) {
+      throw new AppError(error.message, 500);
+    } finally {
+      if (conn) conn.release();
+    }
+  }
+
+  async findStatusJob(status) {
+    return !JOB_STATUS_META[status]?.isFinal;
+  }
+}
+
+module.exports = { JobServices };
+

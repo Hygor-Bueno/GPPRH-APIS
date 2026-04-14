@@ -1,4 +1,4 @@
-const poolGpprh = require('../../../config/mysql');
+const { poolGpprh } = require('../../../config/mysql');
 const { sqlInsertJob, sqlSelectJob, buildInsertParams, sqlUpdateJob, sqlOriginStatus, spToggleJobLike, spToggleJobApplication, sqlInsertJobComments, sqlSelectJobComments } = require('../repositories/jobRepository');
 const { Jobs } = require('../domain/Jobs/Jobs');
 const { JOB_STATUS_META } = require('../domain/Jobs/job-status.meta');
