@@ -11,6 +11,7 @@ const config = {
     encrypt: (process.env.GIPP_SQLSERVER_DB_OPTIONS_ENCRYPT === 'true'),
     enableArithAbort: true
   },
+  requestTimeout: 60000,
   pool: {
     max: 10,
     min: 0,

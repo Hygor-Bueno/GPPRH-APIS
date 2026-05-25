@@ -7,13 +7,20 @@ const logoDataUri = `data:image/svg+xml;base64,${Buffer
   .from(fs.readFileSync(logoPath, "utf-8"))
   .toString("base64")}`;
 
+const _moneyFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 function formatMoney(value) {
   const num =
     typeof value === "number"
       ? value
       : Number(String(value || 0).replace(",", "."));
 
-  return "R$ " + (num || 0).toFixed(2).replace(".", ",");
+  return _moneyFormatter.format(num || 0);
 }
 
 function gerarItensHtml(itens = []) {

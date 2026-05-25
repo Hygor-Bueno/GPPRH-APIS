@@ -19,7 +19,12 @@ async function getCostCenters(companyCode) {
 async function getBranches(companyCode) {
   try {
     const pool = await poolPromise;
-    const result = await pool.request().query(sqlBranch(companyCode));
+    const { sql, params } = sqlBranch(companyCode);
+    const request = pool.request();
+    for (const [key, value] of Object.entries(params)) {
+      request.input(key, value);
+    }
+    const result = await request.query(sql);
     return result.recordset;
   } catch (err) {
     throw err;

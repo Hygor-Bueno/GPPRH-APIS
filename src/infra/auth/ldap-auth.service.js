@@ -76,10 +76,17 @@ class LDAPAuthenticator {
         if (err) return reject(err);
 
         res.on('searchEntry', entry => {
+          // entry.attributes → Attribute[] com .buffers (bytes brutos) e .values (UTF-8 decodificado)
+          // entry.pojo.attributes → objetos com .values já decodificados como UTF-8 (corrompido para binários)
           const attributes = {};
-          entry.pojo.attributes.forEach(attr => {
+          for (const attr of entry.attributes) {
             attributes[attr.type.toLowerCase()] = attr.values;
-          });
+          }
+
+          // objectGUID é binário puro (16 bytes). @ldapjs/attribute decodifica via UTF-8 por padrão,
+          // corrompendo bytes inválidos em U+FFFD (0xEFBFBD). Usamos .buffers[0] para os bytes reais.
+          const guidAttr = entry.attributes.find(a => a.type.toLowerCase() === 'objectguid');
+          const rawGuidBuffer = guidAttr?.buffers?.[0];
 
           found = {
             dn: entry.pojo.objectName,
@@ -87,9 +94,7 @@ class LDAPAuthenticator {
             displayName: attributes.displayname?.[0],
             mail: attributes.mail?.[0],
             memberOf: attributes.memberof || [],
-            objectGUID: attributes.objectguid
-              ? Buffer.from(attributes.objectguid[0]).toString('hex')
-              : null,
+            objectGUID: rawGuidBuffer ? rawGuidBuffer.toString('hex') : null,
             userAccountControl: attributes.useraccountcontrol
               ? parseInt(attributes.useraccountcontrol[0], 10)
               : undefined

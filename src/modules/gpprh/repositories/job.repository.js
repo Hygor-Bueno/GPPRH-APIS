@@ -25,23 +25,23 @@ function buildUpdateParams(data, whereField = 'id') {
 }
 
 function sqlSelectJob(idCandidate = null) {
-  const likedByMe = idCandidate
+  const likedByMe = idCandidate != null
     ? `EXISTS (
          SELECT 1
          FROM gpprh.job_likes jl
          WHERE jl.job_id = jb.id
-           AND jl.candidate_id = ${idCandidate}
+           AND jl.candidate_id = ?
        )`
     : `0`;
-  const applicatedByMe = idCandidate
+  const applicatedByMe = idCandidate != null
     ? `EXISTS (
          SELECT 1
          FROM gpprh.applications apc
          WHERE apc.job_id = jb.id
-           AND apc.candidate_id = ${idCandidate}
+           AND apc.candidate_id = ?
        )`
     : `0`;
-  return `
+  const sql = `
     SELECT
         jb.*,
         IFNULL(lk.likes, 0) AS likes,
@@ -68,6 +68,8 @@ function sqlSelectJob(idCandidate = null) {
     WHERE jb.status = 'OPEN'
     ORDER BY jb.created_at DESC;
   `;
+  const params = idCandidate != null ? [idCandidate, idCandidate] : [];
+  return { sql, params };
 }
 
 // recupera o status original do job antes de atualizar

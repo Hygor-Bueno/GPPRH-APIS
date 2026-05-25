@@ -1,20 +1,34 @@
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require("cookie-parser");
+const { apiLimiter } = require('./middlewares/rate-limit.middleware');
 
 const app = express();
+
+// Necessário quando a API está atrás de um proxy reverso (nginx, etc.)
+// Permite que express-rate-limit use o IP real do cliente via X-Forwarded-For
+app.set('trust proxy', 1);
 
 // Carregar middlewares básicos
 app.use(express.json());
 app.use(cookieParser());
 
-// CORS - permitir credenciais (cookies)
-app.use(cors({
-  origin: ["http://localhost:3000", "http://localhost:5173", "https://vagas.gpprh.com.br"],
-  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
-  allowedHeaders: ["Content-Type","Authorization"],
+// CORS deve vir ANTES do rate limiter para que respostas 429
+// também incluam os headers de CORS (evita falso erro de CORS no browser)
+const corsOptions = {
+  origin: ["http://localhost:3000", "http://localhost:5173", "https://vagas.gpprh.com.br", "http://10.10.10.99"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
-}));
+};
+
+// Responde preflights OPTIONS explicitamente antes de qualquer outra rota
+// Express 5 não aceita '*' como wildcard — usa regex
+app.options(/.*/, cors(corsOptions));
+app.use(cors(corsOptions));
+
+// Rate limiting geral (200 req/IP a cada 15 min)
+app.use(apiLimiter);
 
 
 // Rotas dos módulos
@@ -27,6 +41,9 @@ app.use('/protheus', protheusRoutes);
 const gpprhRoutes = require('./modules/gpprh/routes');
 const { errorHandler } = require('./middlewares/error.middleware');
 app.use('/gpprh', gpprhRoutes);
+
+const gippRoutes = require('./modules/gipp/routes');
+app.use('/gipp', gippRoutes);
 
 /**
  * 🔹 404 (rota não encontrada)

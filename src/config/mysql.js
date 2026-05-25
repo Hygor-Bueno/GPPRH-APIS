@@ -23,4 +23,15 @@ const poolGlobal = mysql.createPool({
   queueLimit: 0,
 });
 
-module.exports = { poolGpprh, poolGlobal };
+const poolGippMySQL = mysql.createPool({
+  host: process.env.MYSQL_GIPP_HOST,
+  user: process.env.MYSQL_GIPP_USER,
+  password: process.env.MYSQL_GIPP_PASSWORD,
+  database: process.env.MYSQL_GIPP_DATABASE,
+  port: Number(process.env.MYSQL_GIPP_PORT || 3306),
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+});
+
+module.exports = { poolGpprh, poolGlobal, poolGippMySQL };

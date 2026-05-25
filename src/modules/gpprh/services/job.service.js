@@ -133,9 +133,8 @@ class JobServices {
     let conn;
     try {
       conn = await poolGpprh.getConnection();
-      const [result] = await conn.execute(
-        sqlSelectJob(codeCandidate)
-      );
+      const { sql, params } = sqlSelectJob(codeCandidate);
+      const [result] = await conn.execute(sql, params);
       return result;
     } catch (error) {
       throw new AppError(error.message, 500);

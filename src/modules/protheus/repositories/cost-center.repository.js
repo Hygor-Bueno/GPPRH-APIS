@@ -1,5 +1,8 @@
 // repositório que apenas retorna SQL (padrão que você usa)
 function sqlCostCenter(company_code) {
+    if (!/^\d+$/.test(String(company_code))) {
+        throw new Error('Invalid company_code: must be numeric');
+    }
     return `
     SELECT
       LTRIM(RTRIM(CC.CTT_CUSTO)) AS costCenterCode,
@@ -9,14 +12,17 @@ function sqlCostCenter(company_code) {
   `;
 }
 function sqlCompanyBranchByBranchCode(branch_code) {
-    return `
+    return {
+        sql: `
     SELECT
         M0_CODIGO,
         M0_NOMECOM,
         M0_CODFIL,
-        M0_FILIAL 
-    FROM TMPPRD12.dbo.SYS_COMPANY WHERE M0_CODFIL = '${branch_code}';
-  `;
+        M0_FILIAL
+    FROM TMPPRD12.dbo.SYS_COMPANY WHERE M0_CODFIL = @branch_code;
+  `,
+        params: { branch_code }
+    };
 }
 function sqlCompany() {
     return `SELECT * FROM (
@@ -28,13 +34,14 @@ function sqlCompany() {
           ) company ORDER BY company_name;`;
 }
 function sqlMapUserWithOrganization(registration) {
-    return `SELECT
+    return {
+        sql: `SELECT
                 LTRIM(RTRIM(CC.CTT_CUSTO)) AS CTT_CUSTO,
                 LTRIM(RTRIM(CC.CTT_DESC01)) AS CTT_DESC01,
                 M0_CODIGO,
                 M0_NOMECOM,
                 M0_CODFIL,
-                M0_FILIAL 
+                M0_FILIAL
 
             FROM TMPPRD12.dbo.SRA020 RH
 
@@ -44,13 +51,16 @@ function sqlMapUserWithOrganization(registration) {
                 INNER JOIN TMPPRD12.dbo.SYS_COMPANY COMP
                 ON RH.RA_FILIAL = COMP.M0_CODFIL
 
-            WHERE	RH.RA_MAT LIKE '${registration}' AND 
-                    RH.D_E_L_E_T_ <> '*' AND 
-                    RH.RA_DEMISSA = '';`;
+            WHERE RH.RA_MAT LIKE @registration AND
+                    RH.D_E_L_E_T_ <> '*' AND
+                    RH.RA_DEMISSA = '';`,
+        params: { registration }
+    };
 }
 
 function sqlBranch(company_code) {
-    return `SELECT
+    return {
+        sql: `SELECT
           LTRIM(RTRIM(CP.M0_CODIGO))  AS company_code,
           LTRIM(RTRIM(CP.M0_FILIAL))  AS company_name,
           LTRIM(RTRIM(CP.M0_CODFIL))  AS branch_code,
@@ -62,22 +72,22 @@ function sqlBranch(company_code) {
           LTRIM(RTRIM(CP.M0_CEPENT))  AS branch_cep,
           CONCAT(
               NULLIF(LTRIM(RTRIM(CP.M0_ENDENT)), ''),
-              CASE 
+              CASE
                   WHEN NULLIF(LTRIM(RTRIM(CP.M0_BAIRENT)), '') IS NOT NULL THEN
                       CONCAT(', ', LTRIM(RTRIM(CP.M0_BAIRENT)))
                   ELSE ''
               END,
-              CASE 
+              CASE
                   WHEN NULLIF(LTRIM(RTRIM(CP.M0_CIDENT)), '') IS NOT NULL THEN
                       CONCAT(' - ', LTRIM(RTRIM(CP.M0_CIDENT)))
                   ELSE ''
               END,
-              CASE 
+              CASE
                   WHEN NULLIF(LTRIM(RTRIM(CP.M0_ESTENT)), '') IS NOT NULL THEN
                       CONCAT('/', LTRIM(RTRIM(CP.M0_ESTENT)))
                   ELSE ''
               END,
-              CASE 
+              CASE
                   WHEN NULLIF(LTRIM(RTRIM(CP.M0_CEPENT)), '') IS NOT NULL THEN
                       CONCAT(' - CEP ', LTRIM(RTRIM(CP.M0_CEPENT)))
                   ELSE ''
@@ -85,8 +95,10 @@ function sqlBranch(company_code) {
           ) AS full_branch_address
       FROM TMPPRD12.dbo.SYS_COMPANY CP
       WHERE  CP.D_E_L_E_T_ <> '*'
-      AND M0_CODIGO = ${company_code}
-      ORDER BY CP.M0_FILIAL;`;
+      AND M0_CODIGO = @company_code
+      ORDER BY CP.M0_FILIAL;`,
+        params: { company_code }
+    };
 }
 
 
@@ -123,15 +135,17 @@ function sqlEmployeeData() {
         @name;
     `;
 }
-function spInsertEmployeeCompensation({employee_id, compensation_id, value, branch_code, start_date, user }) {
-    return `EXEC dbo.sp_gipp_insert_employee_compensation
-    @employee_id = ${employee_id},
-    @compensation_id = ${compensation_id},
-    @value = ${value},
-    @branch_code = ${branch_code},
-    @start_date = ${start_date},
-    @user = ${user}; `
-
+function spInsertEmployeeCompensation({ employee_id, compensation_id, value, branch_code, start_date, user }) {
+    return {
+        sql: `EXEC dbo.sp_gipp_insert_employee_compensation
+    @employee_id = @employee_id,
+    @compensation_id = @compensation_id,
+    @value = @value,
+    @branch_code = @branch_code,
+    @start_date = @start_date,
+    @user = @user;`,
+        params: { employee_id, compensation_id, value, branch_code, start_date, user }
+    };
 }
 
 module.exports = {

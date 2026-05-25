@@ -5,6 +5,7 @@ const { GlobalService } = require("../services/auth.service.js");
 const { parseTime } = require('../../../utils/time-parser.js');
 const { UnauthorizedError } = require('../../../errors/unauthorized.error.js');
 const { User } = require('../domain/user.entity');
+const { respond } = require('../../../utils/respond');
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -54,19 +55,14 @@ async function globalLogin(req, res) {
   await createSession(res, user);
 
   notifyUserLogin(user).catch(() => {}); // fire-and-forget — WebSocket notification, non-critical
-  return res.json({
-    error: false,
-    message: "Success in login" // new User(payload)
-  });
+  return respond.message(res, 'Logged in successfully');
 };
 
 async function me(req, res) {
-  if (!req.user) {
-    throw new UnauthorizedError('Not authenticated');
-  }
+  if (!req.user) throw new UnauthorizedError('Not authenticated');
 
   const user = new User(req.user);
-  const payload = {
+  return respond.ok(res, {
     id: user.id,
     nickname: user.nickname,
     registration: user.registration,
@@ -75,22 +71,13 @@ async function me(req, res) {
     company_name: user.company_name,
     branch_name: user.branch_name,
     cost_center_description: user.cost_center_description
-  }
-
-  return res.json({
-    error: false,
-    data: payload
   });
 };
 
 async function logout(req, res) {
   res.clearCookie('accessToken', cookieOpts());
   res.clearCookie('refreshToken', cookieOpts());
-
-  return res.json({
-    error: false,
-    message: 'Logged out successfully'
-  });
+  return respond.message(res, 'Logged out successfully');
 };
 
 

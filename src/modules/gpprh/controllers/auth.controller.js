@@ -8,6 +8,7 @@ const { GpprhService } = require('../services/gpprh.service.js');
 const { UnauthorizedError } = require('../../../errors/unauthorized.error.js');
 const { BadRequestError } = require('../../../errors/bad-request.error.js');
 const { AppError } = require('../../../errors/app.error.js');
+const { respond } = require('../../../utils/respond.js');
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -63,25 +64,17 @@ const login = async (req, res) => {
 
   await createSession(res, payload);
 
-  return res.json({
-    error: false,
-    data: new User(payload)
-  });
+  return respond.ok(res, new User(payload));
 };
 
 const me = (req, res) => {
-  if (!req.user) {
-    throw new UnauthorizedError('Not authenticated');
-  }
+  if (!req.user) throw new UnauthorizedError('Not authenticated');
   const user = new User(req.user);
-  return res.json({
-    error: false,
-    data: {
-      user_id: user.user_id,
-      name: user.name,
-      email: user.email,
-      candidate: user.candidate,
-    },
+  return respond.ok(res, {
+    user_id: user.user_id,
+    name: user.name,
+    email: user.email,
+    candidate: user.candidate,
   });
 };
 
@@ -119,19 +112,12 @@ const googleLogin = async (req, res) => {
   user.permissions = 'CANDIDATE';
   await createSession(res, user);
 
-  return res.json({
-    error: false,
-    message: 'Success login'
-  });
+  return respond.message(res, 'Logged in successfully');
 };
 const logout = (req, res) => {
   res.clearCookie('accessToken', cookieOpts());
   res.clearCookie('refreshToken', cookieOpts());
-
-  return res.json({
-    error: false,
-    message: 'Logged out successfully'
-  });
+  return respond.message(res, 'Logged out successfully');
 };
 
 module.exports = {

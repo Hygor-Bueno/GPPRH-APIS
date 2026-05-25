@@ -1,5 +1,6 @@
 const { AppError } = require("../../../errors/app.error");
 const { Employee } = require("../services/employee.service");
+const { respond } = require("../../../utils/respond");
 
 async function getPhotoEmployee(req, res) {
     const { id } = req.params;
@@ -16,7 +17,6 @@ async function getPhotoEmployee(req, res) {
 };
 async function postPhotoEmployee(req, res) {
     const { id } = req.params;
-    console.log("file:", req.file);
     if (!id || id == 0) {
         throw new AppError('Id is required', 400);
     }
@@ -32,10 +32,7 @@ async function postPhotoEmployee(req, res) {
     const employee = new Employee(id);
     await employee.updateEmployeePhoto(req.file.buffer);
 
-    res.json({
-        error: false,
-        message: "Photo saved successfully"
-    });
+    respond.message(res, 'Photo saved successfully');
 }
 
 module.exports = {

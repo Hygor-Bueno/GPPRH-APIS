@@ -25,7 +25,12 @@ class GlobalService {
             }
 
             const userData = rows[0][0];
-            const empl = await pool.request().query(sqlMapUserWithOrganization(userData.registration));
+            const { sql: emplSql, params: emplParams } = sqlMapUserWithOrganization(userData.registration);
+            const emplRequest = pool.request();
+            for (const [key, value] of Object.entries(emplParams)) {
+                emplRequest.input(key, value);
+            }
+            const empl = await emplRequest.query(emplSql);
             return this.mapUserWithOrganization(userData, empl.recordset[0]);
         } catch (err) {
             throw err;

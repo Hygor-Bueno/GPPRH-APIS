@@ -4,24 +4,53 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest --testPathPattern=src --coverage",
+    "test:watch": "jest --testPathPattern=src --watch"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "src/middlewares/validate.middleware.js",
+      "src/middlewares/async-handler.middleware.js",
+      "src/middlewares/error.middleware.js",
+      "src/utils/respond.js",
+      "src/schemas/auth.schema.js",
+      "src/schemas/job.schema.js",
+      "src/schemas/gipp-rh.schema.js"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "lines": 80
+      }
+    }
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "activedirectory2": "^2.2.0",
+    "axios": "^1.15.0",
+    "bcrypt": "^5.1.1",
+    "bcryptjs": "^3.0.3",
+    "cookie": "^1.0.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "5.2.1",
+    "express-rate-limit": "^8.3.2",
     "google-auth-library": "^10.5.0",
     "jsonwebtoken": "^9.0.3",
     "ldapjs": "^3.0.7",
     "mssql": "^12.2.0",
-    "mysql2": "^3.15.3"
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.15.3",
+    "puppeteer": "^22.0.0",
+    "ws": "^8.18.2"
   },
   "devDependencies": {
-    "nodemon": "^3.1.11"
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.11",
+    "supertest": "^7.1.0"
   }
 }
