@@ -1,9 +1,10 @@
 /**
  * @fileoverview Handlers WebSocket — Chat Direto.
  *
- * Trata eventos de chat iniciados pelo cliente via WebSocket.
- * O fluxo unificado elimina a necessidade de dois passos separados
- * (REST para salvar + WS para notificar) do sistema PHP legado.
+ * Trata eventos de chat iniciados pelo cliente via WebSocket, orquestrando
+ * via `ChatUseCases` (mesma camada de aplicação consumida pelo controller
+ * REST), injetando o adapter de entrega local (`connectionManager`), já que
+ * este handler roda no mesmo processo do servidor WebSocket.
  *
  * Fluxo `chat:send`:
  *   1. Cliente envia `{ event: 'chat:send', payload: { to_user_id, message, type } }`
@@ -19,20 +20,16 @@
  */
 
 const { connectionManager } = require('../connectionManager');
-const { ChatService }       = require('../../modules/global/services/chat.service');
+const { ChatUseCases }             = require('../../modules/global/application/chat/chat.use-cases');
+const { MysqlChatRepository }      = require('../../modules/global/infrastructure/chat/mysql-chat.repository');
+const { WsLocalChatEventPublisher } = require('../../modules/global/infrastructure/chat/ws-local-chat-event.publisher');
+const { AppError } = require('../../errors/app.error');
 
-/** Mapa string → inteiro para a coluna `type` (INT) da tabela `cl_message`. */
-const TYPE_TO_INT = { text: 1, image: 2, file: 3 };
-
-/**
- * Converte o `type` enviado pelo cliente (string ou int) para o inteiro do banco.
- * @param {*} raw
- * @returns {1|2|3}
- */
-function _resolveType(raw) {
-    if (typeof raw === 'number' && [1, 2, 3].includes(raw)) return raw;
-    const str = String(raw ?? 'text').trim().toLowerCase();
-    return TYPE_TO_INT[str] ?? 1;
+function createUseCases() {
+    return new ChatUseCases({
+        repository: new MysqlChatRepository(),
+        eventPublisher: new WsLocalChatEventPublisher()
+    });
 }
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
@@ -51,48 +48,29 @@ function _resolveType(raw) {
  * @returns {Promise<void>}
  */
 async function handleChatSend(ws, payload) {
-    const { to_user_id, message } = payload || {};
-    const type = _resolveType((payload || {}).type);
+    const { to_user_id, message, type } = payload || {};
 
-    // ── Validação básica ──────────────────────────────────────────────────────
+    // ── Validação básica de forma do payload (transporte, não regra de domínio) ──
     if (!to_user_id || typeof to_user_id !== 'number') {
         return _sendError(ws, 'Campo `to_user_id` é obrigatório e deve ser um número.');
     }
     if (!message || typeof message !== 'string' || !message.trim()) {
         return _sendError(ws, 'Campo `message` é obrigatório e não pode ser vazio.');
     }
-    if (to_user_id === ws.userId) {
-        return _sendError(ws, 'Não é possível enviar mensagem para si mesmo.');
-    }
 
     try {
-        const service  = new ChatService();
-        const savedMsg = await service.sendMessage(ws.userId, to_user_id, message.trim(), type);
-
-        const wsPayload = {
-            id:           savedMsg.id,
-            sender_id:    savedMsg.sender_id,
-            recipient_id: savedMsg.recipient_id,
-            message:      savedMsg.message,
-            type:         savedMsg.type,
-            file_id:      savedMsg.file_id ?? null,
-            notification: savedMsg.notification,
-            date:         savedMsg.date
-        };
-
-        // Confirmação ao remetente
-        connectionManager.sendToUser(ws.userId, {
-            event:   'chat:delivered',
-            payload: wsPayload
+        const useCases = createUseCases();
+        await useCases.sendMessage({
+            senderId: ws.userId,
+            recipientId: to_user_id,
+            message: message.trim(),
+            type
         });
-
-        // Entrega ao destinatário (se estiver online)
-        connectionManager.sendToUser(to_user_id, {
-            event:   'chat:message',
-            payload: wsPayload
-        });
-
     } catch (err) {
+        if (err instanceof AppError) {
+            // Erro de negócio (ex.: self-send) — mensagem segura de expor ao cliente
+            return _sendError(ws, err.message);
+        }
         console.error(`[chat:send] Failed to save message (userId=${ws.userId}):`, err.message);
         _sendError(ws, 'Erro interno ao enviar mensagem. Tente novamente.');
     }
