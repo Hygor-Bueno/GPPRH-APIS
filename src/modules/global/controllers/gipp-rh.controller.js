@@ -333,6 +333,7 @@ async function postPaymentReceipt(req, res) {
         branch_name:            body.branch_name,
         work_schedule_id:       body.work_schedule_id,
         reference:              body.reference,
+        reference_date:         body.reference_date         ?? null,
         description:            body.description,
         amount:                 body.amount,
         movement_type:          body.movement_type,
@@ -377,6 +378,9 @@ async function getPaymentReceipts(req, res) {
     if (q.is_active        !== undefined) filters.is_active        = q.is_active === 'true' ? 1 : 0;
     if (q.payment_type_id  !== undefined) filters.payment_type_id  = Number(q.payment_type_id);
     if (q.work_schedule_id !== undefined) filters.work_schedule_id = q.work_schedule_id;
+    if (q.reference_date   !== undefined) filters.reference_date   = q.reference_date;
+    if (q.date_from        !== undefined) filters.date_from        = q.date_from;
+    if (q.date_to          !== undefined) filters.date_to          = q.date_to;
 
     const service = new GippRhService();
     const data    = await service.getPaymentReceipts(filters);
@@ -403,6 +407,7 @@ async function putPaymentReceipt(req, res) {
         amount:                 body.amount,
         movement_type:          body.movement_type,
         is_active:              body.is_active,
+        reference_date:         body.reference_date ?? null,
         event_code:             body.event_code,
         work_schedule_id:       body.work_schedule_id,
         payment_type_id:        body.payment_type_id,
@@ -447,10 +452,10 @@ async function patchPaymentReceipt(req, res) {
  * @returns {Promise<void>} `200 OK` com a lista de recibos.
  */
 async function getReceipt(req, res) {
-    const { employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId } = req.query;
+    const { employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId, date_from, date_to } = req.query;
 
     const receipt = new GippRhService();
-    const data    = await receipt.getReceipt(employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId);
+    const data    = await receipt.getReceipt(employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId, date_from, date_to);
     return respond.ok(res, data);
 }
 

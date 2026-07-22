@@ -55,6 +55,7 @@ const postPaymentReceiptSchema = {
     movement_type:    { type: 'string',  required: true, enum: ['E', 'D'] },
     is_active:        { type: 'boolean', required: true },
     // opcionais
+    reference_date:   { type: 'string',  pattern: DATE_PATTERN },  // YYYY-MM-DD; se omitido usa GETDATE()
     event_code:       { type: 'string',  maxLength: 50 },
     work_schedule_id: { type: 'string'   },
     payment_type_id:  { type: 'number',  min: 1 },
@@ -68,6 +69,7 @@ const putPaymentReceiptSchema = {
     amount:           { type: 'number',  required: true, min: 0 },
     movement_type:    { type: 'string',  required: true, enum: ['E', 'D'] },
     is_active:        { type: 'boolean', required: true },
+    reference_date:   { type: 'string',  pattern: DATE_PATTERN },  // YYYY-MM-DD; opcional
     event_code:       { type: 'string',  maxLength: 50 },
     work_schedule_id: { type: 'string'   },
     payment_type_id:  { type: 'number',  min: 1 }
@@ -80,6 +82,7 @@ const patchPaymentReceiptSchema = {
     amount:           { type: 'number',  min: 0 },
     movement_type:    { type: 'string',  enum: ['E', 'D'] },
     is_active:        { type: 'boolean'  },
+    reference_date:   { type: 'string',  pattern: DATE_PATTERN },  // YYYY-MM-DD; opcional
     event_code:       { type: 'string'   },
     work_schedule_id: { type: 'string',  min: 1 },
     payment_type_id:  { type: 'number',  min: 1 }

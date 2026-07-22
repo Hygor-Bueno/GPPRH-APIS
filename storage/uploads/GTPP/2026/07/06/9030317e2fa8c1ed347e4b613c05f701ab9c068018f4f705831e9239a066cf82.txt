@@ -1,0 +1,77 @@
+QUERY UTILIZADA 
+
+------------------------------------------ // ------------------------------------------
+ SELECT DTACONTABILIZA,
+         FI.*,
+         COMP.VLRNOMINAL AS VLRNOMINALTOTAL,
+         FI.VLRNOMINAL - FI.VLRPAGO AS VLRSALDO,
+        CONSINCO.PKG_FINANCEIRO.FIF_MULTAJUROS(FI.SEQTITULO,
+                                              TRUNC(SYSDATE),
+                                              'P',
+                                              'M') AS MULTA_CALCULADA,
+        CONSINCO.PKG_FINANCEIRO.FIF_MULTAJUROS(FI.SEQTITULO,
+                                              TRUNC(SYSDATE),
+                                              'P',
+                                              'J') AS JUROS_CALCULADO,
+        (COMP.VLRPAGO+COMP.MULTA+COMP.JUROS+COMP.ACRES_TITULO) AS VLRLIQUIDO,
+        CONSINCO.PKG_FINANCEIRO.FIF_DIASATRASO(FI.ABERTOQUITADO,
+                                               TRUNC(SYSDATE),
+                                               FI.DTAVENCIMENTO,
+                                               FI.DTAPROGRAMADA,
+                                               FI.DTAQUITACAO,
+                                               'N') AS DIASATRASO,
+     OPCANCELADA,
+       MULTA,
+       JUROS,
+       ACRES_TITULO
+
+    FROM CONSINCO.FI_TITULO FI
+
+   INNER JOIN (SELECT SEQTITULO,
+               OPCANCELADA,
+               MAX(DTACONTABILIZA) AS DTACONTABILIZA,
+                    SUM(CASE
+                          WHEN COLOPERACAO1 = 'N' THEN
+                           VLROPERACAO
+                          ELSE
+                           0
+                        END) AS VLRNOMINAL,
+                    SUM(CASE
+                          WHEN COLOPERACAO1 = 'P' THEN
+                           VLROPERACAO
+                          ELSE
+                           0
+                        END) AS VLRPAGO,
+                    SUM(CASE
+                          WHEN CODOPERACAO IN (9,10) THEN
+                           VLROPERACAO
+                          ELSE
+                           0
+                        END) AS MULTA,
+                    SUM(CASE
+                          WHEN CODOPERACAO IN (7,8) THEN
+                           VLROPERACAO
+                          ELSE
+                           0
+                        END) AS JUROS,
+                    SUM(CASE
+                          WHEN CODOPERACAO = 194 THEN
+                           VLROPERACAO
+                          ELSE
+                           0
+                        END) AS ACRES_TITULO
+               FROM CONSINCO.FI_TITOPERACAO
+              GROUP BY SEQTITULO,
+                     OPCANCELADA) COMP
+
+    ON COMP.SEQTITULO = FI.SEQTITULO
+    
+    LEFT JOIN CONSINCO.FI_TITCOMPRADOR CM
+    ON CM.SEQTITULO = FI.SEQTITULO
+    
+    WHERE FI.DTAEMISSAO = TO_DATE('11/04/2026', 'DD/MM/YYYY')
+      AND FI.ABERTOQUITADO = 'A'
+      AND FI.CODESPECIE = 'ACORDO'
+      AND CM.SEQCOMPRADOR = 21
+      AND FI.NROEMPRESA = 9
+      AND OPCANCELADA IS NULL;

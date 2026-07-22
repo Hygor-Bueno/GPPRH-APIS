@@ -513,6 +513,13 @@ class GippService {
 
             // 6 — UUID único por jornada: todos os itens da mesma jornada compartilham o mesmo receipt_group_id
             const receiptGroupId = randomUUID();
+            // Converte workDate de DD/MM/YYYY para Date (SQL Server DATE)
+            let referenceDateObj = null;
+            if (workDate) {
+                const [day, month, year] = workDate.split('/');
+                referenceDateObj = new Date(`${year}-${month}-${day}`);
+            }
+
             const basePayload = {
                 company_code:           ws.company_code           != null ? String(ws.company_code)                        : null,
                 branch_code:            ws.branch_time_record     != null ? String(ws.branch_time_record).padStart(4, '0') : null,
@@ -521,6 +528,7 @@ class GippService {
                 branch_name:            ws.branch_name            != null ? String(ws.branch_name)                         : null,
                 work_schedule_id:       codWorkSchedule,
                 reference,
+                reference_date:         referenceDateObj,
                 movement_type:          'E',
                 is_active:              1,
                 receipt_group_id:       receiptGroupId,
@@ -612,6 +620,7 @@ class GippService {
                     .input('branch_name',             sql.VarChar(200),     item.branch_name             ?? null)
                     .input('work_schedule_id',        sql.VarChar(20),      item.work_schedule_id        ?? null)
                     .input('reference',               sql.VarChar(6),       item.reference               ?? null)
+                    .input('reference_date',          sql.Date,             item.reference_date          ?? null)
                     .input('description',             sql.VarChar(500),     item.description             ?? null)
                     .input('amount',                  sql.Decimal(18, 2),   item.amount)
                     .input('movement_type',           sql.Char(1),          item.movement_type           ?? null)
@@ -625,13 +634,13 @@ class GippService {
                         INSERT INTO GIPP.dbo.gipp_payment_receipt (
                             company_code, branch_code, employee_code, payee_id,
                             employee_name, branch_name, work_schedule_id,
-                            reference, description, amount, movement_type, is_active,
+                            reference, reference_date, description, amount, movement_type, is_active,
                             receipt_group_id, event_code, payment_type_id,
                             created_at, created_by, created_by_branch_code
                         ) VALUES (
                             @company_code, @branch_code, @employee_code, @payee_id,
                             @employee_name, @branch_name, @work_schedule_id,
-                            @reference, @description, @amount, @movement_type, @is_active,
+                            @reference, ISNULL(@reference_date, GETDATE()), @description, @amount, @movement_type, @is_active,
                             @receipt_group_id, @event_code, @payment_type_id,
                             GETDATE(), @created_by, @created_by_branch_code
                         );

@@ -12,6 +12,11 @@ async function listBranches(req, res) {
   res.status(200).json({ error: false, data });
 }
 
+async function listAllBranches(req, res) {
+  const data = await ProtheusService.getAllBranches();
+  res.status(200).json({ error: false, data });
+}
+
 async function listCompanies(req, res) {
   const data = await ProtheusService.getCompanies();
   res.status(200).json({ error: false, data });
@@ -20,5 +25,6 @@ async function listCompanies(req, res) {
 module.exports = {
   listCostCenters,
   listBranches,
+  listAllBranches,
   listCompanies
 };

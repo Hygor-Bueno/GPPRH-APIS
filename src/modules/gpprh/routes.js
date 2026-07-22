@@ -8,7 +8,7 @@ const { asyncHandler } = require('../../middlewares/async-handler.middleware');
 const { loginLimiter } = require('../../middlewares/rate-limit.middleware');
 const { validate } = require('../../middlewares/validate.middleware');
 const { loginSchema } = require('../../schemas/auth.schema');
-const { createJobSchema, updateJobSchema, blockUnknownJobFields, validateSalaryRange } = require('../../schemas/job.schema');
+const { createJobSchema, updateJobSchema, blockUnknownJobFields, validateSalaryRange, jobLikeSchema, jobApplicationSchema, jobCommentSchema } = require('../../schemas/job.schema');
 
 // 1 - ROTAS DE AUTENTICAÇÃO
 // 1.1 - PUBLICA
@@ -27,10 +27,10 @@ router.get('/job-statuses', authMiddleware, canAll(['JOB_STATUS_VIEW']), asyncHa
 router.get('/job-status-rules', authMiddleware, canAll(['CANDIDATE']), asyncHandler(GrppController.rulesJobStatus));
 router.get('/job-contracts', authMiddleware, asyncHandler(GrppController.jobContracts));
 
-router.post('/job-likes', authMiddleware, canAll(['CANDIDATE']), asyncHandler(GrppController.jobLikes));
-router.post('/job-application', authMiddleware, canAll(['CANDIDATE']), asyncHandler(GrppController.jobApplication));
+router.post('/job-likes', authMiddleware, canAll(['CANDIDATE']), validate(jobLikeSchema), asyncHandler(GrppController.jobLikes));
+router.post('/job-application', authMiddleware, canAll(['CANDIDATE']), validate(jobApplicationSchema), asyncHandler(GrppController.jobApplication));
 router.get('/job-application', authMiddleware, canAll(['CANDIDATE']), asyncHandler(GrppController.viewJobApplication));
-router.post('/job-comments', authMiddleware, canAll(['CANDIDATE']), asyncHandler(GrppController.jobComments));
+router.post('/job-comments', authMiddleware, canAll(['CANDIDATE']), validate(jobCommentSchema), asyncHandler(GrppController.jobComments));
 router.get('/:codeJob/job-comments', authMiddleware, canAll(['CANDIDATE']), asyncHandler(GrppController.jobCommentsView));
 
 // 2.2 - ROTAS PUBLICAS

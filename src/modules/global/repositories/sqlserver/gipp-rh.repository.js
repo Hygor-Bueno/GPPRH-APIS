@@ -245,6 +245,7 @@ function sqlInsertPaymentReceipt() {
             branch_name,
             work_schedule_id,
             reference,
+            reference_date,
             description,
             amount,
             movement_type,
@@ -265,6 +266,7 @@ function sqlInsertPaymentReceipt() {
             @branch_name,
             @work_schedule_id,
             @reference,
+            ISNULL(@reference_date, GETDATE()),
             @description,
             @amount,
             @movement_type,
@@ -297,22 +299,28 @@ function sqlInsertPaymentReceipt() {
  * @param {0|1}     [filters.is_active]
  * @param {number}  [filters.payment_type_id]
  * @param {string}  [filters.work_schedule_id]
+ * @param {string}  [filters.reference_date]   - Data exata YYYY-MM-DD
+ * @param {string}  [filters.date_from]        - Início do intervalo YYYY-MM-DD
+ * @param {string}  [filters.date_to]          - Fim do intervalo YYYY-MM-DD
  * @returns {{ sql: string, params: object }} Query e parâmetros
  */
 function sqlGetPaymentReceipts(filters) {
     const params = {};
     const where  = [];
 
-    if (filters.id               !== undefined) { where.push('c.id = @id');                             params.id               = filters.id; }
-    if (filters.employee_code    !== undefined) { where.push('c.employee_code = @employee_code');       params.employee_code    = filters.employee_code; }
-    if (filters.branch_code      !== undefined) { where.push('c.branch_code = @branch_code');           params.branch_code      = filters.branch_code; }
-    if (filters.reference        !== undefined) { where.push('c.reference = @reference');               params.reference        = filters.reference; }
-    if (filters.description      !== undefined) { where.push('c.description LIKE @description');        params.description      = `%${filters.description}%`; }
-    if (filters.amount           !== undefined) { where.push('c.amount = @amount');                     params.amount           = filters.amount; }
-    if (filters.movement_type    !== undefined) { where.push('c.movement_type = @movement_type');       params.movement_type    = filters.movement_type; }
-    if (filters.is_active        !== undefined) { where.push('c.is_active = @is_active');               params.is_active        = filters.is_active; }
-    if (filters.payment_type_id  !== undefined) { where.push('c.payment_type_id = @payment_type_id');  params.payment_type_id  = filters.payment_type_id; }
-    if (filters.work_schedule_id !== undefined) { where.push('c.work_schedule_id = @work_schedule_id'); params.work_schedule_id = filters.work_schedule_id; }
+    if (filters.id               !== undefined) { where.push('c.id = @id');                              params.id               = filters.id; }
+    if (filters.employee_code    !== undefined) { where.push('c.employee_code = @employee_code');        params.employee_code    = filters.employee_code; }
+    if (filters.branch_code      !== undefined) { where.push('c.branch_code = @branch_code');            params.branch_code      = filters.branch_code; }
+    if (filters.reference        !== undefined) { where.push('c.reference = @reference');                params.reference        = filters.reference; }
+    if (filters.description      !== undefined) { where.push('c.description LIKE @description');         params.description      = `%${filters.description}%`; }
+    if (filters.amount           !== undefined) { where.push('c.amount = @amount');                      params.amount           = filters.amount; }
+    if (filters.movement_type    !== undefined) { where.push('c.movement_type = @movement_type');        params.movement_type    = filters.movement_type; }
+    if (filters.is_active        !== undefined) { where.push('c.is_active = @is_active');                params.is_active        = filters.is_active; }
+    if (filters.payment_type_id  !== undefined) { where.push('c.payment_type_id = @payment_type_id');   params.payment_type_id  = filters.payment_type_id; }
+    if (filters.work_schedule_id !== undefined) { where.push('c.work_schedule_id = @work_schedule_id');  params.work_schedule_id = filters.work_schedule_id; }
+    if (filters.reference_date   !== undefined) { where.push('CAST(c.reference_date AS DATE) = @reference_date'); params.reference_date = filters.reference_date; }
+    if (filters.date_from        !== undefined) { where.push('CAST(c.reference_date AS DATE) >= @date_from');     params.date_from      = filters.date_from; }
+    if (filters.date_to          !== undefined) { where.push('CAST(c.reference_date AS DATE) <= @date_to');       params.date_to        = filters.date_to; }
 
     const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
@@ -326,6 +334,7 @@ function sqlGetPaymentReceipts(filters) {
             LTRIM(RTRIM(c.employee_name)) AS employee_name,
             c.work_schedule_id,
             c.reference,
+            c.reference_date,
             c.description,
             c.amount,
             c.movement_type,
@@ -361,6 +370,7 @@ function sqlUpdatePaymentReceipt() {
             amount                 = @amount,
             movement_type          = @movement_type,
             is_active              = @is_active,
+            reference_date         = ISNULL(@reference_date, reference_date),
             event_code             = @event_code,
             work_schedule_id       = @work_schedule_id,
             payment_type_id        = @payment_type_id,
@@ -383,6 +393,7 @@ const PATCH_RECEIPT_FIELDS = {
     amount:           'Decimal',
     movement_type:    'Char',
     is_active:        'Bit',
+    reference_date:   'Date',
     event_code:       'VarChar',
     work_schedule_id: 'VarChar',
     payment_type_id:  'Int'
@@ -428,18 +439,20 @@ function sqlPatchPaymentReceipt(fields) {
  * @param {number|null} paymentTypeId  - Tipo de pagamento (ex: 1=salário, 6=fechamento GIPP)
  * @returns {{ sql: string, params: object }} Query e parâmetros
  */
-function sqlGetReceipt(employeeCode, branchCode, referenceInit, referenceTwo, paymentTypeId) {
+function sqlGetReceipt(employeeCode, branchCode, referenceInit, referenceTwo, paymentTypeId, dateFrom, dateTo) {
     const params = {};
     let where = [];
 
-    if (employeeCode)  { where.push(`c.employee_code = @employeeCode`);     params.employeeCode  = employeeCode; }
-    if (branchCode)    { where.push(`c.branch_code = @branchCode`);         params.branchCode    = branchCode; }
-    if (paymentTypeId) { where.push(`c.payment_type_id = @paymentTypeId`);  params.paymentTypeId = paymentTypeId; }
+    if (employeeCode)  { where.push(`c.employee_code = @employeeCode`);                              params.employeeCode  = employeeCode; }
+    if (branchCode)    { where.push(`c.branch_code = @branchCode`);                                  params.branchCode    = branchCode; }
+    if (paymentTypeId) { where.push(`c.payment_type_id = @paymentTypeId`);                           params.paymentTypeId = paymentTypeId; }
     if (referenceInit) {
         where.push(`c.reference BETWEEN @referenceInit AND @referenceTwo`);
         params.referenceInit = referenceInit;
         params.referenceTwo  = referenceTwo || referenceInit;
     }
+    if (dateFrom) { where.push(`CAST(c.reference_date AS DATE) >= @dateFrom`); params.dateFrom = dateFrom; }
+    if (dateTo)   { where.push(`CAST(c.reference_date AS DATE) <= @dateTo`);   params.dateTo   = dateTo; }
 
     // Sempre filtra apenas recibos ativos na listagem
     where.push('c.is_active = 1');
@@ -461,6 +474,7 @@ function sqlGetReceipt(employeeCode, branchCode, referenceInit, referenceTwo, pa
             pt.description           AS payment_type,
             -- MIN evita duplicatas quando múltiplos itens têm created_at ligeiramente diferentes
             MIN(c.created_at)        AS created_at,
+            MIN(c.reference_date)    AS reference_date,
             -- Soma líquida: proventos positivos, descontos negativos
             SUM(
                 CASE
@@ -569,14 +583,24 @@ function sqlGetReceiptsByGroupIds(groupIds) {
                AND comp.D_E_L_E_T_ != '*'
 
             -- Colaboradores CLT (prestadores não possuem vínculo em SRA020)
+            -- RA_FILIAL filtra pela filial do recibo: evita produto cartesiano quando
+            -- o mesmo RA_MAT existe em mais de uma filial ativa no SRA020.
             LEFT JOIN TMPPRD12.dbo.SRA020 emp
-                ON emp.RA_MAT       = rec.employee_code
-               AND emp.D_E_L_E_T_  != '*'
-               AND emp.RA_DEMISSA   = ''
+                ON emp.RA_MAT      = rec.employee_code
+               AND emp.RA_FILIAL   = rec.branch_code
+               AND emp.D_E_L_E_T_ != '*'
+               AND emp.RA_DEMISSA  = ''
 
-            LEFT JOIN TMPPRD12.dbo.CTT020 cc
-                ON cc.CTT_CUSTO     = emp.RA_CC
-               AND cc.D_E_L_E_T_   != '*'
+            -- OUTER APPLY garante no máximo 1 linha por centro de custo,
+            -- evitando produto cartesiano quando CTT020 tem a mesma CTT_CUSTO
+            -- cadastrada em múltiplas filiais/empresas (comportamento padrão do Protheus).
+            OUTER APPLY (
+                SELECT TOP 1 CTT_DESC01
+                FROM TMPPRD12.dbo.CTT020
+                WHERE CTT_CUSTO   = emp.RA_CC
+                  AND D_E_L_E_T_ != '*'
+                ORDER BY CTT_FILIAL
+            ) cc
 
             WHERE rec.receipt_group_id IN (${keys.join(', ')})
               AND rec.is_active = 1

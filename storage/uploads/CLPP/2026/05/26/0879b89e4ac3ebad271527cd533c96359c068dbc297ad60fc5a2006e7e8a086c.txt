@@ -1,0 +1,1179 @@
+﻿20260525T101903.376+0000      Execution started.
+20260525T101903.445+0000 0018 SET ThousandSep='.'
+20260525T101903.445+0000 0019 SET DecimalSep=','
+20260525T101903.445+0000 0020 SET MoneyThousandSep='.'
+20260525T101903.445+0000 0021 SET MoneyDecimalSep=','
+20260525T101903.445+0000 0022 SET MoneyFormat='R$#.##0,00;-R$#.##0,00'
+20260525T101903.445+0000 0023 SET TimeFormat='hh:mm:ss'
+20260525T101903.445+0000 0024 SET DateFormat='DD/MM/YYYY'
+20260525T101903.445+0000 0025 SET TimestampFormat='DD/MM/YYYY hh:mm:ss[.fff]'
+20260525T101903.445+0000 0026 SET FirstWeekDay=6
+20260525T101903.445+0000 0027 SET BrokenWeeks=1
+20260525T101903.445+0000 0028 SET ReferenceDay=0
+20260525T101903.445+0000 0029 SET FirstMonthOfYear=1
+20260525T101903.445+0000 0030 SET CollationLocale='pt-BR'
+20260525T101903.445+0000 0031 SET CreateSearchIndexOnReload=1
+20260525T101903.445+0000 0032 SET MonthNames='Jan;Fev;Mar;Abr;Mai;Jun;Jul;Ago;Set;Out;Nov;Dez'
+20260525T101903.445+0000 0033 SET LongMonthNames='Janeiro;Fevereiro;Março;Abril;Maio;Junho;Julho;Agosto;Setembro;Outubro;Novembro;Dezembro'
+20260525T101903.445+0000 0034 SET DayNames='seg;ter;qua;qui;sex;sáb;dom'
+20260525T101903.445+0000 0035 SET LongDayNames='segunda-feira;terça-feira;quarta-feira;quinta-feira;sexta-feira;sábado;domingo'
+20260525T101903.445+0000 0036 SET NumericalAbbreviation='3:k;6:M;9:G;12:T;15:P;18:E;21:Z;24:Y;-3:m;-6:μ;-9:n;-12:p;-15:f;-18:a;-21:z;-24:y'
+20260525T101903.445+0000 0039 SET vTotalRegisters = 0
+20260525T101903.445+0000 0041 SET vTotalFields = 0
+20260525T101903.445+0000 0043 Sub recordQVD(pTable)
+20260525T101903.445+0000 0057 Sub ReadingTime(pTable, pInit, pFinal)
+20260525T101903.446+0000 0071 Sub CargoRegistration(pTable, pInit, pFinal, ptime, pregisters,pfields)
+20260525T101903.446+0000 0083 LET vStartLoad = NOW()
+20260525T101903.446+0000 0086 LIB CONNECT TO 'Services ETL:Consinco'
+20260525T101903.586+0000      Connected.
+20260525T101903.586+0000 0089 SET vConectionC5 = 'Services ETL:Consinco'
+20260525T101903.586+0000 0092 SET vExtractedPath = 'lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw'
+20260525T101903.586+0000 0094 Sub MrlLanctoEstoque(pDateRef)
+20260525T101903.587+0000 0156 SUB RecoverMonths(pStartMonth,pEndMonth,pDateRef)
+20260525T101903.587+0000 0164 SUB MrlLanctoEstoqueCountLinesSelect(pTableName,pFirstDayOneMonthAgo,pLastDayOneMonthAgo)
+20260525T101903.587+0000 0177 SUB MrlLanctoEstoqueCountLinesQvd(pTableName,pFirstDayOneMonthAgo,pLastDayOneMonthAgo)
+20260525T101903.587+0000 0194 SUB CorrMonth(pSubFato,pDateRef)
+20260525T101903.588+0000 0232 Sub CorrPeriod(pSubFato,pFirstDayOneMonthAgo,pLastDayOneMonthAgo,pCtrlDivergence)
+20260525T101903.589+0000 0270 SUB CorrDay(pSubFato,pFirstDayPeriod,pLastDayPeriod,pCtrlDivergencePeriod)
+20260525T101903.589+0000 0301 LET vYesterday = Today()-1
+20260525T101903.589+0000 0302 LET vDay = Day(vYesterday)
+20260525T101903.589+0000 0303 LET vInitMonth = 0
+20260525T101903.589+0000 0306 If vDay <= 7 then
+20260525T101903.589+0000 0315 CALL RecoverMonths(vInitMonth,0,vYesterday)
+  20260525T101903.589+0000 0157 for vIndexMonth = pStartMonth to pEndMonth
+    20260525T101903.589+0000 0158 LET vDate = AddMonths(pDateRef,vIndexMonth)
+    20260525T101903.589+0000 0159 CALL CorrMonth('MrlLanctoEstoque',vDate)
+      20260525T101903.589+0000 0195 TRACE CORRIGINDO O ARQUIVO >>> MrlLanctoEstoque
+      20260525T101903.589+0000 0195 CORRIGINDO O ARQUIVO >>> MrlLanctoEstoque
+      20260525T101903.589+0000 0196 
+      20260525T101903.589+0000 0196 LET vContSelect = 0
+      20260525T101903.589+0000 0197 LET vCountLinesQvd = 0
+      20260525T101903.589+0000 0198 let vYear = Year(pDateRef)
+      20260525T101903.589+0000 0199 let vMonth = Num(Month(pDateRef),00)
+      20260525T101903.590+0000 0200 Let vDateOneMonthAgo = pDateRef
+      20260525T101903.590+0000 0201 LET vFirstDayOneMonthAgo = MonthStart(vDateOneMonthAgo)
+      20260525T101903.590+0000 0202 LET vLastDayOneMonthAgo = MonthEnd(vDateOneMonthAgo)
+      20260525T101903.590+0000 0205 IF(vLastDayOneMonthAgo > TODAY()) THEN
+        20260525T101903.590+0000 0206 vLastDayOneMonthAgo = DATE(TODAY()-1)
+        20260525T101903.590+0000 0207 END IF
+      20260525T101903.590+0000 0210 TRACE # 24/05/2026 #
+      20260525T101903.590+0000 0210 # 24/05/2026 #
+      20260525T101903.590+0000 0211 
+      20260525T101903.590+0000 0212 CALL MrlLanctoEstoqueCountLinesSelect('TempCountSelect',vFirstDayOneMonthAgo,vLastDayOneMonthAgo)
+        20260525T101903.590+0000 0165 TempCountSelect:
+        20260525T101903.590+0000 0166   SQL SELECT 
+        20260525T101903.590+0000 0167        COUNT(*) AS CountLineSelect
+        20260525T101903.590+0000 0168   FROM CONSINCO.MRL_LANCTOESTOQUE
+        20260525T101903.590+0000 0169   WHERE 
+        20260525T101903.590+0000 0170   DTAENTRADASAIDA BETWEEN TO_DATE('01/05/2026', 'DD/MM/YYYY') AND TO_DATE('24/05/2026', 'DD/MM/YYYY')
+        20260525T101909.569+0000      	1 fields found: COUNTLINESELECT, 
+        20260525T101909.570+0000      1 lines fetched
+        20260525T101909.572+0000 0171 vContSelect = Peek('COUNTLINESELECT', 0, 'TempCountSelect')
+        20260525T101909.572+0000 0172 DROP TABLE TempCountSelect
+        20260525T101909.572+0000 0173 END SUB
+      20260525T101909.572+0000 0214 CALL MrlLanctoEstoqueCountLinesQvd('TempTableQvd',vFirstDayOneMonthAgo,vLastDayOneMonthAgo)
+        20260525T101909.572+0000 0178 LET vYear = Year(pFirstDayOneMonthAgo)
+        20260525T101909.572+0000 0179 LET vMonth = Num(Month(pFirstDayOneMonthAgo),00)
+        20260525T101909.573+0000 0181 if FileSize('[lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd]') > 0 then
+          20260525T101909.721+0000 0182 TempTableQvd:
+          20260525T101909.721+0000 0183     LOAD
+          20260525T101909.721+0000 0184        RowNo() as Lines
+          20260525T101909.721+0000 0185     FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+          20260525T101909.721+0000 0186     where DATE(DTAENTRADASAIDA,'DD/MM/YYYY') >= '01/05/2026' and DATE(DTAENTRADASAIDA,'DD/MM/YYYY') <= '24/05/2026'
+          20260525T101910.108+0000      	1 fields found: Lines, 
+          20260525T101935.787+0000      3,843,926 lines fetched
+          20260525T101935.818+0000 0187 vCountLinesQvd = NoOfRows('TempTableQvd')
+          20260525T101935.818+0000 0188 DROP TABLE TempTableQvd
+          20260525T101935.839+0000 0190 End if
+        20260525T101935.839+0000 0191 END SUB
+      20260525T101935.839+0000 0220 LET vTotalDivergence = (vContSelect - vCountLinesQvd)
+      20260525T101935.839+0000 0222 Trace 01/05/2026 <> 24/05/2026
+      20260525T101935.839+0000 0222 01/05/2026 <> 24/05/2026
+      20260525T101935.839+0000 0223 
+      20260525T101935.839+0000 0223 Trace MÊS -> Total Divergencias = 212669 (4056595 -  3843926)
+      20260525T101935.839+0000 0223 MÊS -> Total Divergencias = 212669 (4056595 -  3843926)
+      20260525T101935.839+0000 0224 
+      20260525T101935.839+0000 0225 If vTotalDivergence <> 0 then
+        20260525T101935.839+0000 0226 CALL CorrPeriod(pSubFato,vFirstDayOneMonthAgo,vLastDayOneMonthAgo,vTotalDivergence)
+          20260525T101935.839+0000 0233 LET vStep = -7
+          20260525T101935.839+0000 0234 SET fCalcDivgCtrl = ($1 - ( $2 - $3))
+          20260525T101935.840+0000 0235 LET vCtrlDivergencePeriod = pCtrlDivergence
+          20260525T101935.840+0000 0236 for vIndexPeriod = pLastDayOneMonthAgo to pFirstDayOneMonthAgo step vStep
+            20260525T101935.840+0000 0237 LET vLastDayPeriod = date(vIndexPeriod)
+            20260525T101935.840+0000 0238 LET vFirstDayPeriod = date(vIndexPeriod+(vStep+1))
+            20260525T101935.840+0000 0240 If day(vFirstDayPeriod) > day(vLastDayPeriod) then
+            20260525T101935.840+0000 0244 CALL MrlLanctoEstoqueCountLinesSelect('TempCountSelect',vFirstDayPeriod,vLastDayPeriod)
+              20260525T101935.840+0000 0165 TempCountSelect:
+              20260525T101935.840+0000 0166   SQL SELECT 
+              20260525T101935.840+0000 0167        COUNT(*) AS CountLineSelect
+              20260525T101935.840+0000 0168   FROM CONSINCO.MRL_LANCTOESTOQUE
+              20260525T101935.840+0000 0169   WHERE 
+              20260525T101935.840+0000 0170   DTAENTRADASAIDA BETWEEN TO_DATE('18/05/2026', 'DD/MM/YYYY') AND TO_DATE('24/05/2026', 'DD/MM/YYYY')
+              20260525T101936.319+0000      	1 fields found: COUNTLINESELECT, 
+              20260525T101936.320+0000      1 lines fetched
+              20260525T101936.321+0000 0171 vContSelect = Peek('COUNTLINESELECT', 0, 'TempCountSelect')
+              20260525T101936.321+0000 0172 DROP TABLE TempCountSelect
+              20260525T101936.321+0000 0173 END SUB
+            20260525T101936.322+0000 0245 CALL MrlLanctoEstoqueCountLinesQvd('TempTableQvd',vFirstDayPeriod,vLastDayPeriod)
+              20260525T101936.322+0000 0178 LET vYear = Year(pFirstDayOneMonthAgo)
+              20260525T101936.322+0000 0179 LET vMonth = Num(Month(pFirstDayOneMonthAgo),00)
+              20260525T101936.322+0000 0181 if FileSize('[lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd]') > 0 then
+                20260525T101936.358+0000 0182 TempTableQvd:
+                20260525T101936.358+0000 0183     LOAD
+                20260525T101936.358+0000 0184        RowNo() as Lines
+                20260525T101936.358+0000 0185     FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                20260525T101936.358+0000 0186     where DATE(DTAENTRADASAIDA,'DD/MM/YYYY') >= '18/05/2026' and DATE(DTAENTRADASAIDA,'DD/MM/YYYY') <= '24/05/2026'
+                20260525T101936.710+0000      	1 fields found: Lines, 
+                20260525T101959.277+0000      893,314 lines fetched
+                20260525T101959.315+0000 0187 vCountLinesQvd = NoOfRows('TempTableQvd')
+                20260525T101959.315+0000 0188 DROP TABLE TempTableQvd
+                20260525T101959.319+0000 0190 End if
+              20260525T101959.319+0000 0191 END SUB
+            20260525T101959.319+0000 0248 LET vDivergencePeriod = (vContSelect - vCountLinesQvd)
+            20260525T101959.319+0000 0249 Trace --------------------------------------------------------
+            20260525T101959.319+0000 0249 --------------------------------------------------------
+            20260525T101959.319+0000 0250 
+            20260525T101959.319+0000 0250 Trace Entre 18/05/2026 e 24/05/2026.  Divergência de: 212663
+            20260525T101959.319+0000 0250 Entre 18/05/2026 e 24/05/2026.  Divergência de: 212663
+            20260525T101959.319+0000 0251 
+            20260525T101959.319+0000 0253 vCtrlDivergencePeriod = (vCtrlDivergencePeriod - ( vContSelect - vCountLinesQvd))
+            20260525T101959.319+0000 0256 If vDivergencePeriod <> 0 then
+              20260525T101959.319+0000 0257 CALL CorrDay(pSubFato,vFirstDayPeriod,vLastDayPeriod,vDivergencePeriod)
+                20260525T101959.319+0000 0271 LET vCtrlDivergenceDay = pCtrlDivergencePeriod
+                20260525T101959.319+0000 0272 for vDateRef = pLastDayPeriod to pFirstDayPeriod step -1
+                  20260525T101959.319+0000 0273 vDateRef = Date(vDateRef)
+                  20260525T101959.319+0000 0274 Trace --------------------------------------------------------
+                  20260525T101959.319+0000 0274 --------------------------------------------------------
+                  20260525T101959.319+0000 0275 
+                  20260525T101959.320+0000 0275 TRACE ENTREI NO DIA
+                  20260525T101959.320+0000 0275 ENTREI NO DIA
+                  20260525T101959.320+0000 0276 
+                  20260525T101959.320+0000 0276 TRACE # 24/05/2026 #
+                  20260525T101959.320+0000 0276 # 24/05/2026 #
+                  20260525T101959.320+0000 0277 
+                  20260525T101959.320+0000 0278 CALL MrlLanctoEstoqueCountLinesSelect('TempCountSelect',vDateRef,vDateRef)
+                    20260525T101959.320+0000 0165 TempCountSelect:
+                    20260525T101959.320+0000 0166   SQL SELECT 
+                    20260525T101959.320+0000 0167        COUNT(*) AS CountLineSelect
+                    20260525T101959.320+0000 0168   FROM CONSINCO.MRL_LANCTOESTOQUE
+                    20260525T101959.320+0000 0169   WHERE 
+                    20260525T101959.320+0000 0170   DTAENTRADASAIDA BETWEEN TO_DATE('24/05/2026', 'DD/MM/YYYY') AND TO_DATE('24/05/2026', 'DD/MM/YYYY')
+                    20260525T101959.764+0000      	1 fields found: COUNTLINESELECT, 
+                    20260525T101959.765+0000      1 lines fetched
+                    20260525T101959.766+0000 0171 vContSelect = Peek('COUNTLINESELECT', 0, 'TempCountSelect')
+                    20260525T101959.767+0000 0172 DROP TABLE TempCountSelect
+                    20260525T101959.767+0000 0173 END SUB
+                  20260525T101959.767+0000 0279 CALL MrlLanctoEstoqueCountLinesQvd('TempTableQvd',vDateRef,vDateRef)
+                    20260525T101959.767+0000 0178 LET vYear = Year(pFirstDayOneMonthAgo)
+                    20260525T101959.767+0000 0179 LET vMonth = Num(Month(pFirstDayOneMonthAgo),00)
+                    20260525T101959.767+0000 0181 if FileSize('[lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd]') > 0 then
+                      20260525T101959.804+0000 0182 TempTableQvd:
+                      20260525T101959.804+0000 0183     LOAD
+                      20260525T101959.804+0000 0184        RowNo() as Lines
+                      20260525T101959.804+0000 0185     FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                      20260525T101959.805+0000 0186     where DATE(DTAENTRADASAIDA,'DD/MM/YYYY') >= '24/05/2026' and DATE(DTAENTRADASAIDA,'DD/MM/YYYY') <= '24/05/2026'
+                      20260525T102000.115+0000      	1 fields found: Lines, 
+                      20260525T102021.802+0000      0 lines fetched
+                      20260525T102021.841+0000 0187 vCountLinesQvd = NoOfRows('TempTableQvd')
+                      20260525T102021.841+0000 0188 DROP TABLE TempTableQvd
+                      20260525T102021.841+0000 0190 End if
+                    20260525T102021.841+0000 0191 END SUB
+                  20260525T102021.841+0000 0281 LET vDivergenceDay = (vContSelect - vCountLinesQvd)
+                  20260525T102021.841+0000 0283 vCtrlDivergenceDay = (vCtrlDivergenceDay - ( vContSelect - vCountLinesQvd))
+                  20260525T102021.841+0000 0285 Trace DIA -> Total = 212663. Controlador = 236. # ( 212427 - 0 ) #
+                  20260525T102021.841+0000 0285 DIA -> Total = 212663. Controlador = 236. # ( 212427 - 0 ) #
+                  20260525T102021.841+0000 0286 
+                  20260525T102021.841+0000 0286 Trace # 212427 #
+                  20260525T102021.841+0000 0286 # 212427 #
+                  20260525T102021.841+0000 0287 
+                  20260525T102021.841+0000 0289 If vDivergenceDay <> 0 then
+                    20260525T102021.841+0000 0290 CALL MrlLanctoEstoque(vDateRef)
+                      20260525T102021.841+0000 0096 LET vInit = Now()
+                      20260525T102021.841+0000 0097 let vYear = Year(pDateRef)
+                      20260525T102021.842+0000 0098 let vMonth = Num(Month(pDateRef),00)
+                      20260525T102021.842+0000 0101 MRL_LANCTOESTOQUE_2026_05:
+                      20260525T102021.842+0000 0102 	Select 
+                      20260525T102021.842+0000 0103           SEQMOVTOESTQ,
+                      20260525T102021.842+0000 0104           NROEMPRESA,
+                      20260525T102021.842+0000 0105           DTAENTRADASAIDA,
+                      20260525T102021.842+0000 0106           SEQPRODUTO,
+                      20260525T102021.842+0000 0107           SERIEDOCTO,
+                      20260525T102021.842+0000 0108           TIPLANCTO,
+                      20260525T102021.842+0000 0109           CODGERALOPER,
+                      20260525T102021.842+0000 0110           LOCAL,
+                      20260525T102021.842+0000 0111           TIPUSOCGO,
+                      20260525T102021.842+0000 0112           QTDLANCTO,
+                      20260525T102021.842+0000 0113           VALORVLRNF,
+                      20260525T102021.842+0000 0114           VALORPIS,
+                      20260525T102021.842+0000 0115           VALORCOFINS,
+                      20260525T102021.842+0000 0116           ACMCOMPRAVENDA,
+                      20260525T102021.842+0000 0117           DTAHORLANCTO,
+                      20260525T102021.842+0000 0118           USULANCTO,
+                      20260525T102021.842+0000 0119           NRODOCUMENTO,
+                      20260525T102021.842+0000 0120           INDGERACREDIPI,
+                      20260525T102021.842+0000 0121           VALORIPI,
+                      20260525T102021.842+0000 0122           VALORICMS,
+                      20260525T102021.842+0000 0123           VALORICMSST,
+                      20260525T102021.842+0000 0124           VALORDESPNF,
+                      20260525T102021.842+0000 0125           VALORCOMISSAO,
+                      20260525T102021.842+0000 0126           VALORISS,
+                      20260525T102021.842+0000 0127           VALORDCTOFORANF,
+                      20260525T102021.842+0000 0128           VALORDESPFORANF
+                      20260525T102021.842+0000 0129 	FROM consinco.MRL_LANCTOESTOQUE
+                      20260525T102021.842+0000 0130 	WHERE DTAENTRADASAIDA = TO_DATE('24/05/2026', 'DD/MM/YYYY')
+                      20260525T102022.926+0000      	26 fields found: SEQMOVTOESTQ, NROEMPRESA, DTAENTRADASAIDA, SEQPRODUTO, SERIEDOCTO, TIPLANCTO, CODGERALOPER, LOCAL, TIPUSOCGO, QTDLANCTO, VALORVLRNF, VALORPIS, VALORCOFINS, ACMCOMPRAVENDA, DTAHORLANCTO, USULANCTO, NRODOCUMENTO, INDGERACREDIPI, VALORIPI, VALORICMS, VALORICMSST, VALORDESPNF, VALORCOMISSAO, VALORISS, VALORDCTOFORANF, VALORDESPFORANF, 
+                      20260525T102034.472+0000      212,427 lines fetched
+                      20260525T102034.480+0000 0133 If FileSize('lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd') > 0 then
+                        20260525T102034.525+0000 0134 TRACE ENTROU IF -> This_2026_05 -> 24/05/2026
+                        20260525T102034.525+0000 0134 ENTROU IF -> This_2026_05 -> 24/05/2026 
+                        20260525T102034.525+0000 0135 
+                        20260525T102034.525+0000 0137 TEMP_MRL_LANCTOESTOQUE:
+                        20260525T102034.525+0000 0138       	LOAD Date(DTAENTRADASAIDA) As NEW_DTAENTRADASAIDA Resident MRL_LANCTOESTOQUE_2026_05
+                        20260525T102034.525+0000      	1 fields found: NEW_DTAENTRADASAIDA, 
+                        20260525T102034.596+0000      212,427 lines fetched
+                        20260525T102034.603+0000 0141 LOAD *
+                        20260525T102034.603+0000 0142       	FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                        20260525T102034.603+0000 0143       	WHERE NOT Exists(NEW_DTAENTRADASAIDA, DTAENTRADASAIDA)
+                        20260525T102034.967+0000      	26 fields found: SEQMOVTOESTQ, NROEMPRESA, DTAENTRADASAIDA, SEQPRODUTO, SERIEDOCTO, TIPLANCTO, CODGERALOPER, LOCAL, TIPUSOCGO, QTDLANCTO, VALORVLRNF, VALORPIS, VALORCOFINS, ACMCOMPRAVENDA, DTAHORLANCTO, USULANCTO, NRODOCUMENTO, INDGERACREDIPI, VALORIPI, VALORICMS, VALORICMSST, VALORDESPNF, VALORCOMISSAO, VALORISS, VALORDCTOFORANF, VALORDESPFORANF, 
+                        20260525T102043.038+0000      4,056,353 lines fetched
+                        20260525T102043.054+0000 0146 Drop Table TEMP_MRL_LANCTOESTOQUE
+                        20260525T102043.054+0000 0148 End If
+                      20260525T102043.054+0000 0149 LET vFinal = Now()
+                      20260525T102043.054+0000 0151 Call RecordQVD('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102043.054+0000 0044 Trace MRL_LANCTOESTOQUE_2026_05 <###>
+                        20260525T102043.054+0000 0044 MRL_LANCTOESTOQUE_2026_05 <###>
+                        20260525T102043.054+0000 0045 
+                        20260525T102043.054+0000 0045 Let vQttRegisters = NoOfRows('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102043.054+0000 0046 vTotalRegisters = vTotalRegisters + vQttRegisters
+                        20260525T102043.054+0000 0048 Let vQttFiels = NoOfFields('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102043.054+0000 0049 vTotalFields = vTotalFields + vQttFiels
+                        20260525T102043.054+0000 0051 store [MRL_LANCTOESTOQUE_2026_05] into [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                        20260525T102045.509+0000 0052 Drop Table [MRL_LANCTOESTOQUE_2026_05]
+                        20260525T102045.541+0000 0053 Call ReadingTime('MRL_LANCTOESTOQUE_2026_05',vInit,vFinal)
+                          20260525T102045.541+0000 0058 Let vtime = Interval(pFinal - pInit, 'hh:mm:ss')
+                          20260525T102045.541+0000 0059 if pTable = 'TOTAL' then
+                            20260525T102045.541+0000 0065 TRACE --- Tempo total de leitura da Extração foi de 00:00:22 ---
+                            20260525T102045.541+0000 0065 --- Tempo total de leitura da Extração foi de 00:00:22 ---
+                            20260525T102045.541+0000 0066 
+                            20260525T102045.541+0000 0066 Call CargoRegistration('MRL_LANCTOESTOQUE_2026_05', '25/05/2026 10:20:21', '25/05/2026 10:20:43', '00:00:22', '4056353','26')
+                              20260525T102045.541+0000 0072 [Registro de Tempo]:
+                              20260525T102045.541+0000 0073     LOAD
+                              20260525T102045.541+0000 0074     	'MRL_LANCTOESTOQUE_2026_05'				as [Nome da Tabela],
+                              20260525T102045.541+0000 0075         '25/05/2026 10:20:21'				as [pInit da Leitura],
+                              20260525T102045.541+0000 0076         '25/05/2026 10:20:43'				as [pFinal da Leitura],
+                              20260525T102045.541+0000 0077         '00:00:22'				as [Tempo de Leitura],
+                              20260525T102045.541+0000 0078         '4056353'			as [Qtd Campos],
+                              20260525T102045.542+0000 0079         '26'			as [Total de Registros]
+                              20260525T102045.542+0000 0080     AutoGenerate 1
+                              20260525T102045.542+0000      	6 fields found: Nome da Tabela, pInit da Leitura, pFinal da Leitura, Tempo de Leitura, Qtd Campos, Total de Registros, 
+                              20260525T102045.542+0000      1 lines fetched
+                              20260525T102045.542+0000 0081 End Sub
+                            20260525T102045.542+0000 0067 End If
+                          20260525T102045.542+0000 0068 End Sub
+                        20260525T102045.542+0000 0054 End sub
+                      20260525T102045.542+0000 0153 End Sub
+                    20260525T102045.542+0000 0291 end if
+                  20260525T102045.542+0000 0293 If vCtrlDivergenceDay = 0
+                20260525T102045.542+0000 0296 next
+                  20260525T102045.542+0000 0273 vDateRef = Date(vDateRef)
+                  20260525T102045.542+0000 0274 Trace --------------------------------------------------------
+                  20260525T102045.542+0000 0274 --------------------------------------------------------
+                  20260525T102045.542+0000 0275 
+                  20260525T102045.542+0000 0275 TRACE ENTREI NO DIA
+                  20260525T102045.542+0000 0275 ENTREI NO DIA
+                  20260525T102045.542+0000 0276 
+                  20260525T102045.542+0000 0276 TRACE # 23/05/2026 #
+                  20260525T102045.542+0000 0276 # 23/05/2026 #
+                  20260525T102045.542+0000 0277 
+                  20260525T102045.542+0000 0278 CALL MrlLanctoEstoqueCountLinesSelect('TempCountSelect',vDateRef,vDateRef)
+                    20260525T102045.543+0000 0165 TempCountSelect:
+                    20260525T102045.543+0000 0166   SQL SELECT 
+                    20260525T102045.543+0000 0167        COUNT(*) AS CountLineSelect
+                    20260525T102045.543+0000 0168   FROM CONSINCO.MRL_LANCTOESTOQUE
+                    20260525T102045.543+0000 0169   WHERE 
+                    20260525T102045.543+0000 0170   DTAENTRADASAIDA BETWEEN TO_DATE('23/05/2026', 'DD/MM/YYYY') AND TO_DATE('23/05/2026', 'DD/MM/YYYY')
+                    20260525T102045.985+0000      	1 fields found: COUNTLINESELECT, 
+                    20260525T102045.986+0000      1 lines fetched
+                    20260525T102045.988+0000 0171 vContSelect = Peek('COUNTLINESELECT', 0, 'TempCountSelect')
+                    20260525T102045.988+0000 0172 DROP TABLE TempCountSelect
+                    20260525T102045.988+0000 0173 END SUB
+                  20260525T102045.988+0000 0279 CALL MrlLanctoEstoqueCountLinesQvd('TempTableQvd',vDateRef,vDateRef)
+                    20260525T102045.988+0000 0178 LET vYear = Year(pFirstDayOneMonthAgo)
+                    20260525T102045.988+0000 0179 LET vMonth = Num(Month(pFirstDayOneMonthAgo),00)
+                    20260525T102045.988+0000 0181 if FileSize('[lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd]') > 0 then
+                      20260525T102046.041+0000 0182 TempTableQvd:
+                      20260525T102046.041+0000 0183     LOAD
+                      20260525T102046.041+0000 0184        RowNo() as Lines
+                      20260525T102046.041+0000 0185     FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                      20260525T102046.041+0000 0186     where DATE(DTAENTRADASAIDA,'DD/MM/YYYY') >= '23/05/2026' and DATE(DTAENTRADASAIDA,'DD/MM/YYYY') <= '23/05/2026'
+                      20260525T102046.313+0000      	1 fields found: Lines, 
+                      20260525T102112.817+0000      210,988 lines fetched
+                      20260525T102112.865+0000 0187 vCountLinesQvd = NoOfRows('TempTableQvd')
+                      20260525T102112.865+0000 0188 DROP TABLE TempTableQvd
+                      20260525T102112.866+0000 0190 End if
+                    20260525T102112.866+0000 0191 END SUB
+                  20260525T102112.867+0000 0281 LET vDivergenceDay = (vContSelect - vCountLinesQvd)
+                  20260525T102112.867+0000 0283 vCtrlDivergenceDay = (vCtrlDivergenceDay - ( vContSelect - vCountLinesQvd))
+                  20260525T102112.867+0000 0285 Trace DIA -> Total = 212663. Controlador = 38. # ( 211186 - 210988 ) #
+                  20260525T102112.867+0000 0285 DIA -> Total = 212663. Controlador = 38. # ( 211186 - 210988 ) #
+                  20260525T102112.867+0000 0286 
+                  20260525T102112.867+0000 0286 Trace # 198 #
+                  20260525T102112.867+0000 0286 # 198 #
+                  20260525T102112.867+0000 0287 
+                  20260525T102112.867+0000 0289 If vDivergenceDay <> 0 then
+                    20260525T102112.867+0000 0290 CALL MrlLanctoEstoque(vDateRef)
+                      20260525T102112.867+0000 0096 LET vInit = Now()
+                      20260525T102112.867+0000 0097 let vYear = Year(pDateRef)
+                      20260525T102112.867+0000 0098 let vMonth = Num(Month(pDateRef),00)
+                      20260525T102112.867+0000 0101 MRL_LANCTOESTOQUE_2026_05:
+                      20260525T102112.867+0000 0102 	Select 
+                      20260525T102112.867+0000 0103           SEQMOVTOESTQ,
+                      20260525T102112.867+0000 0104           NROEMPRESA,
+                      20260525T102112.867+0000 0105           DTAENTRADASAIDA,
+                      20260525T102112.867+0000 0106           SEQPRODUTO,
+                      20260525T102112.867+0000 0107           SERIEDOCTO,
+                      20260525T102112.867+0000 0108           TIPLANCTO,
+                      20260525T102112.867+0000 0109           CODGERALOPER,
+                      20260525T102112.867+0000 0110           LOCAL,
+                      20260525T102112.867+0000 0111           TIPUSOCGO,
+                      20260525T102112.867+0000 0112           QTDLANCTO,
+                      20260525T102112.867+0000 0113           VALORVLRNF,
+                      20260525T102112.867+0000 0114           VALORPIS,
+                      20260525T102112.867+0000 0115           VALORCOFINS,
+                      20260525T102112.867+0000 0116           ACMCOMPRAVENDA,
+                      20260525T102112.867+0000 0117           DTAHORLANCTO,
+                      20260525T102112.867+0000 0118           USULANCTO,
+                      20260525T102112.867+0000 0119           NRODOCUMENTO,
+                      20260525T102112.868+0000 0120           INDGERACREDIPI,
+                      20260525T102112.868+0000 0121           VALORIPI,
+                      20260525T102112.868+0000 0122           VALORICMS,
+                      20260525T102112.868+0000 0123           VALORICMSST,
+                      20260525T102112.868+0000 0124           VALORDESPNF,
+                      20260525T102112.868+0000 0125           VALORCOMISSAO,
+                      20260525T102112.868+0000 0126           VALORISS,
+                      20260525T102112.868+0000 0127           VALORDCTOFORANF,
+                      20260525T102112.868+0000 0128           VALORDESPFORANF
+                      20260525T102112.868+0000 0129 	FROM consinco.MRL_LANCTOESTOQUE
+                      20260525T102112.868+0000 0130 	WHERE DTAENTRADASAIDA = TO_DATE('23/05/2026', 'DD/MM/YYYY')
+                      20260525T102114.040+0000      	26 fields found: SEQMOVTOESTQ, NROEMPRESA, DTAENTRADASAIDA, SEQPRODUTO, SERIEDOCTO, TIPLANCTO, CODGERALOPER, LOCAL, TIPUSOCGO, QTDLANCTO, VALORVLRNF, VALORPIS, VALORCOFINS, ACMCOMPRAVENDA, DTAHORLANCTO, USULANCTO, NRODOCUMENTO, INDGERACREDIPI, VALORIPI, VALORICMS, VALORICMSST, VALORDESPNF, VALORCOMISSAO, VALORISS, VALORDCTOFORANF, VALORDESPFORANF, 
+                      20260525T102134.191+0000      211,186 lines fetched
+                      20260525T102134.197+0000 0133 If FileSize('lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd') > 0 then
+                        20260525T102134.241+0000 0134 TRACE ENTROU IF -> This_2026_05 -> 23/05/2026
+                        20260525T102134.241+0000 0134 ENTROU IF -> This_2026_05 -> 23/05/2026 
+                        20260525T102134.241+0000 0135 
+                        20260525T102134.241+0000 0137 TEMP_MRL_LANCTOESTOQUE:
+                        20260525T102134.241+0000 0138       	LOAD Date(DTAENTRADASAIDA) As NEW_DTAENTRADASAIDA Resident MRL_LANCTOESTOQUE_2026_05
+                        20260525T102134.241+0000      	1 fields found: NEW_DTAENTRADASAIDA, 
+                        20260525T102134.312+0000      211,186 lines fetched
+                        20260525T102134.318+0000 0141 LOAD *
+                        20260525T102134.318+0000 0142       	FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                        20260525T102134.318+0000 0143       	WHERE NOT Exists(NEW_DTAENTRADASAIDA, DTAENTRADASAIDA)
+                        20260525T102134.784+0000      	26 fields found: SEQMOVTOESTQ, NROEMPRESA, DTAENTRADASAIDA, SEQPRODUTO, SERIEDOCTO, TIPLANCTO, CODGERALOPER, LOCAL, TIPUSOCGO, QTDLANCTO, VALORVLRNF, VALORPIS, VALORCOFINS, ACMCOMPRAVENDA, DTAHORLANCTO, USULANCTO, NRODOCUMENTO, INDGERACREDIPI, VALORIPI, VALORICMS, VALORICMSST, VALORDESPNF, VALORCOMISSAO, VALORISS, VALORDCTOFORANF, VALORDESPFORANF, 
+                        20260525T102144.989+0000      4,056,551 lines fetched
+                        20260525T102145.017+0000 0146 Drop Table TEMP_MRL_LANCTOESTOQUE
+                        20260525T102145.017+0000 0148 End If
+                      20260525T102145.017+0000 0149 LET vFinal = Now()
+                      20260525T102145.017+0000 0151 Call RecordQVD('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102145.017+0000 0044 Trace MRL_LANCTOESTOQUE_2026_05 <###>
+                        20260525T102145.017+0000 0044 MRL_LANCTOESTOQUE_2026_05 <###>
+                        20260525T102145.017+0000 0045 
+                        20260525T102145.017+0000 0045 Let vQttRegisters = NoOfRows('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102145.017+0000 0046 vTotalRegisters = vTotalRegisters + vQttRegisters
+                        20260525T102145.017+0000 0048 Let vQttFiels = NoOfFields('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102145.017+0000 0049 vTotalFields = vTotalFields + vQttFiels
+                        20260525T102145.018+0000 0051 store [MRL_LANCTOESTOQUE_2026_05] into [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                        20260525T102154.556+0000 0052 Drop Table [MRL_LANCTOESTOQUE_2026_05]
+                        20260525T102154.596+0000 0053 Call ReadingTime('MRL_LANCTOESTOQUE_2026_05',vInit,vFinal)
+                          20260525T102154.596+0000 0058 Let vtime = Interval(pFinal - pInit, 'hh:mm:ss')
+                          20260525T102154.596+0000 0059 if pTable = 'TOTAL' then
+                            20260525T102154.596+0000 0065 TRACE --- Tempo total de leitura da Extração foi de 00:00:33 ---
+                            20260525T102154.596+0000 0065 --- Tempo total de leitura da Extração foi de 00:00:33 ---
+                            20260525T102154.596+0000 0066 
+                            20260525T102154.596+0000 0066 Call CargoRegistration('MRL_LANCTOESTOQUE_2026_05', '25/05/2026 10:21:12', '25/05/2026 10:21:45', '00:00:33', '8112904','52')
+                              20260525T102154.597+0000 0072 [Registro de Tempo]:
+                              20260525T102154.597+0000 0073     LOAD
+                              20260525T102154.597+0000 0074     	'MRL_LANCTOESTOQUE_2026_05'				as [Nome da Tabela],
+                              20260525T102154.597+0000 0075         '25/05/2026 10:21:12'				as [pInit da Leitura],
+                              20260525T102154.597+0000 0076         '25/05/2026 10:21:45'				as [pFinal da Leitura],
+                              20260525T102154.597+0000 0077         '00:00:33'				as [Tempo de Leitura],
+                              20260525T102154.597+0000 0078         '8112904'			as [Qtd Campos],
+                              20260525T102154.597+0000 0079         '52'			as [Total de Registros]
+                              20260525T102154.597+0000 0080     AutoGenerate 1
+                              20260525T102154.597+0000      	6 fields found: Nome da Tabela, pInit da Leitura, pFinal da Leitura, Tempo de Leitura, Qtd Campos, Total de Registros, 
+                              20260525T102154.597+0000      2 lines fetched
+                              20260525T102154.597+0000 0081 End Sub
+                            20260525T102154.597+0000 0067 End If
+                          20260525T102154.597+0000 0068 End Sub
+                        20260525T102154.597+0000 0054 End sub
+                      20260525T102154.597+0000 0153 End Sub
+                    20260525T102154.597+0000 0291 end if
+                  20260525T102154.597+0000 0293 If vCtrlDivergenceDay = 0
+                20260525T102154.598+0000 0296 next
+                  20260525T102154.598+0000 0273 vDateRef = Date(vDateRef)
+                  20260525T102154.598+0000 0274 Trace --------------------------------------------------------
+                  20260525T102154.598+0000 0274 --------------------------------------------------------
+                  20260525T102154.598+0000 0275 
+                  20260525T102154.598+0000 0275 TRACE ENTREI NO DIA
+                  20260525T102154.598+0000 0275 ENTREI NO DIA
+                  20260525T102154.598+0000 0276 
+                  20260525T102154.598+0000 0276 TRACE # 22/05/2026 #
+                  20260525T102154.598+0000 0276 # 22/05/2026 #
+                  20260525T102154.598+0000 0277 
+                  20260525T102154.598+0000 0278 CALL MrlLanctoEstoqueCountLinesSelect('TempCountSelect',vDateRef,vDateRef)
+                    20260525T102154.598+0000 0165 TempCountSelect:
+                    20260525T102154.598+0000 0166   SQL SELECT 
+                    20260525T102154.598+0000 0167        COUNT(*) AS CountLineSelect
+                    20260525T102154.598+0000 0168   FROM CONSINCO.MRL_LANCTOESTOQUE
+                    20260525T102154.598+0000 0169   WHERE 
+                    20260525T102154.598+0000 0170   DTAENTRADASAIDA BETWEEN TO_DATE('22/05/2026', 'DD/MM/YYYY') AND TO_DATE('22/05/2026', 'DD/MM/YYYY')
+                    20260525T102155.029+0000      	1 fields found: COUNTLINESELECT, 
+                    20260525T102155.029+0000      1 lines fetched
+                    20260525T102155.032+0000 0171 vContSelect = Peek('COUNTLINESELECT', 0, 'TempCountSelect')
+                    20260525T102155.032+0000 0172 DROP TABLE TempCountSelect
+                    20260525T102155.032+0000 0173 END SUB
+                  20260525T102155.032+0000 0279 CALL MrlLanctoEstoqueCountLinesQvd('TempTableQvd',vDateRef,vDateRef)
+                    20260525T102155.032+0000 0178 LET vYear = Year(pFirstDayOneMonthAgo)
+                    20260525T102155.032+0000 0179 LET vMonth = Num(Month(pFirstDayOneMonthAgo),00)
+                    20260525T102155.032+0000 0181 if FileSize('[lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd]') > 0 then
+                      20260525T102155.070+0000 0182 TempTableQvd:
+                      20260525T102155.070+0000 0183     LOAD
+                      20260525T102155.070+0000 0184        RowNo() as Lines
+                      20260525T102155.070+0000 0185     FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                      20260525T102155.070+0000 0186     where DATE(DTAENTRADASAIDA,'DD/MM/YYYY') >= '22/05/2026' and DATE(DTAENTRADASAIDA,'DD/MM/YYYY') <= '22/05/2026'
+                      20260525T102155.470+0000      	1 fields found: Lines, 
+                      20260525T102219.228+0000      156,408 lines fetched
+                      20260525T102219.277+0000 0187 vCountLinesQvd = NoOfRows('TempTableQvd')
+                      20260525T102219.278+0000 0188 DROP TABLE TempTableQvd
+                      20260525T102219.279+0000 0190 End if
+                    20260525T102219.279+0000 0191 END SUB
+                  20260525T102219.279+0000 0281 LET vDivergenceDay = (vContSelect - vCountLinesQvd)
+                  20260525T102219.279+0000 0283 vCtrlDivergenceDay = (vCtrlDivergenceDay - ( vContSelect - vCountLinesQvd))
+                  20260525T102219.279+0000 0285 Trace DIA -> Total = 212663. Controlador = 9. # ( 156437 - 156408 ) #
+                  20260525T102219.279+0000 0285 DIA -> Total = 212663. Controlador = 9. # ( 156437 - 156408 ) #
+                  20260525T102219.279+0000 0286 
+                  20260525T102219.279+0000 0286 Trace # 29 #
+                  20260525T102219.279+0000 0286 # 29 #
+                  20260525T102219.279+0000 0287 
+                  20260525T102219.279+0000 0289 If vDivergenceDay <> 0 then
+                    20260525T102219.279+0000 0290 CALL MrlLanctoEstoque(vDateRef)
+                      20260525T102219.279+0000 0096 LET vInit = Now()
+                      20260525T102219.280+0000 0097 let vYear = Year(pDateRef)
+                      20260525T102219.280+0000 0098 let vMonth = Num(Month(pDateRef),00)
+                      20260525T102219.280+0000 0101 MRL_LANCTOESTOQUE_2026_05:
+                      20260525T102219.280+0000 0102 	Select 
+                      20260525T102219.280+0000 0103           SEQMOVTOESTQ,
+                      20260525T102219.280+0000 0104           NROEMPRESA,
+                      20260525T102219.280+0000 0105           DTAENTRADASAIDA,
+                      20260525T102219.280+0000 0106           SEQPRODUTO,
+                      20260525T102219.280+0000 0107           SERIEDOCTO,
+                      20260525T102219.280+0000 0108           TIPLANCTO,
+                      20260525T102219.280+0000 0109           CODGERALOPER,
+                      20260525T102219.280+0000 0110           LOCAL,
+                      20260525T102219.280+0000 0111           TIPUSOCGO,
+                      20260525T102219.280+0000 0112           QTDLANCTO,
+                      20260525T102219.280+0000 0113           VALORVLRNF,
+                      20260525T102219.280+0000 0114           VALORPIS,
+                      20260525T102219.280+0000 0115           VALORCOFINS,
+                      20260525T102219.280+0000 0116           ACMCOMPRAVENDA,
+                      20260525T102219.280+0000 0117           DTAHORLANCTO,
+                      20260525T102219.280+0000 0118           USULANCTO,
+                      20260525T102219.280+0000 0119           NRODOCUMENTO,
+                      20260525T102219.280+0000 0120           INDGERACREDIPI,
+                      20260525T102219.280+0000 0121           VALORIPI,
+                      20260525T102219.280+0000 0122           VALORICMS,
+                      20260525T102219.280+0000 0123           VALORICMSST,
+                      20260525T102219.280+0000 0124           VALORDESPNF,
+                      20260525T102219.280+0000 0125           VALORCOMISSAO,
+                      20260525T102219.280+0000 0126           VALORISS,
+                      20260525T102219.280+0000 0127           VALORDCTOFORANF,
+                      20260525T102219.280+0000 0128           VALORDESPFORANF
+                      20260525T102219.280+0000 0129 	FROM consinco.MRL_LANCTOESTOQUE
+                      20260525T102219.280+0000 0130 	WHERE DTAENTRADASAIDA = TO_DATE('22/05/2026', 'DD/MM/YYYY')
+                      20260525T102221.383+0000      	26 fields found: SEQMOVTOESTQ, NROEMPRESA, DTAENTRADASAIDA, SEQPRODUTO, SERIEDOCTO, TIPLANCTO, CODGERALOPER, LOCAL, TIPUSOCGO, QTDLANCTO, VALORVLRNF, VALORPIS, VALORCOFINS, ACMCOMPRAVENDA, DTAHORLANCTO, USULANCTO, NRODOCUMENTO, INDGERACREDIPI, VALORIPI, VALORICMS, VALORICMSST, VALORDESPNF, VALORCOMISSAO, VALORISS, VALORDCTOFORANF, VALORDESPFORANF, 
+                      20260525T102249.999+0000      156,437 lines fetched
+                      20260525T102250.003+0000 0133 If FileSize('lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd') > 0 then
+                        20260525T102250.113+0000 0134 TRACE ENTROU IF -> This_2026_05 -> 22/05/2026
+                        20260525T102250.113+0000 0134 ENTROU IF -> This_2026_05 -> 22/05/2026 
+                        20260525T102250.113+0000 0135 
+                        20260525T102250.113+0000 0137 TEMP_MRL_LANCTOESTOQUE:
+                        20260525T102250.113+0000 0138       	LOAD Date(DTAENTRADASAIDA) As NEW_DTAENTRADASAIDA Resident MRL_LANCTOESTOQUE_2026_05
+                        20260525T102250.113+0000      	1 fields found: NEW_DTAENTRADASAIDA, 
+                        20260525T102250.173+0000      156,437 lines fetched
+                        20260525T102250.179+0000 0141 LOAD *
+                        20260525T102250.179+0000 0142       	FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                        20260525T102250.179+0000 0143       	WHERE NOT Exists(NEW_DTAENTRADASAIDA, DTAENTRADASAIDA)
+                        20260525T102250.464+0000      	26 fields found: SEQMOVTOESTQ, NROEMPRESA, DTAENTRADASAIDA, SEQPRODUTO, SERIEDOCTO, TIPLANCTO, CODGERALOPER, LOCAL, TIPUSOCGO, QTDLANCTO, VALORVLRNF, VALORPIS, VALORCOFINS, ACMCOMPRAVENDA, DTAHORLANCTO, USULANCTO, NRODOCUMENTO, INDGERACREDIPI, VALORIPI, VALORICMS, VALORICMSST, VALORDESPNF, VALORCOMISSAO, VALORISS, VALORDCTOFORANF, VALORDESPFORANF, 
+                        20260525T102257.880+0000      4,056,580 lines fetched
+                        20260525T102257.895+0000 0146 Drop Table TEMP_MRL_LANCTOESTOQUE
+                        20260525T102257.895+0000 0148 End If
+                      20260525T102257.895+0000 0149 LET vFinal = Now()
+                      20260525T102257.895+0000 0151 Call RecordQVD('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102257.896+0000 0044 Trace MRL_LANCTOESTOQUE_2026_05 <###>
+                        20260525T102257.896+0000 0044 MRL_LANCTOESTOQUE_2026_05 <###>
+                        20260525T102257.896+0000 0045 
+                        20260525T102257.896+0000 0045 Let vQttRegisters = NoOfRows('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102257.896+0000 0046 vTotalRegisters = vTotalRegisters + vQttRegisters
+                        20260525T102257.896+0000 0048 Let vQttFiels = NoOfFields('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102257.896+0000 0049 vTotalFields = vTotalFields + vQttFiels
+                        20260525T102257.896+0000 0051 store [MRL_LANCTOESTOQUE_2026_05] into [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                        20260525T102301.275+0000 0052 Drop Table [MRL_LANCTOESTOQUE_2026_05]
+                        20260525T102301.300+0000 0053 Call ReadingTime('MRL_LANCTOESTOQUE_2026_05',vInit,vFinal)
+                          20260525T102301.300+0000 0058 Let vtime = Interval(pFinal - pInit, 'hh:mm:ss')
+                          20260525T102301.300+0000 0059 if pTable = 'TOTAL' then
+                            20260525T102301.300+0000 0065 TRACE --- Tempo total de leitura da Extração foi de 00:00:38 ---
+                            20260525T102301.300+0000 0065 --- Tempo total de leitura da Extração foi de 00:00:38 ---
+                            20260525T102301.300+0000 0066 
+                            20260525T102301.301+0000 0066 Call CargoRegistration('MRL_LANCTOESTOQUE_2026_05', '25/05/2026 10:22:19', '25/05/2026 10:22:57', '00:00:38', '12169484','78')
+                              20260525T102301.301+0000 0072 [Registro de Tempo]:
+                              20260525T102301.301+0000 0073     LOAD
+                              20260525T102301.301+0000 0074     	'MRL_LANCTOESTOQUE_2026_05'				as [Nome da Tabela],
+                              20260525T102301.301+0000 0075         '25/05/2026 10:22:19'				as [pInit da Leitura],
+                              20260525T102301.301+0000 0076         '25/05/2026 10:22:57'				as [pFinal da Leitura],
+                              20260525T102301.301+0000 0077         '00:00:38'				as [Tempo de Leitura],
+                              20260525T102301.301+0000 0078         '12169484'			as [Qtd Campos],
+                              20260525T102301.301+0000 0079         '78'			as [Total de Registros]
+                              20260525T102301.301+0000 0080     AutoGenerate 1
+                              20260525T102301.301+0000      	6 fields found: Nome da Tabela, pInit da Leitura, pFinal da Leitura, Tempo de Leitura, Qtd Campos, Total de Registros, 
+                              20260525T102301.301+0000      3 lines fetched
+                              20260525T102301.301+0000 0081 End Sub
+                            20260525T102301.301+0000 0067 End If
+                          20260525T102301.301+0000 0068 End Sub
+                        20260525T102301.301+0000 0054 End sub
+                      20260525T102301.301+0000 0153 End Sub
+                    20260525T102301.301+0000 0291 end if
+                  20260525T102301.302+0000 0293 If vCtrlDivergenceDay = 0
+                20260525T102301.302+0000 0296 next
+                  20260525T102301.302+0000 0273 vDateRef = Date(vDateRef)
+                  20260525T102301.302+0000 0274 Trace --------------------------------------------------------
+                  20260525T102301.302+0000 0274 --------------------------------------------------------
+                  20260525T102301.302+0000 0275 
+                  20260525T102301.302+0000 0275 TRACE ENTREI NO DIA
+                  20260525T102301.302+0000 0275 ENTREI NO DIA
+                  20260525T102301.302+0000 0276 
+                  20260525T102301.302+0000 0276 TRACE # 21/05/2026 #
+                  20260525T102301.302+0000 0276 # 21/05/2026 #
+                  20260525T102301.302+0000 0277 
+                  20260525T102301.302+0000 0278 CALL MrlLanctoEstoqueCountLinesSelect('TempCountSelect',vDateRef,vDateRef)
+                    20260525T102301.302+0000 0165 TempCountSelect:
+                    20260525T102301.302+0000 0166   SQL SELECT 
+                    20260525T102301.302+0000 0167        COUNT(*) AS CountLineSelect
+                    20260525T102301.302+0000 0168   FROM CONSINCO.MRL_LANCTOESTOQUE
+                    20260525T102301.302+0000 0169   WHERE 
+                    20260525T102301.302+0000 0170   DTAENTRADASAIDA BETWEEN TO_DATE('21/05/2026', 'DD/MM/YYYY') AND TO_DATE('21/05/2026', 'DD/MM/YYYY')
+                    20260525T102301.854+0000      	1 fields found: COUNTLINESELECT, 
+                    20260525T102301.854+0000      1 lines fetched
+                    20260525T102301.856+0000 0171 vContSelect = Peek('COUNTLINESELECT', 0, 'TempCountSelect')
+                    20260525T102301.856+0000 0172 DROP TABLE TempCountSelect
+                    20260525T102301.856+0000 0173 END SUB
+                  20260525T102301.856+0000 0279 CALL MrlLanctoEstoqueCountLinesQvd('TempTableQvd',vDateRef,vDateRef)
+                    20260525T102301.856+0000 0178 LET vYear = Year(pFirstDayOneMonthAgo)
+                    20260525T102301.856+0000 0179 LET vMonth = Num(Month(pFirstDayOneMonthAgo),00)
+                    20260525T102301.856+0000 0181 if FileSize('[lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd]') > 0 then
+                      20260525T102301.908+0000 0182 TempTableQvd:
+                      20260525T102301.908+0000 0183     LOAD
+                      20260525T102301.908+0000 0184        RowNo() as Lines
+                      20260525T102301.908+0000 0185     FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                      20260525T102301.908+0000 0186     where DATE(DTAENTRADASAIDA,'DD/MM/YYYY') >= '21/05/2026' and DATE(DTAENTRADASAIDA,'DD/MM/YYYY') <= '21/05/2026'
+                      20260525T102302.189+0000      	1 fields found: Lines, 
+                      20260525T102325.264+0000      132,184 lines fetched
+                      20260525T102325.319+0000 0187 vCountLinesQvd = NoOfRows('TempTableQvd')
+                      20260525T102325.319+0000 0188 DROP TABLE TempTableQvd
+                      20260525T102325.320+0000 0190 End if
+                    20260525T102325.320+0000 0191 END SUB
+                  20260525T102325.320+0000 0281 LET vDivergenceDay = (vContSelect - vCountLinesQvd)
+                  20260525T102325.320+0000 0283 vCtrlDivergenceDay = (vCtrlDivergenceDay - ( vContSelect - vCountLinesQvd))
+                  20260525T102325.320+0000 0285 Trace DIA -> Total = 212663. Controlador = 7. # ( 132186 - 132184 ) #
+                  20260525T102325.321+0000 0285 DIA -> Total = 212663. Controlador = 7. # ( 132186 - 132184 ) #
+                  20260525T102325.321+0000 0286 
+                  20260525T102325.321+0000 0286 Trace # 2 #
+                  20260525T102325.321+0000 0286 # 2 #
+                  20260525T102325.321+0000 0287 
+                  20260525T102325.321+0000 0289 If vDivergenceDay <> 0 then
+                    20260525T102325.321+0000 0290 CALL MrlLanctoEstoque(vDateRef)
+                      20260525T102325.321+0000 0096 LET vInit = Now()
+                      20260525T102325.321+0000 0097 let vYear = Year(pDateRef)
+                      20260525T102325.321+0000 0098 let vMonth = Num(Month(pDateRef),00)
+                      20260525T102325.321+0000 0101 MRL_LANCTOESTOQUE_2026_05:
+                      20260525T102325.321+0000 0102 	Select 
+                      20260525T102325.321+0000 0103           SEQMOVTOESTQ,
+                      20260525T102325.321+0000 0104           NROEMPRESA,
+                      20260525T102325.321+0000 0105           DTAENTRADASAIDA,
+                      20260525T102325.321+0000 0106           SEQPRODUTO,
+                      20260525T102325.321+0000 0107           SERIEDOCTO,
+                      20260525T102325.321+0000 0108           TIPLANCTO,
+                      20260525T102325.321+0000 0109           CODGERALOPER,
+                      20260525T102325.321+0000 0110           LOCAL,
+                      20260525T102325.321+0000 0111           TIPUSOCGO,
+                      20260525T102325.321+0000 0112           QTDLANCTO,
+                      20260525T102325.321+0000 0113           VALORVLRNF,
+                      20260525T102325.321+0000 0114           VALORPIS,
+                      20260525T102325.321+0000 0115           VALORCOFINS,
+                      20260525T102325.321+0000 0116           ACMCOMPRAVENDA,
+                      20260525T102325.321+0000 0117           DTAHORLANCTO,
+                      20260525T102325.321+0000 0118           USULANCTO,
+                      20260525T102325.321+0000 0119           NRODOCUMENTO,
+                      20260525T102325.321+0000 0120           INDGERACREDIPI,
+                      20260525T102325.321+0000 0121           VALORIPI,
+                      20260525T102325.321+0000 0122           VALORICMS,
+                      20260525T102325.321+0000 0123           VALORICMSST,
+                      20260525T102325.321+0000 0124           VALORDESPNF,
+                      20260525T102325.321+0000 0125           VALORCOMISSAO,
+                      20260525T102325.321+0000 0126           VALORISS,
+                      20260525T102325.321+0000 0127           VALORDCTOFORANF,
+                      20260525T102325.321+0000 0128           VALORDESPFORANF
+                      20260525T102325.321+0000 0129 	FROM consinco.MRL_LANCTOESTOQUE
+                      20260525T102325.321+0000 0130 	WHERE DTAENTRADASAIDA = TO_DATE('21/05/2026', 'DD/MM/YYYY')
+                      20260525T102328.413+0000      	26 fields found: SEQMOVTOESTQ, NROEMPRESA, DTAENTRADASAIDA, SEQPRODUTO, SERIEDOCTO, TIPLANCTO, CODGERALOPER, LOCAL, TIPUSOCGO, QTDLANCTO, VALORVLRNF, VALORPIS, VALORCOFINS, ACMCOMPRAVENDA, DTAHORLANCTO, USULANCTO, NRODOCUMENTO, INDGERACREDIPI, VALORIPI, VALORICMS, VALORICMSST, VALORDESPNF, VALORCOMISSAO, VALORISS, VALORDCTOFORANF, VALORDESPFORANF, 
+                      20260525T102336.330+0000      132,186 lines fetched
+                      20260525T102336.334+0000 0133 If FileSize('lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd') > 0 then
+                        20260525T102336.522+0000 0134 TRACE ENTROU IF -> This_2026_05 -> 21/05/2026
+                        20260525T102336.522+0000 0134 ENTROU IF -> This_2026_05 -> 21/05/2026 
+                        20260525T102336.522+0000 0135 
+                        20260525T102336.522+0000 0137 TEMP_MRL_LANCTOESTOQUE:
+                        20260525T102336.522+0000 0138       	LOAD Date(DTAENTRADASAIDA) As NEW_DTAENTRADASAIDA Resident MRL_LANCTOESTOQUE_2026_05
+                        20260525T102336.522+0000      	1 fields found: NEW_DTAENTRADASAIDA, 
+                        20260525T102336.572+0000      132,186 lines fetched
+                        20260525T102336.582+0000 0141 LOAD *
+                        20260525T102336.582+0000 0142       	FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                        20260525T102336.582+0000 0143       	WHERE NOT Exists(NEW_DTAENTRADASAIDA, DTAENTRADASAIDA)
+                        20260525T102336.859+0000      	26 fields found: SEQMOVTOESTQ, NROEMPRESA, DTAENTRADASAIDA, SEQPRODUTO, SERIEDOCTO, TIPLANCTO, CODGERALOPER, LOCAL, TIPUSOCGO, QTDLANCTO, VALORVLRNF, VALORPIS, VALORCOFINS, ACMCOMPRAVENDA, DTAHORLANCTO, USULANCTO, NRODOCUMENTO, INDGERACREDIPI, VALORIPI, VALORICMS, VALORICMSST, VALORDESPNF, VALORCOMISSAO, VALORISS, VALORDCTOFORANF, VALORDESPFORANF, 
+                        20260525T102343.733+0000      4,056,582 lines fetched
+                        20260525T102343.749+0000 0146 Drop Table TEMP_MRL_LANCTOESTOQUE
+                        20260525T102343.749+0000 0148 End If
+                      20260525T102343.749+0000 0149 LET vFinal = Now()
+                      20260525T102343.749+0000 0151 Call RecordQVD('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102343.749+0000 0044 Trace MRL_LANCTOESTOQUE_2026_05 <###>
+                        20260525T102343.749+0000 0044 MRL_LANCTOESTOQUE_2026_05 <###>
+                        20260525T102343.749+0000 0045 
+                        20260525T102343.749+0000 0045 Let vQttRegisters = NoOfRows('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102343.749+0000 0046 vTotalRegisters = vTotalRegisters + vQttRegisters
+                        20260525T102343.749+0000 0048 Let vQttFiels = NoOfFields('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102343.749+0000 0049 vTotalFields = vTotalFields + vQttFiels
+                        20260525T102343.749+0000 0051 store [MRL_LANCTOESTOQUE_2026_05] into [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                        20260525T102345.795+0000 0052 Drop Table [MRL_LANCTOESTOQUE_2026_05]
+                        20260525T102345.819+0000 0053 Call ReadingTime('MRL_LANCTOESTOQUE_2026_05',vInit,vFinal)
+                          20260525T102345.819+0000 0058 Let vtime = Interval(pFinal - pInit, 'hh:mm:ss')
+                          20260525T102345.819+0000 0059 if pTable = 'TOTAL' then
+                            20260525T102345.820+0000 0065 TRACE --- Tempo total de leitura da Extração foi de 00:00:18 ---
+                            20260525T102345.820+0000 0065 --- Tempo total de leitura da Extração foi de 00:00:18 ---
+                            20260525T102345.820+0000 0066 
+                            20260525T102345.820+0000 0066 Call CargoRegistration('MRL_LANCTOESTOQUE_2026_05', '25/05/2026 10:23:25', '25/05/2026 10:23:43', '00:00:18', '16226066','104')
+                              20260525T102345.820+0000 0072 [Registro de Tempo]:
+                              20260525T102345.820+0000 0073     LOAD
+                              20260525T102345.820+0000 0074     	'MRL_LANCTOESTOQUE_2026_05'				as [Nome da Tabela],
+                              20260525T102345.820+0000 0075         '25/05/2026 10:23:25'				as [pInit da Leitura],
+                              20260525T102345.820+0000 0076         '25/05/2026 10:23:43'				as [pFinal da Leitura],
+                              20260525T102345.820+0000 0077         '00:00:18'				as [Tempo de Leitura],
+                              20260525T102345.820+0000 0078         '16226066'			as [Qtd Campos],
+                              20260525T102345.820+0000 0079         '104'			as [Total de Registros]
+                              20260525T102345.820+0000 0080     AutoGenerate 1
+                              20260525T102345.820+0000      	6 fields found: Nome da Tabela, pInit da Leitura, pFinal da Leitura, Tempo de Leitura, Qtd Campos, Total de Registros, 
+                              20260525T102345.820+0000      4 lines fetched
+                              20260525T102345.820+0000 0081 End Sub
+                            20260525T102345.820+0000 0067 End If
+                          20260525T102345.820+0000 0068 End Sub
+                        20260525T102345.820+0000 0054 End sub
+                      20260525T102345.820+0000 0153 End Sub
+                    20260525T102345.820+0000 0291 end if
+                  20260525T102345.821+0000 0293 If vCtrlDivergenceDay = 0
+                20260525T102345.821+0000 0296 next
+                  20260525T102345.821+0000 0273 vDateRef = Date(vDateRef)
+                  20260525T102345.821+0000 0274 Trace --------------------------------------------------------
+                  20260525T102345.821+0000 0274 --------------------------------------------------------
+                  20260525T102345.821+0000 0275 
+                  20260525T102345.821+0000 0275 TRACE ENTREI NO DIA
+                  20260525T102345.821+0000 0275 ENTREI NO DIA
+                  20260525T102345.821+0000 0276 
+                  20260525T102345.821+0000 0276 TRACE # 20/05/2026 #
+                  20260525T102345.821+0000 0276 # 20/05/2026 #
+                  20260525T102345.821+0000 0277 
+                  20260525T102345.821+0000 0278 CALL MrlLanctoEstoqueCountLinesSelect('TempCountSelect',vDateRef,vDateRef)
+                    20260525T102345.821+0000 0165 TempCountSelect:
+                    20260525T102345.821+0000 0166   SQL SELECT 
+                    20260525T102345.821+0000 0167        COUNT(*) AS CountLineSelect
+                    20260525T102345.821+0000 0168   FROM CONSINCO.MRL_LANCTOESTOQUE
+                    20260525T102345.821+0000 0169   WHERE 
+                    20260525T102345.821+0000 0170   DTAENTRADASAIDA BETWEEN TO_DATE('20/05/2026', 'DD/MM/YYYY') AND TO_DATE('20/05/2026', 'DD/MM/YYYY')
+                    20260525T102346.221+0000      	1 fields found: COUNTLINESELECT, 
+                    20260525T102346.221+0000      1 lines fetched
+                    20260525T102346.223+0000 0171 vContSelect = Peek('COUNTLINESELECT', 0, 'TempCountSelect')
+                    20260525T102346.223+0000 0172 DROP TABLE TempCountSelect
+                    20260525T102346.223+0000 0173 END SUB
+                  20260525T102346.223+0000 0279 CALL MrlLanctoEstoqueCountLinesQvd('TempTableQvd',vDateRef,vDateRef)
+                    20260525T102346.223+0000 0178 LET vYear = Year(pFirstDayOneMonthAgo)
+                    20260525T102346.223+0000 0179 LET vMonth = Num(Month(pFirstDayOneMonthAgo),00)
+                    20260525T102346.223+0000 0181 if FileSize('[lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd]') > 0 then
+                      20260525T102346.259+0000 0182 TempTableQvd:
+                      20260525T102346.259+0000 0183     LOAD
+                      20260525T102346.259+0000 0184        RowNo() as Lines
+                      20260525T102346.259+0000 0185     FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                      20260525T102346.259+0000 0186     where DATE(DTAENTRADASAIDA,'DD/MM/YYYY') >= '20/05/2026' and DATE(DTAENTRADASAIDA,'DD/MM/YYYY') <= '20/05/2026'
+                      20260525T102346.510+0000      	1 fields found: Lines, 
+                      20260525T102411.305+0000      125,657 lines fetched
+                      20260525T102411.351+0000 0187 vCountLinesQvd = NoOfRows('TempTableQvd')
+                      20260525T102411.351+0000 0188 DROP TABLE TempTableQvd
+                      20260525T102411.352+0000 0190 End if
+                    20260525T102411.352+0000 0191 END SUB
+                  20260525T102411.352+0000 0281 LET vDivergenceDay = (vContSelect - vCountLinesQvd)
+                  20260525T102411.353+0000 0283 vCtrlDivergenceDay = (vCtrlDivergenceDay - ( vContSelect - vCountLinesQvd))
+                  20260525T102411.353+0000 0285 Trace DIA -> Total = 212663. Controlador = 7. # ( 125657 - 125657 ) #
+                  20260525T102411.353+0000 0285 DIA -> Total = 212663. Controlador = 7. # ( 125657 - 125657 ) #
+                  20260525T102411.353+0000 0286 
+                  20260525T102411.353+0000 0286 Trace # 0 #
+                  20260525T102411.353+0000 0286 # 0 #
+                  20260525T102411.353+0000 0287 
+                  20260525T102411.353+0000 0289 If vDivergenceDay <> 0 then
+                  20260525T102411.353+0000 0293 If vCtrlDivergenceDay = 0
+                20260525T102411.353+0000 0296 next
+                  20260525T102411.353+0000 0273 vDateRef = Date(vDateRef)
+                  20260525T102411.353+0000 0274 Trace --------------------------------------------------------
+                  20260525T102411.353+0000 0274 --------------------------------------------------------
+                  20260525T102411.353+0000 0275 
+                  20260525T102411.353+0000 0275 TRACE ENTREI NO DIA
+                  20260525T102411.353+0000 0275 ENTREI NO DIA
+                  20260525T102411.353+0000 0276 
+                  20260525T102411.353+0000 0276 TRACE # 19/05/2026 #
+                  20260525T102411.353+0000 0276 # 19/05/2026 #
+                  20260525T102411.353+0000 0277 
+                  20260525T102411.353+0000 0278 CALL MrlLanctoEstoqueCountLinesSelect('TempCountSelect',vDateRef,vDateRef)
+                    20260525T102411.353+0000 0165 TempCountSelect:
+                    20260525T102411.353+0000 0166   SQL SELECT 
+                    20260525T102411.353+0000 0167        COUNT(*) AS CountLineSelect
+                    20260525T102411.353+0000 0168   FROM CONSINCO.MRL_LANCTOESTOQUE
+                    20260525T102411.353+0000 0169   WHERE 
+                    20260525T102411.353+0000 0170   DTAENTRADASAIDA BETWEEN TO_DATE('19/05/2026', 'DD/MM/YYYY') AND TO_DATE('19/05/2026', 'DD/MM/YYYY')
+                    20260525T102411.765+0000      	1 fields found: COUNTLINESELECT, 
+                    20260525T102411.766+0000      1 lines fetched
+                    20260525T102411.768+0000 0171 vContSelect = Peek('COUNTLINESELECT', 0, 'TempCountSelect')
+                    20260525T102411.768+0000 0172 DROP TABLE TempCountSelect
+                    20260525T102411.768+0000 0173 END SUB
+                  20260525T102411.768+0000 0279 CALL MrlLanctoEstoqueCountLinesQvd('TempTableQvd',vDateRef,vDateRef)
+                    20260525T102411.768+0000 0178 LET vYear = Year(pFirstDayOneMonthAgo)
+                    20260525T102411.768+0000 0179 LET vMonth = Num(Month(pFirstDayOneMonthAgo),00)
+                    20260525T102411.769+0000 0181 if FileSize('[lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd]') > 0 then
+                      20260525T102411.805+0000 0182 TempTableQvd:
+                      20260525T102411.805+0000 0183     LOAD
+                      20260525T102411.805+0000 0184        RowNo() as Lines
+                      20260525T102411.805+0000 0185     FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                      20260525T102411.805+0000 0186     where DATE(DTAENTRADASAIDA,'DD/MM/YYYY') >= '19/05/2026' and DATE(DTAENTRADASAIDA,'DD/MM/YYYY') <= '19/05/2026'
+                      20260525T102412.154+0000      	1 fields found: Lines, 
+                      20260525T102434.360+0000      132,665 lines fetched
+                      20260525T102434.400+0000 0187 vCountLinesQvd = NoOfRows('TempTableQvd')
+                      20260525T102434.400+0000 0188 DROP TABLE TempTableQvd
+                      20260525T102434.401+0000 0190 End if
+                    20260525T102434.401+0000 0191 END SUB
+                  20260525T102434.401+0000 0281 LET vDivergenceDay = (vContSelect - vCountLinesQvd)
+                  20260525T102434.401+0000 0283 vCtrlDivergenceDay = (vCtrlDivergenceDay - ( vContSelect - vCountLinesQvd))
+                  20260525T102434.401+0000 0285 Trace DIA -> Total = 212663. Controlador = 0. # ( 132672 - 132665 ) #
+                  20260525T102434.401+0000 0285 DIA -> Total = 212663. Controlador = 0. # ( 132672 - 132665 ) #
+                  20260525T102434.401+0000 0286 
+                  20260525T102434.401+0000 0286 Trace # 7 #
+                  20260525T102434.401+0000 0286 # 7 #
+                  20260525T102434.401+0000 0287 
+                  20260525T102434.401+0000 0289 If vDivergenceDay <> 0 then
+                    20260525T102434.401+0000 0290 CALL MrlLanctoEstoque(vDateRef)
+                      20260525T102434.401+0000 0096 LET vInit = Now()
+                      20260525T102434.401+0000 0097 let vYear = Year(pDateRef)
+                      20260525T102434.402+0000 0098 let vMonth = Num(Month(pDateRef),00)
+                      20260525T102434.402+0000 0101 MRL_LANCTOESTOQUE_2026_05:
+                      20260525T102434.402+0000 0102 	Select 
+                      20260525T102434.402+0000 0103           SEQMOVTOESTQ,
+                      20260525T102434.402+0000 0104           NROEMPRESA,
+                      20260525T102434.402+0000 0105           DTAENTRADASAIDA,
+                      20260525T102434.402+0000 0106           SEQPRODUTO,
+                      20260525T102434.402+0000 0107           SERIEDOCTO,
+                      20260525T102434.402+0000 0108           TIPLANCTO,
+                      20260525T102434.402+0000 0109           CODGERALOPER,
+                      20260525T102434.402+0000 0110           LOCAL,
+                      20260525T102434.402+0000 0111           TIPUSOCGO,
+                      20260525T102434.402+0000 0112           QTDLANCTO,
+                      20260525T102434.402+0000 0113           VALORVLRNF,
+                      20260525T102434.402+0000 0114           VALORPIS,
+                      20260525T102434.402+0000 0115           VALORCOFINS,
+                      20260525T102434.402+0000 0116           ACMCOMPRAVENDA,
+                      20260525T102434.402+0000 0117           DTAHORLANCTO,
+                      20260525T102434.402+0000 0118           USULANCTO,
+                      20260525T102434.402+0000 0119           NRODOCUMENTO,
+                      20260525T102434.402+0000 0120           INDGERACREDIPI,
+                      20260525T102434.402+0000 0121           VALORIPI,
+                      20260525T102434.402+0000 0122           VALORICMS,
+                      20260525T102434.402+0000 0123           VALORICMSST,
+                      20260525T102434.402+0000 0124           VALORDESPNF,
+                      20260525T102434.402+0000 0125           VALORCOMISSAO,
+                      20260525T102434.402+0000 0126           VALORISS,
+                      20260525T102434.402+0000 0127           VALORDCTOFORANF,
+                      20260525T102434.402+0000 0128           VALORDESPFORANF
+                      20260525T102434.402+0000 0129 	FROM consinco.MRL_LANCTOESTOQUE
+                      20260525T102434.402+0000 0130 	WHERE DTAENTRADASAIDA = TO_DATE('19/05/2026', 'DD/MM/YYYY')
+                      20260525T102435.684+0000      	26 fields found: SEQMOVTOESTQ, NROEMPRESA, DTAENTRADASAIDA, SEQPRODUTO, SERIEDOCTO, TIPLANCTO, CODGERALOPER, LOCAL, TIPUSOCGO, QTDLANCTO, VALORVLRNF, VALORPIS, VALORCOFINS, ACMCOMPRAVENDA, DTAHORLANCTO, USULANCTO, NRODOCUMENTO, INDGERACREDIPI, VALORIPI, VALORICMS, VALORICMSST, VALORDESPNF, VALORCOMISSAO, VALORISS, VALORDCTOFORANF, VALORDESPFORANF, 
+                      20260525T102443.158+0000      132,672 lines fetched
+                      20260525T102443.162+0000 0133 If FileSize('lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd') > 0 then
+                        20260525T102443.208+0000 0134 TRACE ENTROU IF -> This_2026_05 -> 19/05/2026
+                        20260525T102443.208+0000 0134 ENTROU IF -> This_2026_05 -> 19/05/2026 
+                        20260525T102443.208+0000 0135 
+                        20260525T102443.208+0000 0137 TEMP_MRL_LANCTOESTOQUE:
+                        20260525T102443.208+0000 0138       	LOAD Date(DTAENTRADASAIDA) As NEW_DTAENTRADASAIDA Resident MRL_LANCTOESTOQUE_2026_05
+                        20260525T102443.208+0000      	1 fields found: NEW_DTAENTRADASAIDA, 
+                        20260525T102443.264+0000      132,672 lines fetched
+                        20260525T102443.271+0000 0141 LOAD *
+                        20260525T102443.271+0000 0142       	FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                        20260525T102443.271+0000 0143       	WHERE NOT Exists(NEW_DTAENTRADASAIDA, DTAENTRADASAIDA)
+                        20260525T102443.639+0000      	26 fields found: SEQMOVTOESTQ, NROEMPRESA, DTAENTRADASAIDA, SEQPRODUTO, SERIEDOCTO, TIPLANCTO, CODGERALOPER, LOCAL, TIPUSOCGO, QTDLANCTO, VALORVLRNF, VALORPIS, VALORCOFINS, ACMCOMPRAVENDA, DTAHORLANCTO, USULANCTO, NRODOCUMENTO, INDGERACREDIPI, VALORIPI, VALORICMS, VALORICMSST, VALORDESPNF, VALORCOMISSAO, VALORISS, VALORDCTOFORANF, VALORDESPFORANF, 
+                        20260525T102451.120+0000      4,056,589 lines fetched
+                        20260525T102451.141+0000 0146 Drop Table TEMP_MRL_LANCTOESTOQUE
+                        20260525T102451.141+0000 0148 End If
+                      20260525T102451.141+0000 0149 LET vFinal = Now()
+                      20260525T102451.141+0000 0151 Call RecordQVD('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102451.141+0000 0044 Trace MRL_LANCTOESTOQUE_2026_05 <###>
+                        20260525T102451.141+0000 0044 MRL_LANCTOESTOQUE_2026_05 <###>
+                        20260525T102451.141+0000 0045 
+                        20260525T102451.141+0000 0045 Let vQttRegisters = NoOfRows('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102451.141+0000 0046 vTotalRegisters = vTotalRegisters + vQttRegisters
+                        20260525T102451.141+0000 0048 Let vQttFiels = NoOfFields('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102451.142+0000 0049 vTotalFields = vTotalFields + vQttFiels
+                        20260525T102451.142+0000 0051 store [MRL_LANCTOESTOQUE_2026_05] into [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                        20260525T102453.297+0000 0052 Drop Table [MRL_LANCTOESTOQUE_2026_05]
+                        20260525T102453.331+0000 0053 Call ReadingTime('MRL_LANCTOESTOQUE_2026_05',vInit,vFinal)
+                          20260525T102453.331+0000 0058 Let vtime = Interval(pFinal - pInit, 'hh:mm:ss')
+                          20260525T102453.331+0000 0059 if pTable = 'TOTAL' then
+                            20260525T102453.331+0000 0065 TRACE --- Tempo total de leitura da Extração foi de 00:00:17 ---
+                            20260525T102453.331+0000 0065 --- Tempo total de leitura da Extração foi de 00:00:17 ---
+                            20260525T102453.331+0000 0066 
+                            20260525T102453.331+0000 0066 Call CargoRegistration('MRL_LANCTOESTOQUE_2026_05', '25/05/2026 10:24:34', '25/05/2026 10:24:51', '00:00:17', '20282655','130')
+                              20260525T102453.331+0000 0072 [Registro de Tempo]:
+                              20260525T102453.331+0000 0073     LOAD
+                              20260525T102453.331+0000 0074     	'MRL_LANCTOESTOQUE_2026_05'				as [Nome da Tabela],
+                              20260525T102453.331+0000 0075         '25/05/2026 10:24:34'				as [pInit da Leitura],
+                              20260525T102453.331+0000 0076         '25/05/2026 10:24:51'				as [pFinal da Leitura],
+                              20260525T102453.331+0000 0077         '00:00:17'				as [Tempo de Leitura],
+                              20260525T102453.331+0000 0078         '20282655'			as [Qtd Campos],
+                              20260525T102453.331+0000 0079         '130'			as [Total de Registros]
+                              20260525T102453.331+0000 0080     AutoGenerate 1
+                              20260525T102453.331+0000      	6 fields found: Nome da Tabela, pInit da Leitura, pFinal da Leitura, Tempo de Leitura, Qtd Campos, Total de Registros, 
+                              20260525T102453.332+0000      5 lines fetched
+                              20260525T102453.332+0000 0081 End Sub
+                            20260525T102453.332+0000 0067 End If
+                          20260525T102453.332+0000 0068 End Sub
+                        20260525T102453.332+0000 0054 End sub
+                      20260525T102453.332+0000 0153 End Sub
+                    20260525T102453.332+0000 0291 end if
+                  20260525T102453.332+0000 0293 If vCtrlDivergenceDay = 0
+                  20260525T102453.332+0000 0294 Exit For
+                20260525T102453.332+0000 0298 End SUB
+              20260525T102453.332+0000 0258 End If
+            20260525T102453.332+0000 0260 Trace PERÍODO -> Total = 212669. Controlador = 6. # ( 132672 - 132665 ) #
+            20260525T102453.332+0000 0260 PERÍODO -> Total = 212669. Controlador = 6. # ( 132672 - 132665 ) #
+            20260525T102453.332+0000 0261 
+            20260525T102453.332+0000 0262 If vCtrlDivergencePeriod = 0 then
+          20260525T102453.332+0000 0265 next
+            20260525T102453.332+0000 0237 LET vLastDayPeriod = date(vIndexPeriod)
+            20260525T102453.332+0000 0238 LET vFirstDayPeriod = date(vIndexPeriod+(vStep+1))
+            20260525T102453.333+0000 0240 If day(vFirstDayPeriod) > day(vLastDayPeriod) then
+            20260525T102453.333+0000 0244 CALL MrlLanctoEstoqueCountLinesSelect('TempCountSelect',vFirstDayPeriod,vLastDayPeriod)
+              20260525T102453.333+0000 0165 TempCountSelect:
+              20260525T102453.333+0000 0166   SQL SELECT 
+              20260525T102453.333+0000 0167        COUNT(*) AS CountLineSelect
+              20260525T102453.333+0000 0168   FROM CONSINCO.MRL_LANCTOESTOQUE
+              20260525T102453.333+0000 0169   WHERE 
+              20260525T102453.333+0000 0170   DTAENTRADASAIDA BETWEEN TO_DATE('11/05/2026', 'DD/MM/YYYY') AND TO_DATE('17/05/2026', 'DD/MM/YYYY')
+              20260525T102455.008+0000      	1 fields found: COUNTLINESELECT, 
+              20260525T102455.009+0000      1 lines fetched
+              20260525T102455.011+0000 0171 vContSelect = Peek('COUNTLINESELECT', 0, 'TempCountSelect')
+              20260525T102455.011+0000 0172 DROP TABLE TempCountSelect
+              20260525T102455.011+0000 0173 END SUB
+            20260525T102455.011+0000 0245 CALL MrlLanctoEstoqueCountLinesQvd('TempTableQvd',vFirstDayPeriod,vLastDayPeriod)
+              20260525T102455.011+0000 0178 LET vYear = Year(pFirstDayOneMonthAgo)
+              20260525T102455.011+0000 0179 LET vMonth = Num(Month(pFirstDayOneMonthAgo),00)
+              20260525T102455.011+0000 0181 if FileSize('[lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd]') > 0 then
+                20260525T102455.057+0000 0182 TempTableQvd:
+                20260525T102455.057+0000 0183     LOAD
+                20260525T102455.057+0000 0184        RowNo() as Lines
+                20260525T102455.057+0000 0185     FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                20260525T102455.057+0000 0186     where DATE(DTAENTRADASAIDA,'DD/MM/YYYY') >= '11/05/2026' and DATE(DTAENTRADASAIDA,'DD/MM/YYYY') <= '17/05/2026'
+                20260525T102455.292+0000      	1 fields found: Lines, 
+                20260525T102518.080+0000      1,131,294 lines fetched
+                20260525T102518.116+0000 0187 vCountLinesQvd = NoOfRows('TempTableQvd')
+                20260525T102518.116+0000 0188 DROP TABLE TempTableQvd
+                20260525T102518.123+0000 0190 End if
+              20260525T102518.123+0000 0191 END SUB
+            20260525T102518.123+0000 0248 LET vDivergencePeriod = (vContSelect - vCountLinesQvd)
+            20260525T102518.123+0000 0249 Trace --------------------------------------------------------
+            20260525T102518.123+0000 0249 --------------------------------------------------------
+            20260525T102518.123+0000 0250 
+            20260525T102518.123+0000 0250 Trace Entre 11/05/2026 e 17/05/2026.  Divergência de: 6
+            20260525T102518.123+0000 0250 Entre 11/05/2026 e 17/05/2026.  Divergência de: 6
+            20260525T102518.123+0000 0251 
+            20260525T102518.124+0000 0253 vCtrlDivergencePeriod = (vCtrlDivergencePeriod - ( vContSelect - vCountLinesQvd))
+            20260525T102518.124+0000 0256 If vDivergencePeriod <> 0 then
+              20260525T102518.124+0000 0257 CALL CorrDay(pSubFato,vFirstDayPeriod,vLastDayPeriod,vDivergencePeriod)
+                20260525T102518.124+0000 0271 LET vCtrlDivergenceDay = pCtrlDivergencePeriod
+                20260525T102518.124+0000 0272 for vDateRef = pLastDayPeriod to pFirstDayPeriod step -1
+                  20260525T102518.124+0000 0273 vDateRef = Date(vDateRef)
+                  20260525T102518.124+0000 0274 Trace --------------------------------------------------------
+                  20260525T102518.124+0000 0274 --------------------------------------------------------
+                  20260525T102518.124+0000 0275 
+                  20260525T102518.124+0000 0275 TRACE ENTREI NO DIA
+                  20260525T102518.124+0000 0275 ENTREI NO DIA
+                  20260525T102518.124+0000 0276 
+                  20260525T102518.124+0000 0276 TRACE # 17/05/2026 #
+                  20260525T102518.124+0000 0276 # 17/05/2026 #
+                  20260525T102518.124+0000 0277 
+                  20260525T102518.124+0000 0278 CALL MrlLanctoEstoqueCountLinesSelect('TempCountSelect',vDateRef,vDateRef)
+                    20260525T102518.124+0000 0165 TempCountSelect:
+                    20260525T102518.124+0000 0166   SQL SELECT 
+                    20260525T102518.124+0000 0167        COUNT(*) AS CountLineSelect
+                    20260525T102518.124+0000 0168   FROM CONSINCO.MRL_LANCTOESTOQUE
+                    20260525T102518.124+0000 0169   WHERE 
+                    20260525T102518.124+0000 0170   DTAENTRADASAIDA BETWEEN TO_DATE('17/05/2026', 'DD/MM/YYYY') AND TO_DATE('17/05/2026', 'DD/MM/YYYY')
+                    20260525T102518.571+0000      	1 fields found: COUNTLINESELECT, 
+                    20260525T102518.571+0000      1 lines fetched
+                    20260525T102518.574+0000 0171 vContSelect = Peek('COUNTLINESELECT', 0, 'TempCountSelect')
+                    20260525T102518.574+0000 0172 DROP TABLE TempCountSelect
+                    20260525T102518.574+0000 0173 END SUB
+                  20260525T102518.574+0000 0279 CALL MrlLanctoEstoqueCountLinesQvd('TempTableQvd',vDateRef,vDateRef)
+                    20260525T102518.574+0000 0178 LET vYear = Year(pFirstDayOneMonthAgo)
+                    20260525T102518.574+0000 0179 LET vMonth = Num(Month(pFirstDayOneMonthAgo),00)
+                    20260525T102518.574+0000 0181 if FileSize('[lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd]') > 0 then
+                      20260525T102518.625+0000 0182 TempTableQvd:
+                      20260525T102518.625+0000 0183     LOAD
+                      20260525T102518.625+0000 0184        RowNo() as Lines
+                      20260525T102518.625+0000 0185     FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                      20260525T102518.625+0000 0186     where DATE(DTAENTRADASAIDA,'DD/MM/YYYY') >= '17/05/2026' and DATE(DTAENTRADASAIDA,'DD/MM/YYYY') <= '17/05/2026'
+                      20260525T102518.883+0000      	1 fields found: Lines, 
+                      20260525T102541.303+0000      223,701 lines fetched
+                      20260525T102541.341+0000 0187 vCountLinesQvd = NoOfRows('TempTableQvd')
+                      20260525T102541.341+0000 0188 DROP TABLE TempTableQvd
+                      20260525T102541.342+0000 0190 End if
+                    20260525T102541.342+0000 0191 END SUB
+                  20260525T102541.342+0000 0281 LET vDivergenceDay = (vContSelect - vCountLinesQvd)
+                  20260525T102541.342+0000 0283 vCtrlDivergenceDay = (vCtrlDivergenceDay - ( vContSelect - vCountLinesQvd))
+                  20260525T102541.343+0000 0285 Trace DIA -> Total = 6. Controlador = 6. # ( 223701 - 223701 ) #
+                  20260525T102541.343+0000 0285 DIA -> Total = 6. Controlador = 6. # ( 223701 - 223701 ) #
+                  20260525T102541.343+0000 0286 
+                  20260525T102541.343+0000 0286 Trace # 0 #
+                  20260525T102541.343+0000 0286 # 0 #
+                  20260525T102541.343+0000 0287 
+                  20260525T102541.343+0000 0289 If vDivergenceDay <> 0 then
+                  20260525T102541.343+0000 0293 If vCtrlDivergenceDay = 0
+                20260525T102541.343+0000 0296 next
+                  20260525T102541.343+0000 0273 vDateRef = Date(vDateRef)
+                  20260525T102541.343+0000 0274 Trace --------------------------------------------------------
+                  20260525T102541.343+0000 0274 --------------------------------------------------------
+                  20260525T102541.343+0000 0275 
+                  20260525T102541.343+0000 0275 TRACE ENTREI NO DIA
+                  20260525T102541.343+0000 0275 ENTREI NO DIA
+                  20260525T102541.343+0000 0276 
+                  20260525T102541.343+0000 0276 TRACE # 16/05/2026 #
+                  20260525T102541.343+0000 0276 # 16/05/2026 #
+                  20260525T102541.343+0000 0277 
+                  20260525T102541.343+0000 0278 CALL MrlLanctoEstoqueCountLinesSelect('TempCountSelect',vDateRef,vDateRef)
+                    20260525T102541.343+0000 0165 TempCountSelect:
+                    20260525T102541.343+0000 0166   SQL SELECT 
+                    20260525T102541.343+0000 0167        COUNT(*) AS CountLineSelect
+                    20260525T102541.343+0000 0168   FROM CONSINCO.MRL_LANCTOESTOQUE
+                    20260525T102541.343+0000 0169   WHERE 
+                    20260525T102541.343+0000 0170   DTAENTRADASAIDA BETWEEN TO_DATE('16/05/2026', 'DD/MM/YYYY') AND TO_DATE('16/05/2026', 'DD/MM/YYYY')
+                    20260525T102541.761+0000      	1 fields found: COUNTLINESELECT, 
+                    20260525T102541.761+0000      1 lines fetched
+                    20260525T102541.763+0000 0171 vContSelect = Peek('COUNTLINESELECT', 0, 'TempCountSelect')
+                    20260525T102541.763+0000 0172 DROP TABLE TempCountSelect
+                    20260525T102541.763+0000 0173 END SUB
+                  20260525T102541.763+0000 0279 CALL MrlLanctoEstoqueCountLinesQvd('TempTableQvd',vDateRef,vDateRef)
+                    20260525T102541.763+0000 0178 LET vYear = Year(pFirstDayOneMonthAgo)
+                    20260525T102541.763+0000 0179 LET vMonth = Num(Month(pFirstDayOneMonthAgo),00)
+                    20260525T102541.763+0000 0181 if FileSize('[lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd]') > 0 then
+                      20260525T102541.805+0000 0182 TempTableQvd:
+                      20260525T102541.805+0000 0183     LOAD
+                      20260525T102541.805+0000 0184        RowNo() as Lines
+                      20260525T102541.805+0000 0185     FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                      20260525T102541.805+0000 0186     where DATE(DTAENTRADASAIDA,'DD/MM/YYYY') >= '16/05/2026' and DATE(DTAENTRADASAIDA,'DD/MM/YYYY') <= '16/05/2026'
+                      20260525T102542.101+0000      	1 fields found: Lines, 
+                      20260525T102604.580+0000      218,397 lines fetched
+                      20260525T102604.616+0000 0187 vCountLinesQvd = NoOfRows('TempTableQvd')
+                      20260525T102604.616+0000 0188 DROP TABLE TempTableQvd
+                      20260525T102604.617+0000 0190 End if
+                    20260525T102604.617+0000 0191 END SUB
+                  20260525T102604.617+0000 0281 LET vDivergenceDay = (vContSelect - vCountLinesQvd)
+                  20260525T102604.617+0000 0283 vCtrlDivergenceDay = (vCtrlDivergenceDay - ( vContSelect - vCountLinesQvd))
+                  20260525T102604.617+0000 0285 Trace DIA -> Total = 6. Controlador = 6. # ( 218397 - 218397 ) #
+                  20260525T102604.617+0000 0285 DIA -> Total = 6. Controlador = 6. # ( 218397 - 218397 ) #
+                  20260525T102604.617+0000 0286 
+                  20260525T102604.617+0000 0286 Trace # 0 #
+                  20260525T102604.617+0000 0286 # 0 #
+                  20260525T102604.617+0000 0287 
+                  20260525T102604.617+0000 0289 If vDivergenceDay <> 0 then
+                  20260525T102604.618+0000 0293 If vCtrlDivergenceDay = 0
+                20260525T102604.618+0000 0296 next
+                  20260525T102604.618+0000 0273 vDateRef = Date(vDateRef)
+                  20260525T102604.618+0000 0274 Trace --------------------------------------------------------
+                  20260525T102604.618+0000 0274 --------------------------------------------------------
+                  20260525T102604.618+0000 0275 
+                  20260525T102604.618+0000 0275 TRACE ENTREI NO DIA
+                  20260525T102604.618+0000 0275 ENTREI NO DIA
+                  20260525T102604.618+0000 0276 
+                  20260525T102604.618+0000 0276 TRACE # 15/05/2026 #
+                  20260525T102604.618+0000 0276 # 15/05/2026 #
+                  20260525T102604.618+0000 0277 
+                  20260525T102604.618+0000 0278 CALL MrlLanctoEstoqueCountLinesSelect('TempCountSelect',vDateRef,vDateRef)
+                    20260525T102604.618+0000 0165 TempCountSelect:
+                    20260525T102604.618+0000 0166   SQL SELECT 
+                    20260525T102604.618+0000 0167        COUNT(*) AS CountLineSelect
+                    20260525T102604.618+0000 0168   FROM CONSINCO.MRL_LANCTOESTOQUE
+                    20260525T102604.618+0000 0169   WHERE 
+                    20260525T102604.618+0000 0170   DTAENTRADASAIDA BETWEEN TO_DATE('15/05/2026', 'DD/MM/YYYY') AND TO_DATE('15/05/2026', 'DD/MM/YYYY')
+                    20260525T102608.678+0000      	1 fields found: COUNTLINESELECT, 
+                    20260525T102608.678+0000      1 lines fetched
+                    20260525T102608.680+0000 0171 vContSelect = Peek('COUNTLINESELECT', 0, 'TempCountSelect')
+                    20260525T102608.680+0000 0172 DROP TABLE TempCountSelect
+                    20260525T102608.680+0000 0173 END SUB
+                  20260525T102608.680+0000 0279 CALL MrlLanctoEstoqueCountLinesQvd('TempTableQvd',vDateRef,vDateRef)
+                    20260525T102608.680+0000 0178 LET vYear = Year(pFirstDayOneMonthAgo)
+                    20260525T102608.680+0000 0179 LET vMonth = Num(Month(pFirstDayOneMonthAgo),00)
+                    20260525T102608.680+0000 0181 if FileSize('[lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd]') > 0 then
+                      20260525T102608.728+0000 0182 TempTableQvd:
+                      20260525T102608.728+0000 0183     LOAD
+                      20260525T102608.728+0000 0184        RowNo() as Lines
+                      20260525T102608.728+0000 0185     FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                      20260525T102608.728+0000 0186     where DATE(DTAENTRADASAIDA,'DD/MM/YYYY') >= '15/05/2026' and DATE(DTAENTRADASAIDA,'DD/MM/YYYY') <= '15/05/2026'
+                      20260525T102609.069+0000      	1 fields found: Lines, 
+                      20260525T102634.853+0000      154,294 lines fetched
+                      20260525T102634.889+0000 0187 vCountLinesQvd = NoOfRows('TempTableQvd')
+                      20260525T102634.890+0000 0188 DROP TABLE TempTableQvd
+                      20260525T102634.891+0000 0190 End if
+                    20260525T102634.891+0000 0191 END SUB
+                  20260525T102634.891+0000 0281 LET vDivergenceDay = (vContSelect - vCountLinesQvd)
+                  20260525T102634.891+0000 0283 vCtrlDivergenceDay = (vCtrlDivergenceDay - ( vContSelect - vCountLinesQvd))
+                  20260525T102634.891+0000 0285 Trace DIA -> Total = 6. Controlador = 0. # ( 154300 - 154294 ) #
+                  20260525T102634.891+0000 0285 DIA -> Total = 6. Controlador = 0. # ( 154300 - 154294 ) #
+                  20260525T102634.891+0000 0286 
+                  20260525T102634.891+0000 0286 Trace # 6 #
+                  20260525T102634.891+0000 0286 # 6 #
+                  20260525T102634.891+0000 0287 
+                  20260525T102634.891+0000 0289 If vDivergenceDay <> 0 then
+                    20260525T102634.891+0000 0290 CALL MrlLanctoEstoque(vDateRef)
+                      20260525T102634.891+0000 0096 LET vInit = Now()
+                      20260525T102634.891+0000 0097 let vYear = Year(pDateRef)
+                      20260525T102634.891+0000 0098 let vMonth = Num(Month(pDateRef),00)
+                      20260525T102634.891+0000 0101 MRL_LANCTOESTOQUE_2026_05:
+                      20260525T102634.891+0000 0102 	Select 
+                      20260525T102634.891+0000 0103           SEQMOVTOESTQ,
+                      20260525T102634.891+0000 0104           NROEMPRESA,
+                      20260525T102634.891+0000 0105           DTAENTRADASAIDA,
+                      20260525T102634.891+0000 0106           SEQPRODUTO,
+                      20260525T102634.891+0000 0107           SERIEDOCTO,
+                      20260525T102634.891+0000 0108           TIPLANCTO,
+                      20260525T102634.891+0000 0109           CODGERALOPER,
+                      20260525T102634.891+0000 0110           LOCAL,
+                      20260525T102634.891+0000 0111           TIPUSOCGO,
+                      20260525T102634.891+0000 0112           QTDLANCTO,
+                      20260525T102634.891+0000 0113           VALORVLRNF,
+                      20260525T102634.891+0000 0114           VALORPIS,
+                      20260525T102634.891+0000 0115           VALORCOFINS,
+                      20260525T102634.891+0000 0116           ACMCOMPRAVENDA,
+                      20260525T102634.891+0000 0117           DTAHORLANCTO,
+                      20260525T102634.891+0000 0118           USULANCTO,
+                      20260525T102634.891+0000 0119           NRODOCUMENTO,
+                      20260525T102634.891+0000 0120           INDGERACREDIPI,
+                      20260525T102634.891+0000 0121           VALORIPI,
+                      20260525T102634.891+0000 0122           VALORICMS,
+                      20260525T102634.891+0000 0123           VALORICMSST,
+                      20260525T102634.892+0000 0124           VALORDESPNF,
+                      20260525T102634.892+0000 0125           VALORCOMISSAO,
+                      20260525T102634.892+0000 0126           VALORISS,
+                      20260525T102634.892+0000 0127           VALORDCTOFORANF,
+                      20260525T102634.892+0000 0128           VALORDESPFORANF
+                      20260525T102634.892+0000 0129 	FROM consinco.MRL_LANCTOESTOQUE
+                      20260525T102634.892+0000 0130 	WHERE DTAENTRADASAIDA = TO_DATE('15/05/2026', 'DD/MM/YYYY')
+                      20260525T102635.968+0000      	26 fields found: SEQMOVTOESTQ, NROEMPRESA, DTAENTRADASAIDA, SEQPRODUTO, SERIEDOCTO, TIPLANCTO, CODGERALOPER, LOCAL, TIPUSOCGO, QTDLANCTO, VALORVLRNF, VALORPIS, VALORCOFINS, ACMCOMPRAVENDA, DTAHORLANCTO, USULANCTO, NRODOCUMENTO, INDGERACREDIPI, VALORIPI, VALORICMS, VALORICMSST, VALORDESPNF, VALORCOMISSAO, VALORISS, VALORDCTOFORANF, VALORDESPFORANF, 
+                      20260525T102643.615+0000      154,300 lines fetched
+                      20260525T102643.619+0000 0133 If FileSize('lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd') > 0 then
+                        20260525T102643.656+0000 0134 TRACE ENTROU IF -> This_2026_05 -> 15/05/2026
+                        20260525T102643.656+0000 0134 ENTROU IF -> This_2026_05 -> 15/05/2026 
+                        20260525T102643.656+0000 0135 
+                        20260525T102643.656+0000 0137 TEMP_MRL_LANCTOESTOQUE:
+                        20260525T102643.656+0000 0138       	LOAD Date(DTAENTRADASAIDA) As NEW_DTAENTRADASAIDA Resident MRL_LANCTOESTOQUE_2026_05
+                        20260525T102643.656+0000      	1 fields found: NEW_DTAENTRADASAIDA, 
+                        20260525T102643.703+0000      154,300 lines fetched
+                        20260525T102643.708+0000 0141 LOAD *
+                        20260525T102643.708+0000 0142       	FROM [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                        20260525T102643.708+0000 0143       	WHERE NOT Exists(NEW_DTAENTRADASAIDA, DTAENTRADASAIDA)
+                        20260525T102643.991+0000      	26 fields found: SEQMOVTOESTQ, NROEMPRESA, DTAENTRADASAIDA, SEQPRODUTO, SERIEDOCTO, TIPLANCTO, CODGERALOPER, LOCAL, TIPUSOCGO, QTDLANCTO, VALORVLRNF, VALORPIS, VALORCOFINS, ACMCOMPRAVENDA, DTAHORLANCTO, USULANCTO, NRODOCUMENTO, INDGERACREDIPI, VALORIPI, VALORICMS, VALORICMSST, VALORDESPNF, VALORCOMISSAO, VALORISS, VALORDCTOFORANF, VALORDESPFORANF, 
+                        20260525T102651.380+0000      4,056,595 lines fetched
+                        20260525T102651.396+0000 0146 Drop Table TEMP_MRL_LANCTOESTOQUE
+                        20260525T102651.396+0000 0148 End If
+                      20260525T102651.396+0000 0149 LET vFinal = Now()
+                      20260525T102651.396+0000 0151 Call RecordQVD('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102651.396+0000 0044 Trace MRL_LANCTOESTOQUE_2026_05 <###>
+                        20260525T102651.396+0000 0044 MRL_LANCTOESTOQUE_2026_05 <###>
+                        20260525T102651.396+0000 0045 
+                        20260525T102651.396+0000 0045 Let vQttRegisters = NoOfRows('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102651.396+0000 0046 vTotalRegisters = vTotalRegisters + vQttRegisters
+                        20260525T102651.397+0000 0048 Let vQttFiels = NoOfFields('MRL_LANCTOESTOQUE_2026_05')
+                        20260525T102651.397+0000 0049 vTotalFields = vTotalFields + vQttFiels
+                        20260525T102651.397+0000 0051 store [MRL_LANCTOESTOQUE_2026_05] into [lib://QVD_Storage:DataFiles/PEG_PESE_PRICING_ECOMMERCE/Raw/EXT_MRL_LANCTOESTOQUE_2026_05.qvd](qvd)
+                        20260525T102654.796+0000 0052 Drop Table [MRL_LANCTOESTOQUE_2026_05]
+                        20260525T102654.828+0000 0053 Call ReadingTime('MRL_LANCTOESTOQUE_2026_05',vInit,vFinal)
+                          20260525T102654.828+0000 0058 Let vtime = Interval(pFinal - pInit, 'hh:mm:ss')
+                          20260525T102654.828+0000 0059 if pTable = 'TOTAL' then
+                            20260525T102654.828+0000 0065 TRACE --- Tempo total de leitura da Extração foi de 00:00:17 ---
+                            20260525T102654.828+0000 0065 --- Tempo total de leitura da Extração foi de 00:00:17 ---
+                            20260525T102654.828+0000 0066 
+                            20260525T102654.829+0000 0066 Call CargoRegistration('MRL_LANCTOESTOQUE_2026_05', '25/05/2026 10:26:34', '25/05/2026 10:26:51', '00:00:17', '24339250','156')
+                              20260525T102654.829+0000 0072 [Registro de Tempo]:
+                              20260525T102654.829+0000 0073     LOAD
+                              20260525T102654.829+0000 0074     	'MRL_LANCTOESTOQUE_2026_05'				as [Nome da Tabela],
+                              20260525T102654.829+0000 0075         '25/05/2026 10:26:34'				as [pInit da Leitura],
+                              20260525T102654.829+0000 0076         '25/05/2026 10:26:51'				as [pFinal da Leitura],
+                              20260525T102654.829+0000 0077         '00:00:17'				as [Tempo de Leitura],
+                              20260525T102654.829+0000 0078         '24339250'			as [Qtd Campos],
+                              20260525T102654.829+0000 0079         '156'			as [Total de Registros]
+                              20260525T102654.829+0000 0080     AutoGenerate 1
+                              20260525T102654.829+0000      	6 fields found: Nome da Tabela, pInit da Leitura, pFinal da Leitura, Tempo de Leitura, Qtd Campos, Total de Registros, 
+                              20260525T102654.829+0000      6 lines fetched
+                              20260525T102654.829+0000 0081 End Sub
+                            20260525T102654.829+0000 0067 End If
+                          20260525T102654.829+0000 0068 End Sub
+                        20260525T102654.829+0000 0054 End sub
+                      20260525T102654.829+0000 0153 End Sub
+                    20260525T102654.829+0000 0291 end if
+                  20260525T102654.829+0000 0293 If vCtrlDivergenceDay = 0
+                  20260525T102654.829+0000 0294 Exit For
+                20260525T102654.829+0000 0298 End SUB
+              20260525T102654.830+0000 0258 End If
+            20260525T102654.830+0000 0260 Trace PERÍODO -> Total = 212669. Controlador = 0. # ( 154300 - 154294 ) #
+            20260525T102654.830+0000 0260 PERÍODO -> Total = 212669. Controlador = 0. # ( 154300 - 154294 ) #
+            20260525T102654.830+0000 0261 
+            20260525T102654.830+0000 0262 If vCtrlDivergencePeriod = 0 then
+            20260525T102654.830+0000 0263 Exit for
+          20260525T102654.830+0000 0267 END SUB
+        20260525T102654.830+0000 0227 End If
+      20260525T102654.830+0000 0229 END SUB
+  20260525T102654.830+0000 0160 next
+  20260525T102654.830+0000 0161 END SUB
+20260525T102654.830+0000 0318 trace >> 4406478 <<
+20260525T102654.830+0000 0318 >> 4406478 <<
+20260525T102654.830+0000 0319 
+20260525T102654.830+0000 0319 LET vFullload = NOW()
+20260525T102654.830+0000 0320 Call ReadingTime('TOTAL',vStartLoad,vFullload)
+  20260525T102654.830+0000 0058 Let vtime = Interval(pFinal - pInit, 'hh:mm:ss')
+  20260525T102654.830+0000 0059 if pTable = 'TOTAL' then
+    20260525T102654.830+0000 0061 TRACE --- Tempo total de leitura da Extração foi de 00:07:51 ---
+    20260525T102654.830+0000 0061 --- Tempo total de leitura da Extração foi de 00:07:51 ---
+    20260525T102654.830+0000 0062 
+    20260525T102654.830+0000 0062 Call CargoRegistration('Total da Extração', '25/05/2026 10:19:03', '25/05/2026 10:26:54', '00:07:51', '24339250','156')
+      20260525T102654.830+0000 0072 [Registro de Tempo]:
+      20260525T102654.830+0000 0073     LOAD
+      20260525T102654.830+0000 0074     	'Total da Extração'				as [Nome da Tabela],
+      20260525T102654.830+0000 0075         '25/05/2026 10:19:03'				as [pInit da Leitura],
+      20260525T102654.830+0000 0076         '25/05/2026 10:26:54'				as [pFinal da Leitura],
+      20260525T102654.830+0000 0077         '00:07:51'				as [Tempo de Leitura],
+      20260525T102654.830+0000 0078         '24339250'			as [Qtd Campos],
+      20260525T102654.830+0000 0079         '156'			as [Total de Registros]
+      20260525T102654.830+0000 0080     AutoGenerate 1
+      20260525T102654.831+0000      	6 fields found: Nome da Tabela, pInit da Leitura, pFinal da Leitura, Tempo de Leitura, Qtd Campos, Total de Registros, 
+      20260525T102654.831+0000      7 lines fetched
+      20260525T102654.831+0000 0081 End Sub
+  20260525T102654.831+0000 0063 Else
+  20260525T102654.831+0000 0068 End Sub
+20260525T102654.831+0000 0321 Exit Script
+20260525T102654.981+0000      Execution finished.

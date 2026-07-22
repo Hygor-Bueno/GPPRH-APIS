@@ -1,10 +1,8 @@
 const authService = require('../../../infra/auth/jwt.service.js');
-const { notifyUserLogin } = require('../../../websocket/events/notification.event.js');
 const { BadRequestError } = require("../../../errors/bad-request.error.js");
 const { GlobalService } = require("../services/auth.service.js");
 const { parseTime } = require('../../../utils/time-parser.js');
 const { UnauthorizedError } = require('../../../errors/unauthorized.error.js');
-const { User } = require('../domain/user.entity');
 const { respond } = require('../../../utils/respond');
 
 const isProd = process.env.NODE_ENV === 'production';
@@ -48,29 +46,31 @@ async function globalLogin(req, res) {
     throw new BadRequestError('Username and password are required');
   }
 
+  // Remove espaços do início e fim — autocomplete mobile pode inserir espaços
+  const cleanUsername = username.trim();
+
   const service = new GlobalService();
-  const payload = await service.controlleLogin(username, password);
+  const payload = await service.controlleLogin(cleanUsername, password);
   const user = await service.getGlobalUserForGuid(payload.guid || payload.id);
-  
+
   await createSession(res, user);
 
-  notifyUserLogin(user).catch(() => {}); // fire-and-forget — WebSocket notification, non-critical
   return respond.message(res, 'Logged in successfully');
 };
 
 async function me(req, res) {
   if (!req.user) throw new UnauthorizedError('Not authenticated');
 
-  const user = new User(req.user);
+  const u = req.user;
   return respond.ok(res, {
-    id: user.id,
-    nickname: user.nickname,
-    registration: user.registration,
-    status: user.ad_status,
-    application_ids: user.application_ids,
-    company_name: user.company_name,
-    branch_name: user.branch_name,
-    cost_center_description: user.cost_center_description
+    id:                       u.id,
+    nickname:                 u.nickname,
+    registration:             u.registration,
+    status:                   u.status,
+    application_ids:          u.application_ids,
+    company_name:             u.company_name,
+    branch_name:              u.branch_name,
+    cost_center_description:  u.cost_center_description
   });
 };
 

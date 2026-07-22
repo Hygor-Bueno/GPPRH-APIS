@@ -112,7 +112,7 @@ class AccessService {
      * Retorna usuários com seus papéis agregados, suportando filtros opcionais.
      *
      * @param {Object}  [filters={}]             - Filtros de busca.
-     * @param {0|1}     [filters.status]         - 1 = ativo, 0 = inativo.
+     * @param {string}  [filters.ad_status]      - 'pending' | 'active' | 'blocked' | 'delete'.
      * @param {string}  [filters.name]           - Filtro parcial por nome.
      * @param {string}  [filters.registration]   - Matrícula exata.
      * @param {string}  [filters.branch_code]    - Código da filial.
@@ -160,7 +160,7 @@ class AccessService {
      * @param {string}       payload.name             - Nome completo.
      * @param {string}       [payload.registration]   - Matrícula.
      * @param {string}       [payload.branch_code]    - Código da filial.
-     * @param {0|1}          [payload.status=1]       - Status inicial.
+     * @param {string}       [payload.ad_status='pending'] - 'pending' | 'active' | 'blocked' | 'delete'.
      * @param {0|1}          [payload.administrator=0] - Flag de administrador.
      * @param {string}       [payload.table_protheus] - Tabela Protheus associada.
      * @param {number}       createdBy                - ID do usuário que está criando.
@@ -179,7 +179,7 @@ class AccessService {
                 payload.name             ?? null,
                 payload.registration     ?? null,
                 payload.branch_code      ?? null,
-                payload.status           ?? 1,
+                payload.ad_status        ?? 'pending',
                 payload.administrator    ?? 0,
                 payload.table_protheus   ?? null,
                 createdBy,
@@ -207,7 +207,7 @@ class AccessService {
      * @param {string}  payload.name             - Nome completo.
      * @param {string}  [payload.registration]   - Matrícula.
      * @param {string}  [payload.branch_code]    - Código da filial.
-     * @param {0|1}     payload.status           - Status.
+     * @param {string}  payload.ad_status        - 'pending' | 'active' | 'blocked' | 'delete'.
      * @param {0|1}     payload.administrator    - Flag administrador.
      * @param {string}  [payload.table_protheus] - Tabela Protheus.
      * @param {number}  updatedBy                - ID do usuário que está editando.
@@ -221,7 +221,7 @@ class AccessService {
                 payload.name             ?? null,
                 payload.registration     ?? null,
                 payload.branch_code      ?? null,
-                payload.status           ?? 1,
+                payload.ad_status        ?? 'pending',
                 payload.administrator    ?? 0,
                 payload.table_protheus   ?? null,
                 updatedBy,
@@ -281,7 +281,7 @@ class AccessService {
     }
 
     /**
-     * Desativa um usuário (soft-delete: `status = 0`).
+     * Desativa um usuário (soft-delete: `ad_status = 'delete'`).
      * O registro permanece no banco para auditoria e histórico.
      *
      * @param {number} id        - ID do usuário a desativar.

@@ -101,6 +101,29 @@ function sqlBranch(company_code) {
     };
 }
 
+function sqlAllBranches() {
+    return `SELECT
+          LTRIM(RTRIM(CP.M0_CODIGO))  AS company_code,
+          LTRIM(RTRIM(CP.M0_FILIAL))  AS company_name,
+          LTRIM(RTRIM(CP.M0_CODFIL))  AS branch_code,
+          LTRIM(RTRIM(CP.M0_FILIAL))  AS branch_name,
+          LTRIM(RTRIM(CP.M0_ENDENT))  AS branch_address,
+          LTRIM(RTRIM(CP.M0_BAIRENT)) AS branch_neighborhood,
+          LTRIM(RTRIM(CP.M0_CIDENT))  AS branch_city,
+          LTRIM(RTRIM(CP.M0_ESTENT))  AS branch_state,
+          LTRIM(RTRIM(CP.M0_CEPENT))  AS branch_cep,
+          CONCAT(
+              NULLIF(LTRIM(RTRIM(CP.M0_ENDENT)), ''),
+              CASE WHEN NULLIF(LTRIM(RTRIM(CP.M0_BAIRENT)), '') IS NOT NULL THEN CONCAT(', ', LTRIM(RTRIM(CP.M0_BAIRENT))) ELSE '' END,
+              CASE WHEN NULLIF(LTRIM(RTRIM(CP.M0_CIDENT)), '') IS NOT NULL THEN CONCAT(' - ', LTRIM(RTRIM(CP.M0_CIDENT))) ELSE '' END,
+              CASE WHEN NULLIF(LTRIM(RTRIM(CP.M0_ESTENT)), '') IS NOT NULL THEN CONCAT('/', LTRIM(RTRIM(CP.M0_ESTENT))) ELSE '' END,
+              CASE WHEN NULLIF(LTRIM(RTRIM(CP.M0_CEPENT)), '') IS NOT NULL THEN CONCAT(' - CEP ', LTRIM(RTRIM(CP.M0_CEPENT))) ELSE '' END
+          ) AS full_branch_address
+      FROM TMPPRD12.dbo.SYS_COMPANY CP
+      WHERE CP.D_E_L_E_T_ <> '*'
+      ORDER BY LTRIM(RTRIM(CP.M0_FILIAL));`;
+}
+
 
 function sqlEmployeeData() {
     return `
@@ -148,12 +171,45 @@ function spInsertEmployeeCompensation({ employee_id, compensation_id, value, bra
     };
 }
 
+/**
+ * Enriquece uma lista de usuários com dados do Protheus (empresa, filial, centro de custo).
+ *
+ * Parâmetros: um input @r0, @r1, ... @r{n-1} por matrícula.
+ *
+ * @param {number} count - Quantidade de matrículas
+ * @returns {string} SQL com placeholders dinâmicos
+ */
+function sqlGetUserOrganizationBatch(count) {
+    const placeholders = Array.from({ length: count }, (_, i) => `@r${i}`).join(', ');
+    return `
+        SELECT
+            LTRIM(RTRIM(RH.RA_MAT))       AS registration,
+            LTRIM(RTRIM(RH.RA_DEMISSA))   AS ra_demissa,
+            LTRIM(RTRIM(CC.CTT_CUSTO))    AS cost_center_code,
+            LTRIM(RTRIM(CC.CTT_DESC01))   AS cost_center_description,
+            LTRIM(RTRIM(COMP.M0_CODIGO))  AS company_code,
+            LTRIM(RTRIM(COMP.M0_NOMECOM)) AS company_name,
+            LTRIM(RTRIM(COMP.M0_CODFIL))  AS branch_code,
+            LTRIM(RTRIM(COMP.M0_FILIAL))  AS branch_name,
+            LTRIM(RTRIM(COMP.M0_CGC))     AS cnpj
+        FROM TMPPRD12.dbo.SRA020 RH
+            INNER JOIN TMPPRD12.dbo.CTT020 CC
+                ON CC.CTT_CUSTO = RH.RA_CC AND CC.D_E_L_E_T_ <> '*'
+            INNER JOIN TMPPRD12.dbo.SYS_COMPANY COMP
+                ON COMP.M0_CODFIL = RH.RA_FILIAL AND COMP.D_E_L_E_T_ <> '*'
+        WHERE RH.RA_MAT IN (${placeholders})
+          AND RH.D_E_L_E_T_ <> '*'
+    `;
+}
+
 module.exports = {
     sqlCostCenter,
     sqlBranch,
+    sqlAllBranches,
     sqlEmployeeData,
     sqlCompany,
     sqlCompanyBranchByBranchCode,
     sqlMapUserWithOrganization,
+    sqlGetUserOrganizationBatch,
     spInsertEmployeeCompensation
 };

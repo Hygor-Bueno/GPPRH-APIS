@@ -1,6 +1,6 @@
-const { AppError } = require("../../../errors/app.error");
-const { Employee } = require("../services/employee.service");
-const { respond } = require("../../../utils/respond");
+const { AppError }                                      = require("../../../errors/app.error");
+const { Employee, getEmployeesFiltered, getUsersFiltered } = require("../services/employee.service");
+const { respond }                                         = require("../../../utils/respond");
 
 async function getPhotoEmployee(req, res) {
     const { id } = req.params;
@@ -35,7 +35,37 @@ async function postPhotoEmployee(req, res) {
     respond.message(res, 'Photo saved successfully');
 }
 
+/**
+ * Lista colaboradores paginados com filtros opcionais.
+ *
+ * Porta de `GET /GLOBAL/Controller/CCPP/Employee.php?pPage=1&pApplicationAccess=7`
+ *
+ * @route GET /employees
+ * @access Requer `VIEW_EMPLOYEES`
+ * @param {import('express').Request}  req - Query: pPage, pPageSize, pEmployeeName,
+ *   pCompanyId, pShopId, pDepartmentId, pSubDepartmentId, pApplicationAccess
+ * @param {import('express').Response} res
+ */
+async function getEmployees(req, res) {
+    const result = await getEmployeesFiltered(req.query);
+    return respond.ok(res, result);
+}
+
+/**
+ * Lista usuários paginados com enriquecimento do Protheus.
+ *
+ * @route GET /users
+ * @param {import('express').Request}  req - Query: pPage, pPageSize, pName, pApplicationId, pStatus
+ * @param {import('express').Response} res
+ */
+async function getUsers(req, res) {
+    const result = await getUsersFiltered(req.query);
+    return respond.ok(res, result);
+}
+
 module.exports = {
     getPhotoEmployee,
-    postPhotoEmployee
+    postPhotoEmployee,
+    getEmployees,
+    getUsers,
 };

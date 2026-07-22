@@ -243,7 +243,7 @@ class GippRhService {
                 .input('description',  sql.VarChar, payload.description)
                 .input('active',       sql.Bit,     payload.active)
                 .input('user_code',    sql.VarChar, payload.user_code)
-                .input('branch_code',  sql.VarChar, payload.branch_code)
+                .input('user_branch',  sql.VarChar, payload.branch_code)
                 .execute(sqlUpdateCompensation());
             return result.recordset[0];
         } catch (error) {
@@ -448,6 +448,7 @@ class GippRhService {
                 .input('branch_name',            sql.VarChar(200),   payload.branch_name?.toUpperCase())
                 .input('work_schedule_id',       sql.VarChar(50),    payload.work_schedule_id    ?? null)
                 .input('reference',              sql.VarChar(6),     payload.reference)
+                .input('reference_date',         sql.Date,           payload.reference_date ? new Date(payload.reference_date) : null)
                 .input('description',            sql.VarChar(500),   payload.description)
                 .input('amount',                 sql.Decimal(18, 2), payload.amount)
                 .input('movement_type',          sql.Char(1),        payload.movement_type)
@@ -542,6 +543,7 @@ class GippRhService {
                 .input('amount',                 sql.Decimal(18, 2), payload.amount)
                 .input('movement_type',          sql.Char(1),        payload.movement_type)
                 .input('is_active',              sql.Bit,            payload.is_active)
+                .input('reference_date',         sql.Date,           payload.reference_date ? new Date(payload.reference_date) : null)
                 .input('event_code',             sql.VarChar(50),    payload.event_code           ?? null)
                 .input('work_schedule_id',       sql.VarChar(50),    payload.work_schedule_id     ?? null)
                 .input('payment_type_id',        sql.Int,            payload.payment_type_id      ?? null)
@@ -599,11 +601,12 @@ class GippRhService {
             // Apenas os campos enviados pelo cliente, com o tipo SQL correto
             for (const field of fieldNames) {
                 const sqlType = PATCH_RECEIPT_FIELDS[field];
-                if (sqlType === 'Decimal') request.input(field, sql.Decimal(18, 2), fields[field]);
-                else if (sqlType === 'Int') request.input(field, sql.Int,           fields[field]);
-                else if (sqlType === 'Bit') request.input(field, sql.Bit,           fields[field]);
-                else if (sqlType === 'Char') request.input(field, sql.Char(1),      fields[field]);
-                else                        request.input(field, sql.VarChar,       fields[field]);
+                if (sqlType === 'Decimal')    request.input(field, sql.Decimal(18, 2), fields[field]);
+                else if (sqlType === 'Int')   request.input(field, sql.Int,           fields[field]);
+                else if (sqlType === 'Bit')   request.input(field, sql.Bit,           fields[field]);
+                else if (sqlType === 'Char')  request.input(field, sql.Char(1),       fields[field]);
+                else if (sqlType === 'Date')  request.input(field, sql.Date,          fields[field] ? new Date(fields[field]) : null);
+                else                          request.input(field, sql.VarChar,       fields[field]);
             }
 
             const result = await request.query(sqlPatchPaymentReceipt(fieldNames));
@@ -636,11 +639,11 @@ class GippRhService {
      * @returns {Promise<Object[]>} Lista de recibos encontrados.
      * @throws {AppError} Em caso de falha na consulta.
      */
-    async getReceipt(employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId) {
+    async getReceipt(employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId, dateFrom, dateTo) {
         try {
             const pool = await poolPromise;
             const { sql: query, params } = sqlGetReceipt(
-                employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId
+                employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId, dateFrom, dateTo
             );
             const request = pool.request();
             for (const [key, value] of Object.entries(params)) {

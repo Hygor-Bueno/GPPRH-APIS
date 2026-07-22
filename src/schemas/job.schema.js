@@ -51,4 +51,28 @@ function validateSalaryRange(req, res, next) {
     next();
 }
 
-module.exports = { createJobSchema, updateJobSchema, blockUnknownJobFields, validateSalaryRange };
+const jobLikeSchema = {
+    job_id:       { type: 'number', required: true, min: 1 },
+    candidate_id: { type: 'number', required: true, min: 1 },
+};
+
+const jobApplicationSchema = {
+    job_id:       { type: 'number', required: true, min: 1 },
+    candidate_id: { type: 'number', required: true, min: 1 },
+};
+
+const jobCommentSchema = {
+    job_id:       { type: 'number', required: true, min: 1 },
+    candidate_id: { type: 'number', required: true, min: 1 },
+    comment:      { type: 'string', required: true, minLength: 1, maxLength: 1000 },
+};
+
+module.exports = {
+    createJobSchema,
+    updateJobSchema,
+    blockUnknownJobFields,
+    validateSalaryRange,
+    jobLikeSchema,
+    jobApplicationSchema,
+    jobCommentSchema,
+};

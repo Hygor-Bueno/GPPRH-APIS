@@ -117,24 +117,8 @@ class LDAPAuthenticator {
       throw new UnauthorizedError('User not found in Active Directory');
     }
 
-    /**
-     * ===============================
-     * CLIENT 2 — VALIDATE PASSWORD
-     * ===============================
-     */
-    const authClient = this.createClient();
-
-    authClient.on('error', err => {
-      console.error('[LDAP][AUTH]', err);
-    });
-
-    try {
-      await this.bind(authClient, user.dn, this.password);
-    } catch (err) {
-      throw new UnauthorizedError('Invalid username or password');
-    } finally {
-      authClient.unbind();
-    }
+    // O primeiro bind (DOMAIN\username) já validou as credenciais.
+    // O segundo bind com DN completo é redundante e falha com caracteres especiais no nome.
 
     /**
      * ===============================

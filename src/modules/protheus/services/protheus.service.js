@@ -1,5 +1,5 @@
 const { poolPromise } = require('../../../config/protheus');
-const { sqlCostCenter, sqlBranch,sqlCompany } = require('../repositories/cost-center.repository');
+const { sqlCostCenter, sqlBranch, sqlAllBranches, sqlCompany } = require('../repositories/cost-center.repository');
 
 async function getCostCenters(companyCode) {
   try {
@@ -31,6 +31,16 @@ async function getBranches(companyCode) {
   }
 }
 
+async function getAllBranches() {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(sqlAllBranches());
+    return result.recordset;
+  } catch (err) {
+    throw err;
+  }
+}
+
 async function getCompanies() {
   try {
     const pool = await poolPromise;
@@ -45,5 +55,6 @@ async function getCompanies() {
 module.exports = {
   getCostCenters,
   getBranches,
+  getAllBranches,
   getCompanies
 };

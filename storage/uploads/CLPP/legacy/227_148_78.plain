@@ -1,0 +1,274 @@
+Subgrupo 1;Subgrupo 2;Subgrupo3 - ESPECIES;Coluna1;Obs.;Subgrupo 12;CONTA;DESCRICAO_CONTA
+Aquisição de Bens e equipamentos;Bens de pequeno valor;BENSPE;BENS DE PEQUENO PORTE;;310504003 - Bens de pequeno valor;310504003;Bens de pequeno valor
+Aquisição de Bens e equipamentos;Computador - Escritório;COES;COMPUTADOR - ESCRITORIO;;310503005 - Computador - Escritório;310503005;Computador - Escritório
+Aquisição de Bens e equipamentos;Computador - PDV;COPDV;COMPUTADOR - PDV;;310503006 - Computador - PDV;310503006;Computador - PDV
+Aquisição de Bens e equipamentos;Equipamentos de Informatica;COVC;CONVERSOR DE VIDEO CAMERA;;310503007 - Conversor de Vídeo Câmera;310503007;Conversor de Vídeo Câmera
+Aquisição de Bens e equipamentos;Equipamentos de Informatica;DVR;DVR;;310503009 - DVR;310503009;DVR
+Aquisição de Bens e equipamentos;Equipamentos de Informatica;MOU;MOUSE;;310503012 - Mouse;310503012;Mouse
+Aquisição de Bens e equipamentos;Equipamentos de Informatica;TON;TONER;;310503020 - Toner;310503020;Toner
+Aquisição de Bens e equipamentos;Equipamentos de segurança;SEHI;SEGURANCA;;310501014 - Equipamentos de segurança;310501014;Equipamentos de segurança
+Aquisição de Bens e equipamentos;Equipamentos de segurança;FOCA;FONTE CAMERAS;;310503010 - Fonte Câmeras;310503010;Fonte Câmeras
+Aquisição de Bens e equipamentos;Equipamentos de segurança;MEM;MEMORIA;;310503014 - Memórias;310503014;Memórias
+Aquisição de Bens e equipamentos;Equipamentos Lojas;DEQACO;DESPESA EQUIPAMENTO AÇOUGUE;;310501075 - Equipamentos Lojas;310501075;Equipamentos Lojas
+Aquisição de Bens e equipamentos;Equipamentos Lojas;DEQPAD;DESPESA EQUIPAMENTO PADARIA;;310501075 - Equipamentos Lojas;310501075;Equipamentos Lojas
+Aquisição de Bens e equipamentos;Equipamentos Lojas;IMOBIL;IMOBILIZADO;;310501075 - Equipamentos Lojas;310501075;Equipamentos Lojas
+Despesa Bancaria ;IOF-Imposto s/Operações Financeiras;IOF;IOF;;310901006 - IOF-Imposto s/Operações Financeiras;310901006;IOF-Imposto s/Operações Financeiras
+Despesa Bancaria ;Juros Empréstimos e Financ. Nacional;JEFN;JUROS EMPRESTIMO/FINANCIAMENTO;;310901003 - Juros Empréstimos e Financ. Nacional;310901003;Juros Empréstimos e Financ. Nacional
+Despesa Bancaria ;Juros Passivos;JMF;JUROS E MULTAS FISCAIS;;310901009 - Juros Passivos;310901009;Juros Passivos
+Despesa Bancaria ;Juros Passivos;JURPAS;JUROS PASSIVO;;310901009 - Juros Passivos;310901009;Juros Passivos
+Despesa Bancaria ;Juros s/Antecipação de Cartão;JAC;JUROS S/ ANTECIPACAO DO CARTAO;;310901004 - Juros s/Antecipação de Cartão;310901004;Juros s/Antecipação de Cartão
+Despesa Bancaria ;Juros s/Mútuo;JSM;JUROS SOBRE MUTUO;;310901008 - Juros s/Mútuo;310901008;Juros s/Mútuo
+Despesa Bancaria ;Tarifa Boleto;TBF;TARIFA BOLETO;;310901011 - Tarifa Boleto;310901011;Tarifa Boleto
+Despesa Bancaria ;Tarifa Boleto;TABFOR;TARIFA BOLETO - FORNECEDORES;;310102006 - Tarifa boleto - fornecedores;310102006;Tarifa boleto - fornecedores
+Despesa Bancaria ;Tarifa Sispag;SISPAG;TARIFA SISPAG;;310901005 - Tarifa Sispag;310901005;Tarifa Sispag
+Despesa com Obra;Materiais para construções e reformas;DEOB;DESPESAS COM OBRA;;310502016 - Materiais para construções e reformas;310502016;Materiais para construções e reformas
+Despesa com Pessoal Operacional;13° salario;13OP;13° SALARIO - OPERACIONAL;;310201003 - 13° salario;310201003;13° salario
+Despesa com Pessoal Operacional;Ad. insalubridade e periculosidade;ADIPOP;ADICIONAL INSAL. PERUC. OPERAC;;310201005 - Ad. insalubridade e periculosidade;310201005;Ad. insalubridade e periculosidade
+Despesa com Pessoal Operacional;Adicional noturno ;ADNTOP;ADICIONAL NOTURNO OPERACIONAL;;310201004 - Adicional noturno ;310201004;Adicional noturno 
+Despesa com Pessoal Operacional;Autônomos;AUT;AUTONOMOS;;310401008 - Autônomos;310401008;Autônomos
+Despesa com Pessoal Operacional;Bonificacao/gratificação ;BONGOP;BONIFICAÇÃO/GRATIFICAÇÃO OPERA;;310201010 - Bonificacao/gratificação ;310201010;Bonificacao/gratificação 
+Despesa com Pessoal Operacional;Capacitação e desen. profissional;CAPDP;CAPACITACAO E DESEN. PROFICION;;310201401 - Capacitação e desen. profissional;310201401;Capacitação e desen. profissional
+Despesa com Pessoal Operacional;Cestas natalinas;CESNAT;CESTA NATALINA;;310205007 - Cestas natalinas;310205007;Cestas natalinas
+Despesa com Pessoal Operacional;Condução;COND;CONDUCAO;;310501008 - Condução;310501008;Condução
+Despesa com Pessoal Operacional;Contrato PCMSO/Exame Medico;PCMSO;CONTRATO PCMSO;;310205008 - Contrato PCMSO;310205008;Contrato PCMSO
+Despesa com Pessoal Operacional;Contrato PCMSO/Exame Medico;EXME;EXAME MEDICO;;310201406 - Contrato PCMSO/Exame Medico;310201406;Contrato PCMSO/Exame Medico
+Despesa com Pessoal Operacional;Contrato PCMSO/Exame Medico;INMETR;INMETRA SANTO ANDRÉ;;310201406 - Contrato PCMSO/Exame Medico;310201406;Contrato PCMSO/Exame Medico
+Despesa com Pessoal Operacional;Contrato PCMSO/Exame Medico;SESMT;SESMT;;310201406 - Contrato PCMSO/Exame Medico;310201406;Contrato PCMSO/Exame Medico
+Despesa com Pessoal Operacional;Despesas com recrutamento e seleção;DERECS;DESP. RECRUTAMENTO E SELEÇÃO;;310201404 - Despesas com recrutamento e seleção;310201404;Despesas com recrutamento e seleção
+Despesa com Pessoal Operacional;Despesas diversas;SOC;DESPESAS SOCIAIS;;320101017 - Despesas gerais não dedutíveis;320101017;Despesas gerais não dedutíveis
+Despesa com Pessoal Operacional;Dissidio;DISSOP;DISSIDIO OPERACIONAL;;310201012 - Dissidio;310201012;Dissidio
+Despesa com Pessoal Operacional;Domingo remunerado;DOM.OP;DOMINGO REMUNERADO OPERACIONAL;;310201009 - Domingo remunerado;310201009;Domingo remunerado
+Despesa com Pessoal Operacional;Equipamentos proteção individual;EQPI;EQUIP. PROTECAO INDIVIDUAL;;310201403 - Equipamentos proteção individual;310201403;Equipamentos proteção individual
+Despesa com Pessoal Operacional;Ferias ;FERIAS;FERIAS OPERACIONAL;;310201002 - Ferias ;310201002;Ferias 
+Despesa com Pessoal Operacional;FGTS;FGTS;FGTS - FUNDO DE GARANTIA;;310203005 - FGTS;310203005;FGTS
+Despesa com Pessoal Operacional;FGTS rescisao;FGTS 1;FGTS RESCISÃO ADM;;310203006 - FGTS rescisao;310203006;FGTS rescisao
+Despesa com Pessoal Operacional;FGTS s/ 13° salario;FGTS13;FGTS SOBRE 13° SALARIO;;310203008 - FGTS s/ 13° salario;310203008;FGTS s/ 13° salario
+Despesa com Pessoal Operacional;FGTS s/ ferias;FGTSFE;FGTS SOBRE FERIAS;;310203007 - FGTS s/ ferias;310203007;FGTS s/ ferias
+Despesa com Pessoal Operacional;Folga remunerada;FOLOP;FOLGA REMUNERADA OPERACIONAL;;310201008 - Folga remunerada;310201008;Folga remunerada
+Despesa com Pessoal Operacional;Hora extra 100%;HE100P;HORA EXTRA 100% OPERACIONAL;;310201007 - Hora extra 100%;310201007;Hora extra 100%
+Despesa com Pessoal Operacional;Hora extra 60% ;HE60OP;HORA EXTRA 60% OPERACIONAL;;310201006 - Hora extra 60% ;310201006;Hora extra 60% 
+Despesa com Pessoal Operacional;Indenizacao;HOMOL;DESPESAS COM HOMOLOGAÇÃO OP;;310201018 - Indenizacao;310201018;Indenizacao
+Despesa com Pessoal Operacional;INSS s/ ferias;INSSFE;INSS SOBRE FERIAS;;310203003 - INSS s/ ferias;310203003;INSS s/ ferias
+Despesa com Pessoal Operacional;IRRF s/ 13° salario;IRRF13;IRRF SOBRE 13 SALARIO;;310203011 - IRRF s/ 13° salario;310203011;IRRF s/ 13° salario
+Despesa com Pessoal Operacional;IRRF sobre salario;IRRFSA;IRRF SOBRE SALARIO;;310203009 - IRRF sobre salario;310203009;IRRF sobre salario
+Despesa com Pessoal Operacional;Lanches e Refeições;LARE;LANCHES E REFEICAO;;310501009 - Lanches e Refeições;310501009;Lanches e Refeições
+Despesa com Pessoal Operacional;Lavanderia;UNIFOR;UNIFORME;;310501006 - Lavanderia;310501006;Lavanderia
+Despesa com Pessoal Operacional;Processo trabalhista;PRTBOP;PROCESSO TRABALHISTA OPERACION;;310201014 - Processo trabalhista;310201014;Processo trabalhista
+Despesa com Pessoal Operacional;Refeitório ;ALIMEN;DESPESAS COM ALIMENTAÇÃO;;310201301 - Refeitório ;310201301;Refeitório 
+Despesa com Pessoal Operacional;Rescisao ;RESOP;RESCISAO FUNCIONARIO OP;;310201013 - Rescisao ;310201013;Rescisao 
+Despesa com Pessoal Operacional;Rescisao ;RESOPS;RESCISAO OPERACIONAL SHIRO;;310201013 - Rescisao ;310201013;Rescisao 
+Despesa com Pessoal Operacional;Salario e ordenados ;ADTFUN;ADIANTAMENTO A FUNCIONÁRIOS;;310201001 - Salario e ordenados ;310201001;Salario e ordenados 
+Despesa com Pessoal Operacional;Salario e ordenados ;SALARI;SALARIOS OPERACIONAIS;;310201001 - Salario e ordenados ;310201001;Salario e ordenados 
+Despesa com Pessoal Operacional;Salario e ordenados ;SEPPF;SERVICO PRESTADOS PF;;310201001 - Salario e ordenados ;310201001;Salario e ordenados 
+Despesa com Pessoal Operacional;Salario e ordenados ;SLOPSH;SALARIOS OPERACIONAL SHIRO;;310201001 - Salario e ordenados ;310201001;Salario e ordenados 
+Despesa com Pessoal Operacional;Uniformes;LAV;LAVANDERIA;;310201402 - Uniformes;310201402;Uniformes
+Despesa com Pessoal Operacional;Vale alimentacao;VALAL;VALE ALIMENTACAO;;310201302 - Vale refeição;310201302;Vale refeição
+Despesa com Pessoal Operacional;Vale refeicao;VALREF;VALE REFEICAO OP;;310204004 - Vale alimentacao;310204004;Vale alimentacao
+Despesa com Pessoal Operacional;Vale transporte;VALTRA;VALE TRANSPORTE;;310201303 - Vale transporte;310201303;Vale transporte
+Despesa com veiculos;Multas de Trânsito;MT;MULTAS DE TRANSITO;;320101001 - Multas de Trânsito;320101001;Multas de Trânsito
+Despesa com veiculos;Peças e Manutenção De Veículos;MAME;MANUTENCAO MECANICA- VEICULO;;310502010 - Peças e Manutenção De Veículos;310502010;Peças e Manutenção De Veículos
+Despesa com veiculos;Pedágios e estacionamento;EST;ESTACIONAMENTO;;310602001 - Pedágios e estacionamento;310602001;Pedágios e estacionamento
+Despesa com veiculos;Pedágios e estacionamento;PED;PEDAGIO;;310602001 - Pedágios e estacionamento;310602001;Pedágios e estacionamento
+Despesa Fixa;Água e Esgoto;AGUA;AGUA E ESGOTO;;310503025 - Água e Esgoto;310503025;Água e Esgoto
+Despesa Fixa;Água e Esgoto;AGUESG;AGUA E ESGOTO SHIRO;;320101017 - Água e Esgoto;320101017;Despesas gerais não dedutíveis
+Despesa Fixa;Aluguéis de Imóveis;ALUGUE;ALUGUEL DE IMOVEL;;310506001 - Aluguéis de Imóveis;310506001;Aluguéis de Imóveis
+Despesa Fixa;Associações;APAS;APAS;;310701008 - Associações;310701008;Associações
+Despesa Fixa;Associações;CPCAAE;CONTR. PERMIS. CENT. ABAST. SP;;310701008 - Associações;310701008;Associações
+Despesa Fixa;Coleta de lixo;CL;COLETA DE LIXO;;310504019 - Coleta de lixo;310504019;Coleta de lixo
+Despesa Fixa;Energia Elétrica;ENERGI;ENERGIA ELETRICA;;310503026 - Energia Elétrica;310503026;Energia Elétrica
+Despesa Fixa;Gás;GAS;GAS;;310503029 - Gás;310503029;Gás
+Despesa Fixa;NUTRICIONISTA;NUTRI;NUTRICIONISTA;;320101017 - Despesas gerais não dedutíveis;320101017;Despesas gerais não dedutíveis
+Despesa Fixa;TELEFO/TV/INTERNET;TELEFO;TELEFO/TV/INTERNET;;310503027 - Telefonia Móvel;310503027;Telefonia Móvel
+Despesas com Pessoal Administrativo;13° salario - administrativo;13SAL;13 SALARIOS ADM;;310202003 - 13° salario - administrativo;310202003;13° salario - administrativo
+Despesas com Pessoal Administrativo;Ad. insalubridade e peliculosidade - adm;ADIPAD;ADICIONAL INSAL. PERIC. ADM;;310202005 - Ad. insalubridade e peliculosidade - adm;310202005;Ad. insalubridade e peliculosidade - adm
+Despesas com Pessoal Administrativo;Adicional noturno - administrativo;ADNTAD;ADICIONAL NOTURNO ADM;;310202004 - Adicional noturno - administrativo;310202004;Adicional noturno - administrativo
+Despesas com Pessoal Administrativo;Bonificacao/ gratificacao - adm;BOGADM;BONIFICAÇÃO/GRATIFICAÇÃO ADM;;310202010 - Bonificacao/ gratificacao - adm;310202010;Bonificacao/ gratificacao - adm
+Despesas com Pessoal Administrativo;Dissidio - administrativo;DISSAD;DISSIDIO ADM;;310202013 - Dissidio - administrativo;310202013;Dissidio - administrativo
+Despesas com Pessoal Administrativo;Domingo remunerado - administrativo;DOMADM;DOMINGO REMUNERADO ADM;;310202009 - Domingo remunerado - administrativo;310202009;Domingo remunerado - administrativo
+Despesas com Pessoal Administrativo;Estagiarios - administrativo;ESTADM;ESTAGIARIO ADM;;310202012 - Estagiarios - administrativo;310202012;Estagiarios - administrativo
+Despesas com Pessoal Administrativo;Ferias ;FERADM;FERIAS ADM;;310201002 - Ferias ;310201002;Ferias 
+Despesas com Pessoal Administrativo;Folga remunerada - administrativo;FOLADM;FOLGA REMUNERADA ADM;;310202008 - Folga remunerada - administrativo;310202008;Folga remunerada - administrativo
+Despesas com Pessoal Administrativo;Hora extra 100% - administrativo;HE100A;HORA EXTRA 100% ADM;;310202007 - Hora extra 100% - administrativo;310202007;Hora extra 100% - administrativo
+Despesas com Pessoal Administrativo;Hora extra 60% - administrativo;HE60AD;HORA EXTRA 60% ADM;;310202006 - Hora extra 60% - administrativo;310202006;Hora extra 60% - administrativo
+Despesas com Pessoal Administrativo;Jovem aprendiz - administrativo;JVAPAD;JOVEM APRENDIZ ADM;;310202011 - Jovem aprendiz - administrativo;310202011;Jovem aprendiz - administrativo
+Despesas com Pessoal Administrativo;Pensao alimenticia - administrativo;PENSAO;PENSAO ALIMENTICIA;;310202016 - Pensao alimenticia - administrativo;310202016;Pensao alimenticia - administrativo
+Despesas com Pessoal Administrativo;Pro labore - administrativo;PROADM;PRO LABORE ADM;;310202014 - Pro labore - administrativo;310202014;Pro labore - administrativo
+Despesas com Pessoal Administrativo;Processo trabalhista - administrativo;PRTBAD;PROCESSO TRABALHISTA ADMINISTR;;310202017 - Processo trabalhista - administrativo;310202017;Processo trabalhista - administrativo
+Despesas com Pessoal Administrativo;Rescisao - administrativo;RESADM;RESCISAO FUNCIONARIO ADM;;310202015 - Rescisao - administrativo;310202015;Rescisao - administrativo
+Despesas com Pessoal Administrativo;Rescisao - administrativo;RESADS;RESCISAO ADMINISTRATIVO SHIRO;;310202015 - Rescisao - administrativo;310202015;Rescisao - administrativo
+Despesas com Pessoal Administrativo;Salarios e ordenados - administrativo;SALADM;SALARIOS ADM;;310202001 - Salarios e ordenados - administrativo;310202001;Salarios e ordenados - administrativo
+Despesas com Pessoal Administrativo;Salarios e ordenados - administrativo;SLADSH;SALARIOS ADM SHIRO;;310202001 - Salarios e ordenados - administrativo;310202001;Salarios e ordenados - administrativo
+Despesas com Pessoal Administrativo;Vale combustível;COMADM;AUXILIO COMBUSTIVEL ADM;;310202306 - Vale combustível;310202306;Vale combustível
+Despesas com Pessoal Administrativo;Vale combustível;COMBUS;VALE COMBUSTIVEL;;310202306 - Vale combustível;310202306;Vale combustível
+Despesas com Pessoal Administrativo;Vale refeicao;VALADM;VALE REFEICAO ADM;;310202302 - Vale refeição;310202302;Vale refeição
+Despesas com Veiculos;Combustível;COMB;COMBUSTIVEL;;310503030 - Combustível;310503030;Combustível
+Despesas com Veiculos;Combustível;LUB;LUBRIFICANTES;;310503030 - Combustível;310503030;Combustível
+Despesas com veiculos;Lacres de Portas e Caminhões;LPC;LACRES DE PORTAS E CAMINHOES;;310501024 - Lacres de Portas e Caminhões;310501024;Lacres de Portas e Caminhões
+Despesas Comerciais;Despesas Propaganda e Marketing;MARKT;PROP. MARKETING INSTITUCIONAL;;310601001 - Despesas Propaganda e Marketing;310601001;Despesas Propaganda e Marketing
+Despesas Comerciais;Despesas Propaganda e Marketing;PRDL;PROPAGANDA- DECORACAO DE LOJA;;310601001 - Despesas Propaganda e Marketing;310601001;Despesas Propaganda e Marketing
+Despesas Comerciais;Despesas Propaganda e Marketing;PRSP;PROPAGANDA- SERV. DE PROPAGADA;;310601001 - Despesas Propaganda e Marketing;310601001;Despesas Propaganda e Marketing
+Despesas Comerciais;Despesas Propaganda e Marketing;PRTFU;PROP TAB E FOLHETOS CONFEC GRA;;310601001 - Despesas Propaganda e Marketing;310601001;Despesas Propaganda e Marketing
+Despesas Comerciais;Distribuicao de folhetos;PRDF;PROPAGANDA DISTRIBUICAO FOLHET;;310601004 - Distribuicao de folhetos;310601004;Distribuicao de folhetos
+Despesas Gerais;Auditoria Sanitária e Anál.Laboratoriais;ASAL;AUDITORIA SANIT. ANALISE LABOR;;310501005 - Auditoria Sanitária e Anál.Laboratoriais;310501005;Auditoria Sanitária e Anál.Laboratoriais
+Despesas Gerais;Auto de Infração ;AIT;AUTO DE INFRACAO TRIBUTARIA;;320101002 - Auto de Infração ;320101002;Auto de Infração 
+Despesas Gerais;Compra de materia prima;MATPRI;MATERIA PRIMA;;310101001 - Compra de materia prima;310101001;Compra de materia prima
+Despesas Gerais;Condução, Taxi e Aplicativos;TAXUBE;DESPESAS COM TAXI E UBER;;310602005 - Condução, Taxi e Aplicativos;310602005;Condução, Taxi e Aplicativos
+Despesas Gerais;Correios;COR;CORREIOS;;310602004 - Correios;310602004;Correios
+Despesas Gerais;Despesa;CHFO;CHIP FOTOCONDUTOR;;310503004 - Chip Fotocondutor;310503004;Chip Fotocondutor
+Despesas Gerais;Despesa;CHTO;CHIP TONER;;310503003 - Chip Toner;310503003;Chip Toner
+Despesas Gerais;Despesa Material de Bombeiro;BOMBEI;DESPESA COM MATERIAL BOMBEIRO;;310501082 - Despesa Material de Bombeiro;310501082;Despesa Material de Bombeiro
+Despesas Gerais;Despesa Material de Bombeiro;VISBOM;VISTORIA DE BOMBEIRO;;310501082 - Despesa Material de Bombeiro;310501082;Despesa Material de Bombeiro
+Despesas Gerais;Despesas de Cartório;DECAR;DESPESAS DE CARTORIO;;310602009 - Despesas de Cartório;310602009;Despesas de Cartório
+Despesas Gerais;Despesas de Cartório;DESPA;DESPACHANTE;;310602009 - Despesas de Cartório;310602009;Despesas de Cartório
+Despesas Gerais;Despesas diversas;DESPTE;DESPESAS TESOURARIA;;310602013 - Despesas diversas;310602013;Despesas diversas
+Despesas Gerais;Despesas diversas;DESP;DESPESAS A PAGAR;;310501075 - Equipamentos Lojas;310501075;Equipamentos Lojas
+Despesas Gerais;Despesas gerais não dedutíveis;DOACAO;DOAÇÕES DE MERCADORIAS;;320101017 - Despesas gerais não dedutíveis;320101017;Despesas gerais não dedutíveis
+Despesas Gerais;Embalagem ;EMBAL;DESPESA MATERIAL EMBALAGEM;;310501040 - Material De Uso E Consumo ;310501040;Material De Uso E Consumo 
+Despesas Gerais;Encadernação;ENCP;ENCADERNACOES/COPIAS/PLASTIFIC;;310504004 - Serviços Prestados - PJ;310504004;Serviços Prestados - PJ
+Despesas Gerais;Equipamentos Automotivos;GRABER;GRABER - MONITORAMENTO;;310401011 - Graber;310401011;Graber
+Despesas Gerais;Franquias e Pequenos Sinistros;FRPS;FRANQUIAS E PEQUENOS SINISTROS;;310509005 - Franquias e Pequenos Sinistros;310509005;Franquias e Pequenos Sinistros
+Despesas Gerais;Galao de agua;GALAG;GALAO DE AGUA;;320505003 - Galao de agua;320505003;Galao de agua
+Despesas Gerais;Inventário;INVENT;INVENTARIO;;310504011 - Inventário;310504011;Inventário
+Despesas Gerais;IPEM - Instituto de Pesos e Medidas;IPEM;IPEM;;310703005 - IPEM - Instituto de Pesos e Medidas;310703005;IPEM - Instituto de Pesos e Medidas
+Despesas Gerais;Leasing Equipamentos de Informática;LEI;LEASING EQUIP. DE INFORMATICA;;310508002 - Leasing Equipamentos de Informática;310508002;Leasing Equipamentos de Informática
+Despesas Gerais;Leasing Máquinas e Equipamentos;LEME;LEASING MAQUINA E EQUIPAMENTOS;;310508001 - Leasing Máquinas e Equipamentos;310508001;Leasing Máquinas e Equipamentos
+Despesas Gerais;Limpeza e conservação;COPR;COMBATE DE PRAGAS;;310504013 - Limpeza e conservação;310504013;Limpeza e conservação
+Despesas Gerais;Limpeza e conservação;LICON;LIMPEZA E CONSERVACAO;;310504013 - Limpeza e conservação;310504013;Limpeza e conservação
+Despesas Gerais;Locação de Pós - Point Office Service;POS;POS- POINT OFFICE SERVICE;;310501051 - Locação de Pós - Point Office Service;310501051;Locação de Pós - Point Office Service
+Despesas Gerais;Locação Empilhadeiras;LOEN;LOCACAO DE EMPILHADEIRAS;;310507002 - Locação Empilhadeiras;310507002;Locação Empilhadeiras
+Despesas Gerais;Locação gerais e Equipamentos;LOCH;LOCACAO CARRO HIDRAULICO;;310507004 - Locação Carro Hidráulico;310507004;Locação Carro Hidráulico
+Despesas Gerais;Locação gerais e Equipamentos;LOCO;LOCADORA;;310507001 - Locação de Copiadoras;310507001;Locação de Copiadoras
+Despesas Gerais;Locação gerais e Equipamentos;CAC;CACAMBA;;310501050 - Locação gerais e Equipamentos;310501050;Locação gerais e Equipamentos
+Despesas Gerais;Locação gerais e Equipamentos;LOCMOV;LOCAÇÃO DE MOVEIS E UTENSÍLIOS;;310501050 - Locação gerais e Equipamentos;310501050;Locação gerais e Equipamentos
+Despesas Gerais;Locação gerais e Equipamentos;LOME;LOCACAO OUTRAS MAQUINA/EQUIPAM;;310501050 - Locação gerais e Equipamentos;310501050;Locação gerais e Equipamentos
+Despesas Gerais;Manutencao e pequenas reformas;VIDRA;VIDRACEIRO;;310209004 - Manutenção Fachada e Cobertura;310209004;Manutenção Fachada e Cobertura
+Despesas Gerais;Material de Limpeza;MATLI;MATERIAL DE LIMPEZA;;310501004 - Material de Limpeza;310501004;Material de Limpeza
+Despesas Gerais;Material De Uso E Consumo ;DROGA;DROGARIA;;310501040 - Material De Uso E Consumo ;310501040;Material De Uso E Consumo 
+Despesas Gerais;Material De Uso E Consumo ;ETAL;ETIQUETAS DE ALARME;;310501040 - Material De Uso E Consumo ;310501040;Material De Uso E Consumo 
+Despesas Gerais;Material De Uso E Consumo ;SCL;SACOLAS;;310501040 - Material De Uso E Consumo ;310501040;Material De Uso E Consumo 
+Despesas Gerais;Material de Uso ou Consumo;CONSUM;MATERIAL DE USO E CONSUMO;;310505002 - Material de Uso ou Consumo;310505002;Material de Uso ou Consumo
+Despesas Gerais;Material Escritório;MAES;MATERIAL DE ESCRITORIOS;;310602012 - Material Escritório;310602012;Material Escritório
+Despesas Gerais;Pinpad;PIN;PINPAD;;310506003 - Pinpad;310506003;Pinpad
+Despesas Gerais;Plataforma web;PLATAF;PLATAFORMA WEB - INMETRA;;310205009 - Plataforma web;310205009;Plataforma web
+Despesas Gerais;Prêmios De Seguros E Franquias;SGES;SEGURO ESTACIONAMENTO;;310501060 - Prêmios De Seguros E Franquias;310501060;Prêmios De Seguros E Franquias
+Despesas Gerais;Prêmios e Brindes;PRPB;PROPAGANDA PREMIOS E BRINDES;;310601006 - Prêmios e Brindes;310601006;Prêmios e Brindes
+Despesas Gerais;Processos de Marcas e Patentes;PMP;PROCESSOS DE MARCAS E PATENTES;;310602011 - Processos de Marcas e Patentes;310602011;Processos de Marcas e Patentes
+Despesas Gerais;Reembolso com Despesas;DEMOT;DESPESAS MOTOBOY;;311201001 - Reembolso com Despesas;311201001;Reembolso com Despesas
+Despesas Gerais;Seguro Cargas;SGCA;SEGURO CARGAS;;310509003 - Seguro Cargas;310509003;Seguro Cargas
+Despesas Gerais;Sistema de alarme;SKSA;SEKRON - SISTEMA ALARME;;310504015 - Sistema de alarme;310504015;Sistema de alarme
+Despesas Gerais;Sonorização, Áudio e Espera Telefônica;SONOAU;SONORO/AUDIO E ESPERA TELEFO;;310602008 - Sonorização, Áudio e Espera Telefônica;310602008;Sonorização, Áudio e Espera Telefônica
+Despesas Gerais;Tarifas com Adm. de Cartões;TADMC;TARIFAS COM ADM DE CARTOES;;310901002 - Tarifas com Adm. de Cartões;310901002;Tarifas com Adm. de Cartões
+Despesas Gerais;Utensílios Para Loja;DEQHOR;DESPESA EQUIPAMENTO HORTIFRUTI;;310502004 - Utensílios para Hortifruti;310502004;Utensílios para Hortifruti
+Despesas Gerais;Utensílios Para Loja;DEQLAN;DESPESA EQUIPAMENTO LANCHONETE;;310501035 - Utensílios Para Loja;310501035;Utensílios Para Loja
+Despesas Gerais;Utensílios Para Loja;DEQMER;DESPESA EQUIPAMENTO MERCEARIA;;310501035 - Utensílios Para Loja;310501035;Utensílios Para Loja
+Despesas Gerais;Utensílios Para Loja;UTAC;UTENSILIOS DE ACOUGUE;;310501035 - Utensílios Para Loja;310501035;Utensílios Para Loja
+Despesas Gerais;Utensílios Para Loja;UTENS;OUTROS UTENSILIOS;;310501035 - Utensílios Para Loja;310501035;Utensílios Para Loja
+Despesas Gerais;Utensílios Para Loja;UTHO;UTENSILIOS PARA HORTIFRUTI;;310501035 - Utensílios Para Loja;310501035;Utensílios Para Loja
+Despesas Gerais;Utensílios Para Loja;UTLA;UTENSILIOS PARA LANCHONETE;;310501035 - Utensílios Para Loja;310501035;Utensílios Para Loja
+Despesas Gerais;Utensílios Para Loja;UTPA;UTENSILIOS PARA PADARIA;;310501035 - Utensílios Para Loja;310501035;Utensílios Para Loja
+Despesas Gerais;Utensílios Para Loja;UTSLPR;UTENSILIOS P/ SALA PREPARAÇÃO;;310501035 - Utensílios Para Loja;310501035;Utensílios Para Loja
+Despesas Gerais;Utensílios Para Loja;UTNE;UTENCILIOS PARA MERCEARIA;;310502005 - Utensílios para Mercearia;310502005;Utensílios para Mercearia
+Despesas Gerais;Viagens e Estadias;VIAEST;VIAGENS E ESTADIAS;;310501010 - Viagens e Estadias;310501010;Viagens e Estadias
+Despesas Marketing;Comunicacao Visual;PRCV;PROPAGANDA COMUNICACAO VISUAL;;310601008 - Comunicacao Visual;310601008;Comunicacao Visual
+Despesas Marketing;Consultoria de Marketing;PRCM;PROP. CONSULTORIA DE MARKETING;;310601013 - Consultoria de Marketing;310601013;Consultoria de Marketing
+Despesas Marketing;Desenvolvimento e criacao;PRDC;PROPAGANDA- DESENVOL./CRIACAO;;310601002 - Desenvolvimento e criacao;310601002;Desenvolvimento e criacao
+Despesas Marketing;Radio, TV e Jornal.;PRRTJ;PROPAGANDA RADIO/ TV E JORNAL;;310601007 - Radio, TV e Jornal.;310601007;Radio, TV e Jornal.
+Impostos e Taxas ;Contribuição Sindical;CEACAB;CONTRIB EMPR ASSIST COMER- ABC;;310206009 - Contrib. empregado assis. comer. - ABC;310206009;Contrib. empregado assis. comer. - ABC
+Impostos e Taxas ;Contribuição Sindical;CEACSP;CONTRIB EMP ASSIST COMER- SP;;310206008 - Contrib. empregado assis. comer. - SP;310206008;Contrib. empregado assis. comer. - SP
+Impostos e Taxas ;Contribuição Sindical;CECCAB;CONTRIB EMP CONFED COMER - ABC;;310206010 - Contrib. empregado confed. comer. - ABC;310206010;Contrib. empregado confed. comer. - ABC
+Impostos e Taxas ;Contribuição Sindical;CESCAB;CONTRIB EMPREG. SIND COMER ABC;;310206006 - Contrib. empregado sind. comer. - ABC;310206006;Contrib. empregado sind. comer. - ABC
+Impostos e Taxas ;Contribuição Sindical;CESCSP;CONTRIB EMPREG. SIND COMER -SP;;310206005 - Contrib. empregado sind. comer. - SP;310206005;Contrib. empregado sind. comer. - SP
+Impostos e Taxas ;Contribuição Sindical;CESMSP;CONTR. EMP SIND MOTO COMER- SP;;310206007 - Contrib. empregado sind. motorista - SP;310206007;Contrib. empregado sind. motorista - SP
+Impostos e Taxas ;Contribuição Sindical;CPAABC;CONTRIBUIÇÃO PATRO. ASSI.- ABC;;310206004 - Contribuicao patronal assi. - ABC;310206004;Contribuicao patronal assi. - ABC
+Impostos e Taxas ;Contribuição Sindical;CPASP;CONTRIBUIÇÃO PATRO. ASSIS.- SP;;310206003 - Contribuicao patronal assi. - SP;310206003;Contribuicao patronal assi. - SP
+Impostos e Taxas ;Contribuição Sindical;CPSABC;CONTRIBUIÇÃO PATRO. SIND - ABC;;310206002 - Contribuicao patronal sind. - ABC;310206002;Contribuicao patronal sind. - ABC
+Impostos e Taxas ;Despesas Bancárias;DB;DESPESAS BANCARIAS;;310901001 - Despesas Bancárias;310901001;Despesas Bancárias
+Impostos e Taxas ;Despesas diversas;DARF;DARF 6621;;310705001 - Darf 6621;310705001;Darf 6621
+Impostos e Taxas ;Despesas diversas;DARE;DARE 370-0;;310602013 - Despesas diversas;310602013;Despesas diversas
+Impostos e Taxas ;Despesas diversas;SIMPNA;DAS SIMPLES NACIONAL;;320101017 - Despesas gerais não dedutíveis;320101017;Despesas gerais não dedutíveis
+Impostos e Taxas ;Despesas diversas;GARE;GARE - DR;;310702005 - Gare - DR;310702005;Gare - DR
+Impostos e Taxas ;ICMS e Diferencial de Alíquota;ICMS;ICMS;;311102001 - ICMS e Diferencial de Alíquota;311102001;ICMS e Diferencial de Alíquota
+Impostos e Taxas ;Icms-ST / Gnre;GNRE;GNRE;;311102002 - Icms-ST / Gnre;311102002;Icms-ST / Gnre
+Impostos e Taxas ;Impostos e taxas diversas;CPSSP;CONTRIBUIÇÃO PATRO. SIND. - SP;;310701007 - Impostos e taxas diversas;310701007;Impostos e taxas diversas
+Impostos e Taxas ;Impostos e taxas diversas;CUSTAS;CUSTAS JUDICIAL -GUIA REC. UNI;;310701007 - Impostos e taxas diversas;310701007;Impostos e taxas diversas
+Impostos e Taxas ;Impostos e taxas diversas;IMPORT;DESPESAS DE IMPORTAÇÃO;;310701007 - Impostos e taxas diversas;310701007;Impostos e taxas diversas
+Impostos e Taxas ;Impostos e taxas diversas;IRRFTE;IRRF S/ SERVIÇOS DE TERCEIRO;;310702007 - Impostos e taxas diversas;310702007;Impostos e taxas diversas
+Impostos e Taxas ;Impostos e taxas diversas;PC;PROCESSOS CIVEIS;;310701007 - Impostos e taxas diversas;310701007;Impostos e taxas diversas
+Impostos e Taxas ;Impostos e taxas diversas;TARTAX;TAXAS E TARIFAS;;310701007 - Impostos e taxas diversas;310701007;Impostos e taxas diversas
+Impostos e Taxas ;Impostos e taxas diversas;PCCSLL;RETENCAO PIS COFINS CSLL NFS;;310902001 - Juros e multa recebidos;310902001;Juros e multa recebidos
+Impostos e Taxas ;INSS Funrural;INSSRU;INSS PRODUTOR RURAL;;320101004 - INSS Funrural;320101004;INSS Funrural
+Impostos e Taxas ;Irrf sobre Alugueis;IRRF;IRRF SOBRE ALUGUEIS;;311101005 - Irrf sobre Alugueis;311101005;Irrf sobre Alugueis
+Impostos e Taxas ;ISS;ISSQN;ISSQN;;320101017 - Despesas gerais não dedutíveis;320101017;Despesas gerais não dedutíveis
+Impostos e Taxas ;Multa de Mora;MM;MULTA DE MORA;;310901010 - Multa de Mora;310901010;Multa de Mora
+Impostos e Taxas ;Taxa Localiz.,Instalação e Funcionamento;TXLIF;TAXA LOCALI/INSTALACAO/FUNCIOM;;310703004 - Taxa Localiz.,Instalação e Funcionamento;310703004;Taxa Localiz.,Instalação e Funcionamento
+Impostos e Taxas ;TFA - Taxa Fiscalização de Anúncios;TFA;TFA TAXA FISC. DE ANUNCIOS;;310703002 - TFA - Taxa Fiscalização de Anúncios;310703002;TFA - Taxa Fiscalização de Anúncios
+Impostos e Taxas ;TFE;TFE;TFE TAXA FISC. ESTABELECIMENTO;;320101017 - Despesas gerais não dedutíveis;320101017;Despesas gerais não dedutíveis
+Impostos e Taxas ;TFP - Taxa Fiscalização de Publicidade;TFP;TFP TAXA FISC. DE PUBLICIDADE;;310703003 - TFP - Taxa Fiscalização de Publicidade;310703003;TFP - Taxa Fiscalização de Publicidade
+Manutenções Gerais;Manutencao e pequenas reformas;MALV;MANUTENCAO ALVENARIA;;310209001 - Manutencao e pequenas reformas;310209001;Manutencao e pequenas reformas
+Manutenções Gerais;Manutenção Elétrica;MAELE;MANUTENCAO ELETRICA- VEICULO;;310210003 - Manutenção Elétrica;310210003;Manutenção Elétrica
+Manutenções Gerais;Manutenção Veiculos;MABO;MANUTENCAO BORRACHARIA- VEICUL;;310210004 - Manutenção Borracharia;310210004;Manutenção Borracharia
+Manutenções Gerais;Manutenção Veiculos;MAFU;MANUTENCAO FUNILARIA- VEICULO;;310210002 - Manutenção Funilaria;310210002;Manutenção Funilaria
+Manutenções Gerais;Peças e Ferramentas;FERRAM;FERRAMENTAS;;310502025 - Peças e Ferramentas;310502025;Peças e Ferramentas
+Manutenções Gerais;Peças e Ferramentas;PEAC;PECAS E ACESSORIOS;;310502025 - Peças e Ferramentas;310502025;Peças e Ferramentas
+Manutenções Gerais;Peças e Manut./equip. de Informática;MALCB;MANUTENCAO LEITOR COD. BARRAS;;310211004 - Manutenção Leitor Código de Barras;310211004;Manutenção Leitor Código de Barras
+Manutenções Gerais;Peças e Manut./equip. de Informática;MAPDV;MANUTENCAO PDV;;310211001 - Manutenção PDV;310211001;Manutenção PDV
+Manutenções Gerais;Peças e Manut./equip. de Informática;EQUINF;EQUIPAMENTOS DE INFORMATICA;;310502015 - Peças e Manut./equip. de Informática;310502015;Peças e Manut./equip. de Informática
+Manutenções Gerais;Peças e Manut./equip. de Informática;MAEQI;MANUT. EQUIPAMENTO INFORMATICA;;310502015 - Peças e Manut./equip. de Informática;310502015;Peças e Manut./equip. de Informática
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MACEM;MANUTENCAO EMBALADORA- ACOUGUE;;310208012 - Manutencao - acougue - embaladora;310208012;Manutencao - acougue - embaladora
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MALAH;MANUTENCAO CHAPA - LANCHONETE;;310208007 - Manutencao - lanchonete - chapa;310208007;Manutencao - lanchonete - chapa
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MALAC;MANUTENCAO COIFA - LANCHONETE;;310208006 - Manutencao - lanchonete - coifa;310208006;Manutencao - lanchonete - coifa
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MALM;MANUTENCAO MOENDA - LANCHONETE;;310208009 - Manutencao - lanchonete - moenda;310208009;Manutencao - lanchonete - moenda
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MAPB;MANUTENCAO BATEDEIRA- PADARIA;;310208016 - Manutencao - padaria - batedeira;310208016;Manutencao - padaria - batedeira
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MAPD;MANUTENCAO DOSADOR - PADARIA;;310208020 - Manutencao - padaria - dosador;310208020;Manutencao - padaria - dosador
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MAPM;MANUTEN. MASSAREIRA - PADARIA;;310208015 - Manutencao - padaria - masseira;310208015;Manutencao - padaria - masseira
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MAPMO;MANUTENCAO MODELADORA- PADARIA;;310208017 - Manutencao - padaria - modeladora;310208017;Manutencao - padaria - modeladora
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MAEX;MANUTENCAO DE EXTINTORES;;310208002 - Manutencao extintores;310208002;Manutencao extintores
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MAPCF;MANUT CAM FERMENTACAO-PADARIA;;310208019 - Manutencao padaria - camara fermentacao;310208019;Manutencao padaria - camara fermentacao
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MARP;MANUTENCAO DE RELOGIO DE PONTO;;310208003 - Manutencao relogios de ponto;310208003;Manutencao relogios de ponto
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MARSE;MANUTEN. REVI SIST DE INCENDIO;;310207004 - Manutencao revisao sistema de incendio;310207004;Manutencao revisao sistema de incendio
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MAARC;MANUTENCAO DE AR CONDICIONADO;;310502008 - Peças e Manutenção de Moveis/Equipamento;310502008;Peças e Manutenção de Moveis/Equipamento
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MACFR;MANUTENCAO CAMARA FRIGORIFICA;;310502008 - Peças e Manutenção de Moveis/Equipamento;310502008;Peças e Manutenção de Moveis/Equipamento
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MACH;MANUTEN CARRINHOS E HIDRAULICO;;310502008 - Peças e Manutenção de Moveis/Equipamento;310502008;Peças e Manutenção de Moveis/Equipamento
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MAEMP;MANUTENCAO DE EMPILHADEIRA;;310502008 - Peças e Manutenção de Moveis/Equipamento;310502008;Peças e Manutenção de Moveis/Equipamento
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MAEQ;MANUTENCAO DE EQUIPAMENTOS;;310502008 - Peças e Manutenção de Moveis/Equipamento;310502008;Peças e Manutenção de Moveis/Equipamento
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MAGE;MANUTENCAO DE GERADORES;;310502008 - Peças e Manutenção de Moveis/Equipamento;310502008;Peças e Manutenção de Moveis/Equipamento
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MALAB;MANUTENÇÃO BALCAO REFRIGERADOR;;310502008 - Peças e Manutenção de Moveis/Equipamento;310502008;Peças e Manutenção de Moveis/Equipamento
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MAMSC;MANUT MARCENARIA E SERRALHERIA;;310502008 - Peças e Manutenção de Moveis/Equipamento;310502008;Peças e Manutenção de Moveis/Equipamento
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MANUTE;MANUT DE DEPARTAMENTOS ADM;;310502008 - Peças e Manutenção de Moveis/Equipamento;310502008;Peças e Manutenção de Moveis/Equipamento
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MANVAC;MANUTENCAO EMBALADORA VACUO;;310502008 - Peças e Manutenção de Moveis/Equipamento;310502008;Peças e Manutenção de Moveis/Equipamento
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MAPC;MANUTENCAO CILINDRO - PADARIA;;310502008 - Peças e Manutenção de Moveis/Equipamento;310502008;Peças e Manutenção de Moveis/Equipamento
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MAPF;MANUTENCAO FORNO - PADARIA;;310502008 - Peças e Manutenção de Moveis/Equipamento;310502008;Peças e Manutenção de Moveis/Equipamento
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MAPFA;MANUTENCAO FATIADEIRA- PADARIA;;310502008 - Peças e Manutenção de Moveis/Equipamento;310502008;Peças e Manutenção de Moveis/Equipamento
+Manutenções Gerais;Peças e Manutenção de Moveis/Equipamento;MOVEQU;MANUTENÇÃO DE MOVEIS E EQUIP;;310502008 - Peças e Manutenção de Moveis/Equipamento;310502008;Peças e Manutenção de Moveis/Equipamento
+Manutenções Gerais;Peças e Manutenção Predial/Loja;MACJ;MANUTENCAO CONSERVACAO JARDIM;;310502009 - Peças e Manutenção Predial/Loja;310502009;Peças e Manutenção Predial/Loja
+Manutenções Gerais;Peças e Manutenção Predial/Loja;MAEH;MANUT. ELETRICA E HIDRAULICA;;310502009 - Peças e Manutenção Predial/Loja;310502009;Peças e Manutenção Predial/Loja
+Manutenções Gerais;Peças e Manutenção Predial/Loja;MAEQS;MANUTENCAO EQUIPAM. SEGURANCA;;310502009 - Peças e Manutenção Predial/Loja;310502009;Peças e Manutenção Predial/Loja
+Manutenções Gerais;Peças e Manutenção Predial/Loja;MAFCO;MANUTENCAO FACHADA E COBERTURA;;310502009 - Peças e Manutenção Predial/Loja;310502009;Peças e Manutenção Predial/Loja
+Manutenções Gerais;Peças e Manutenção Predial/Loja;MAPIN;MANUTENCAO DE PINTURA;;310502009 - Peças e Manutenção Predial/Loja;310502009;Peças e Manutenção Predial/Loja
+Manutenções Gerais;Peças e Manutenção Predial/Loja;MATELE;MATERIAL ELETRICO;;310502009 - Peças e Manutenção Predial/Loja;310502009;Peças e Manutenção Predial/Loja
+Manutenções Gerais;Serviços De Manutenção;DESSOC;DESPESAS SOCIAIS;;310502020 - Serviços De Manutenção;310502020;Serviços De Manutenção
+Manutenções Gerais;Serviços De Manutenção;FREDT;FRETES- ENTREGAS EM DOMICILIOS;;310502020 - Serviços De Manutenção;310502020;Serviços De Manutenção
+Manutenções Gerais;Serviços De Manutenção;INVEST;INVESTIMENTOS A PAGAR;;310502020 - Serviços De Manutenção;310502020;Serviços De Manutenção
+Manutenções Gerais;Serviços De Manutenção;MABA;MANUTENCAO BALANCA;;310502020 - Serviços De Manutenção;310502020;Serviços De Manutenção
+Manutenções Gerais;Serviços De Manutenção;MACIM;MANUT. COPIADORES/IMPRESSORA;;310502020 - Serviços De Manutenção;310502020;Serviços De Manutenção
+Manutenções Gerais;Serviços De Manutenção;MAEL;MANUTENCAO DE ELEVADORES;;310502020 - Serviços De Manutenção;310502020;Serviços De Manutenção
+Manutenções Gerais;Serviços De Manutenção;MAMG;MANUTENCAO MAQUINA DE GELO;;310502020 - Serviços De Manutenção;310502020;Serviços De Manutenção
+Manutenções Gerais;Serviços De Manutenção;MANCAS;MANUTENÇÃO CASA DE MAQUINAS;;310502020 - Serviços De Manutenção;310502020;Serviços De Manutenção
+Manutenções Gerais;Serviços De Manutenção;MANLAV;MANUT DE LAVAGEM DE VEICULOS;;310502020 - Serviços De Manutenção;310502020;Serviços De Manutenção
+Manutenções Gerais;Serviços De Manutenção;MANMOC;MANUTENCAO MOEDOR DE CARNE;;310502020 - Serviços De Manutenção;310502020;Serviços De Manutenção
+Manutenções Gerais;Serviços De Manutenção;MANPAL;MANUTENCAO PALETEIRA ELETRICA;;310502020 - Serviços De Manutenção;310502020;Serviços De Manutenção
+Manutenções Gerais;Serviços De Manutenção;MATN;MANUTENCAO TELEFONIA/ NEXTEL;;310502020 - Serviços De Manutenção;310502020;Serviços De Manutenção
+Manutenções Gerais;Serviços De Manutenção;SEENG;SERVICOS DE ENGENHARIA;;310502020 - Serviços De Manutenção;310502020;Serviços De Manutenção
+Serviços de Terceiros e Contratos;Consultoria;CONSU;CONSULTORIA;;310504010 - Consultoria;310504010;Consultoria
+Serviços de Terceiros e Contratos;Fretes - Entrega em Domicílio/Transp.;FRCA;FRETES E CARRETOS;;310501066 - Fretes - Entrega em Domicílio/Transp.;310501066;Fretes - Entrega em Domicílio/Transp.
+Serviços de Terceiros e Contratos;Internet e assinaturas ;PRIN;PROVEDOR INTERNET;;310503034 - Internet e assinaturas ;310503034;Internet e assinaturas 
+Serviços de Terceiros e Contratos;Serasa e Certificado Digital;CERDIG;CERTIFICADO DIGITAL;;310504014 - Serasa e Certificado Digital;310504014;Serasa e Certificado Digital
+Serviços de Terceiros e Contratos;Serasa e Certificado Digital;SER;SERASA;;310504014 - Serasa e Certificado Digital;310504014;Serasa e Certificado Digital
+Serviços de Terceiros e Contratos;Serviços Prestados - PJ;SERVNU;SERV PRESTADOS NUTRICIONISTA;;310302001 - Serviços Prestados - PJ;310302001;Serviços Prestados - PJ
+Serviços de Terceiros e Contratos;Serviços Prestados de Segurança;SEPSE;SERVICOS PRESTADOS SEGURANCA;;310504008 - Serviços Prestados de Segurança;310504008;Serviços Prestados de Segurança
+Serviços de Terceiros e Contratos;Sitef;SITEF;SITEF;;310401007 - Sitef;310401007;Sitef
+Serviços de Terceiros e Contratos;Software;IMENDE;IMENDES - SPEDY;;310401014 - Imendes;310401014;Imendes
+Serviços de Terceiros e Contratos;Suporte Técnico e Software;CONTRO;CONTROLID;;310504016 - Software;310504016;Software
+Serviços de Terceiros e Contratos;Suporte Técnico e Software;SOFT;SOFTWARE;;310504016 - Software;310504016;Software
+Serviços de Terceiros e Contratos;Suporte Técnico e Software;BDDBN;BANCO DE DADOS DBMASTER;;310504012 - Suporte Técnico;310504012;Suporte Técnico
+Serviços de Terceiros e Contratos;Suporte Técnico e Software;SUPINF;SUPORTE TECNICO EM INFORMATICA;;310504012 - Suporte Técnico;310504012;Suporte Técnico

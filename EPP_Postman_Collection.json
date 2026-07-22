@@ -1,0 +1,698 @@
+{
+  "info": {
+    "name": "EPP — Encomendas por Pedido",
+    "description": "Coleção completa das rotas EPP.\n\n⚠️ AUTENTICAÇÃO VIA COOKIE — faça login primeiro (pasta Auth). O Postman gerencia os cookies automaticamente.\n\nPara habilitar cookies no Postman: Settings → Cookies → Domains Allowlist → adicione 'vagas.gpprh.com.br'",
+    "_postman_id": "epp-collection-2026",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://vagas.gpprh.com.br/api/v1/global",
+      "type": "string",
+      "description": "URL base da API"
+    }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/login", "host": ["{{base_url}}"], "path": ["login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"seu.usuario\",\n  \"password\": \"sua.senha\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Autentica o usuário e grava os cookies accessToken, refreshToken e userRole.\n\nDepois do login o Postman passa os cookies automaticamente em todas as demais requisições."
+          }
+        },
+        {
+          "name": "Me (usuário logado)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/me", "host": ["{{base_url}}"], "path": ["me"] },
+            "description": "Retorna os dados do usuário autenticado via cookie."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{base_url}}/logout", "host": ["{{base_url}}"], "path": ["logout"] },
+            "description": "Encerra a sessão e limpa os cookies."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "📦 Produtos",
+      "item": [
+        {
+          "name": "Listar produtos ativos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/products",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "products"]
+            },
+            "description": "Retorna lista reduzida de produtos ativos."
+          }
+        },
+        {
+          "name": "Listar TODOS os produtos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/products?complete=1",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "products"],
+              "query": [{ "key": "complete", "value": "1" }]
+            },
+            "description": "Retorna todos os produtos (ativos e inativos), com mais detalhes."
+          }
+        },
+        {
+          "name": "Listar categorias",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/products?category=1",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "products"],
+              "query": [{ "key": "category", "value": "1" }]
+            },
+            "description": "Retorna apenas as categorias de produtos."
+          }
+        },
+        {
+          "name": "Buscar produto por filtro",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/products?id_category_fk=1&status_prod=1",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "products"],
+              "query": [
+                { "key": "id_product",      "value": "",  "disabled": true,  "description": "ID exato do produto" },
+                { "key": "id_category_fk",  "value": "1", "disabled": false, "description": "ID da categoria" },
+                { "key": "status_prod",     "value": "1", "disabled": false, "description": "1=ativo, 0=inativo" }
+              ]
+            },
+            "description": "Filtra produtos por id_product, id_category_fk e/ou status_prod."
+          }
+        },
+        {
+          "name": "Buscar produto por ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/products/1",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "products", "1"]
+            },
+            "description": "Retorna um produto específico pelo ID, incluindo nome da categoria."
+          }
+        },
+        {
+          "name": "Consultar produto no Consinco (Oracle)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/products/consinco?codigo_acesso=7891234567890&lojas=1",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "products", "consinco"],
+              "query": [
+                { "key": "codigo_acesso", "value": "7891234567890", "description": "Código de barras (EAN) — OBRIGATÓRIO" },
+                { "key": "lojas",         "value": "1",             "description": "Código(s) da loja separados por vírgula — OBRIGATÓRIO" },
+                { "key": "full_store",    "value": "1",             "disabled": true, "description": "Se 1, consulta todas as lojas (1,2,3,7,8,9)" }
+              ]
+            },
+            "description": "Consulta o produto no ERP Consinco via Oracle. Requer codigo_acesso (EAN) e lojas."
+          }
+        },
+        {
+          "name": "Criar produto",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/epp/products", "host": ["{{base_url}}"], "path": ["epp", "products"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_product\": 101,\n  \"description\": \"Bolo de Chocolate 1kg\",\n  \"price\": 45.90,\n  \"status_prod\": 1,\n  \"id_category_fk\": 2,\n  \"measure\": \"UN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Cria um novo produto.\n\nCampos obrigatórios: id_product, description, price, status_prod, id_category_fk, measure\n\nPermissão: EPP_PRODUCTS | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Atualizar produto",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/epp/products/1", "host": ["{{base_url}}"], "path": ["epp", "products", "1"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Bolo de Chocolate 1,5kg\",\n  \"price\": 55.90,\n  \"status_prod\": 1,\n  \"id_category_fk\": 2,\n  \"measure\": \"UN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Atualiza completamente um produto pelo ID.\n\nPermissão: EPP_PRODUCTS | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Alterar status do produto",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/epp/products/1/status", "host": ["{{base_url}}"], "path": ["epp", "products", "1", "status"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status_prod\": 0\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Ativa (1) ou inativa (0) um produto sem alterar os outros campos.\n\nPermissão: EPP_PRODUCTS | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Excluir produto",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{base_url}}/epp/products/1", "host": ["{{base_url}}"], "path": ["epp", "products", "1"] },
+            "description": "Remove um produto. Bloqueado se houver pedidos vinculados.\n\nPermissão: EPP_PRODUCTS | MANAGE_EPP"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "📋 Menus",
+      "item": [
+        {
+          "name": "Listar menus ativos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/epp/menus", "host": ["{{base_url}}"], "path": ["epp", "menus"] },
+            "description": "Retorna menus ativos."
+          }
+        },
+        {
+          "name": "Listar TODOS os menus",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/menus?registration=1",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "menus"],
+              "query": [{ "key": "registration", "value": "1" }]
+            },
+            "description": "Retorna todos os menus (ativos e inativos)."
+          }
+        },
+        {
+          "name": "Buscar menu por filtro",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/menus?status=1&description=natal",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "menus"],
+              "query": [
+                { "key": "id_menu",     "value": "",      "disabled": true,  "description": "ID do menu" },
+                { "key": "status",      "value": "1",     "disabled": false, "description": "1=ativo, 0=inativo" },
+                { "key": "description", "value": "natal", "disabled": false, "description": "Texto parcial da descrição" }
+              ]
+            },
+            "description": "Busca menus com filtros: id_menu, status, description."
+          }
+        },
+        {
+          "name": "Criar menu",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/epp/menus", "host": ["{{base_url}}"], "path": ["epp", "menus"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Cardápio de Natal 2026\",\n  \"status\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Cria um novo menu.\n\nCampos obrigatórios: description\nOpcionais: status (padrão 1)\n\nPermissão: EPP_PRODUCTS | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Atualizar menu",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/epp/menus/1", "host": ["{{base_url}}"], "path": ["epp", "menus", "1"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Cardápio de Natal 2026 — Atualizado\",\n  \"status\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Atualiza um menu.\n\nCampos obrigatórios: description, status\n\nPermissão: EPP_PRODUCTS | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Excluir menu",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{base_url}}/epp/menus/1", "host": ["{{base_url}}"], "path": ["epp", "menus", "1"] },
+            "description": "Remove um menu. Bloqueado se houver itens de cardápio (log_menus) vinculados.\n\nPermissão: EPP_PRODUCTS | MANAGE_EPP"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🗂️ Log Menus (Cardápio × Produto)",
+      "item": [
+        {
+          "name": "Listar todos os itens de cardápio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/epp/log-menus", "host": ["{{base_url}}"], "path": ["epp", "log-menus"] },
+            "description": "Retorna todos os vínculos produto × menu (log_menus), com JOIN de produto e menu."
+          }
+        },
+        {
+          "name": "Buscar itens por PLU",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/log-menus?plu_menu=001",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "log-menus"],
+              "query": [{ "key": "plu_menu", "value": "001", "description": "Código PLU do produto no cardápio" }]
+            },
+            "description": "Filtra itens de cardápio pelo código PLU."
+          }
+        },
+        {
+          "name": "Criar item de cardápio",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/epp/log-menus", "host": ["{{base_url}}"], "path": ["epp", "log-menus"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"epp_id_menu\": 1,\n  \"epp_id_product\": 10,\n  \"plu_menu\": \"001\",\n  \"type_base\": 1,\n  \"status_log_menu\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Vincula um produto a um menu.\n\nCampos obrigatórios: epp_id_menu, epp_id_product, plu_menu\nOpcionais: type_base, status_log_menu\n\nPermissão: EPP_PRODUCTS | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Atualizar item de cardápio",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/epp/log-menus/1", "host": ["{{base_url}}"], "path": ["epp", "log-menus", "1"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"epp_id_menu\": 1,\n  \"epp_id_product\": 10,\n  \"plu_menu\": \"001\",\n  \"type_base\": 2,\n  \"status_log_menu\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Atualiza um item de cardápio pelo ID.\n\nPermissão: EPP_PRODUCTS | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Excluir item de cardápio por ID",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{base_url}}/epp/log-menus/1", "host": ["{{base_url}}"], "path": ["epp", "log-menus", "1"] },
+            "description": "Remove um item de cardápio pelo ID.\n\nPermissão: EPP_PRODUCTS | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Excluir itens por PLU + Menu",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/epp/log-menus/menu", "host": ["{{base_url}}"], "path": ["epp", "log-menus", "menu"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plu_menu\": \"001\",\n  \"epp_id_menu\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Remove todos os itens com o PLU informado dentro de um menu.\n\nCampos obrigatórios: plu_menu, epp_id_menu\n\nPermissão: EPP_PRODUCTS | MANAGE_EPP"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🛒 Pedidos",
+      "item": [
+        {
+          "name": "Listar pedidos pendentes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/epp/orders", "host": ["{{base_url}}"], "path": ["epp", "orders"] },
+            "description": "Retorna todos os pedidos com status pendente."
+          }
+        },
+        {
+          "name": "Listar pedidos por loja de entrega",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/orders?delivery_store=1",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "orders"],
+              "query": [{ "key": "delivery_store", "value": "1", "description": "Código da loja de entrega" }]
+            },
+            "description": "Filtra pedidos pendentes de uma loja de entrega específica."
+          }
+        },
+        {
+          "name": "Buscar pedido por ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/epp/orders/1", "host": ["{{base_url}}"], "path": ["epp", "orders", "1"] },
+            "description": "Retorna um pedido específico com todos os seus dados."
+          }
+        },
+        {
+          "name": "Criar pedido",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/epp/orders", "host": ["{{base_url}}"], "path": ["epp", "orders"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": 42,\n  \"store\": 1,\n  \"name_client\": \"João Silva\",\n  \"date_order\": \"2026-06-08\",\n  \"delivery_date\": \"2026-06-10\",\n  \"delivery_hour\": \"14:00\",\n  \"delivery_store\": 2,\n  \"total\": 150.00,\n  \"fone\": \"11999990000\",\n  \"email\": \"joao@exemplo.com\",\n  \"signal_value\": 50.00,\n  \"menu\": 1,\n  \"id_menu\": 1,\n  \"plu_menu\": \"001\",\n  \"type_rice\": \"branco\",\n  \"description\": \"Festa de aniversário\",\n  \"dessert\": \"Brigadeiro\",\n  \"observation\": \"Sem glúten\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Cria um novo pedido com validação de data de entrega.\n\nCampos OBRIGATÓRIOS: user_id, store, name_client, date_order, delivery_date, delivery_hour, delivery_store, total\n\nCampos opcionais: fone, email, signal_value, menu, id_menu, plu_menu, type_rice, description, dessert, observation\n\nPermissão: EPP_ORDERS | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Atualizar pedido",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/epp/orders/1", "host": ["{{base_url}}"], "path": ["epp", "orders", "1"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": 42,\n  \"store\": 1,\n  \"name_client\": \"João Silva (atualizado)\",\n  \"date_order\": \"2026-06-08\",\n  \"delivery_date\": \"2026-06-11\",\n  \"delivery_hour\": \"16:00\",\n  \"delivery_store\": 2,\n  \"total\": 180.00,\n  \"fone\": \"11999990000\",\n  \"email\": \"joao@exemplo.com\",\n  \"signal_value\": 60.00,\n  \"observation\": \"Sem glúten — confirmado\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Atualiza todos os dados de um pedido.\n\nPermissão: EPP_ORDERS | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Alterar status do pedido",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/epp/orders/1/status", "host": ["{{base_url}}"], "path": ["epp", "orders", "1", "status"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"delivered\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Marca o pedido como entregue ou cancelado.\n\nValores de delivered:\n  1 = Entregue\n  2 = Cancelado\n\nPermissão: EPP_ORDERS | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Excluir pedido",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{base_url}}/epp/orders/1", "host": ["{{base_url}}"], "path": ["epp", "orders", "1"] },
+            "description": "Remove um pedido. Bloqueado se houver itens de venda (log_sales) vinculados.\n\nPermissão: MANAGE_EPP (exclusivo)"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "💰 Log de Vendas (Itens do Pedido)",
+      "item": [
+        {
+          "name": "Listar todos os itens",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/epp/log-sales", "host": ["{{base_url}}"], "path": ["epp", "log-sales"] },
+            "description": "Retorna todos os itens de venda."
+          }
+        },
+        {
+          "name": "Itens de um pedido específico",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/log-sales?epp_id_order=1",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "log-sales"],
+              "query": [{ "key": "epp_id_order", "value": "1", "description": "ID do pedido" }]
+            },
+            "description": "Retorna todos os itens de um pedido específico."
+          }
+        },
+        {
+          "name": "Visão controller (painel de controle)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/log-sales?controller=1",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "log-sales"],
+              "query": [
+                { "key": "controller",    "value": "1",          "description": "Habilita visão com JOINs" },
+                { "key": "delivery_date", "value": "2026-06-10", "disabled": true, "description": "Filtro opcional por data de entrega" },
+                { "key": "delivery_store","value": "1",          "disabled": true, "description": "Filtro opcional por loja de entrega" },
+                { "key": "store",         "value": "1",          "disabled": true, "description": "Filtro opcional por loja de origem" }
+              ]
+            },
+            "description": "Retorna itens com JOINs completos (produto, pedido, cliente). Aceita filtros opcionais por delivery_date, delivery_store, store."
+          }
+        },
+        {
+          "name": "Visão mobile (produção agregada)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/log-sales?mobile=1",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "log-sales"],
+              "query": [{ "key": "mobile", "value": "1" }]
+            },
+            "description": "Retorna dados agregados para a visão de produção (uso em dispositivos mobile).\n\nPermissão: EPP_ORDERS | EPP_RECEIPE | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Receita Oracle de um produto",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/log-sales?oracle_receipe=1&seq_produto=12345",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "log-sales"],
+              "query": [
+                { "key": "oracle_receipe", "value": "1",     "description": "Habilita consulta de receita no Oracle" },
+                { "key": "seq_produto",    "value": "12345", "description": "seq_produto do produto no Consinco — OBRIGATÓRIO" }
+              ]
+            },
+            "description": "Consulta a ficha técnica (receita) de um produto diretamente no Oracle Consinco.\n\nO seq_produto é o campo retornado na rota /epp/products/consinco.\n\nPermissão: EPP_RECEIPE | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Criar item de venda",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/epp/log-sales", "host": ["{{base_url}}"], "path": ["epp", "log-sales"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"epp_id_order\": 1,\n  \"epp_id_product\": 10,\n  \"quantity\": 2,\n  \"price\": 45.90,\n  \"menu\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Adiciona um item ao pedido.\n\nCampos OBRIGATÓRIOS: epp_id_order, epp_id_product, quantity, price\nOpcionais: menu\n\nPermissão: EPP_ORDERS | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Atualizar item de venda",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/epp/log-sales/1", "host": ["{{base_url}}"], "path": ["epp", "log-sales", "1"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"epp_id_order\": 1,\n  \"epp_id_product\": 10,\n  \"quantity\": 3,\n  \"price\": 45.90,\n  \"menu\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Atualiza um item de venda pelo ID.\n\nCampos OBRIGATÓRIOS: epp_id_order, epp_id_product, quantity, price\n\nPermissão: EPP_ORDERS | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Excluir item de venda por ID",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{base_url}}/epp/log-sales/1", "host": ["{{base_url}}"], "path": ["epp", "log-sales", "1"] },
+            "description": "Remove um item de venda específico pelo ID.\n\nPermissão: EPP_ORDERS | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Excluir TODOS os itens de um pedido",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{base_url}}/epp/log-sales/order/1", "host": ["{{base_url}}"], "path": ["epp", "log-sales", "order", "1"] },
+            "description": "Remove todos os itens vinculados a um pedido (útil antes de excluir o pedido).\n\nPermissão: MANAGE_EPP (exclusivo)"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "📊 Estoque",
+      "item": [
+        {
+          "name": "Estoque atual (todos os produtos)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/stock?stock=1",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "stock"],
+              "query": [
+                { "key": "stock",         "value": "1", "description": "Habilita consulta de estoque" },
+                { "key": "id_product_fk", "value": "",  "disabled": true, "description": "Filtra por produto específico" }
+              ]
+            },
+            "description": "Retorna o estoque atual de todos os produtos (ou de um produto específico com id_product_fk)."
+          }
+        },
+        {
+          "name": "Estoque atual de um produto",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/stock?stock=1&id_product_fk=10",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "stock"],
+              "query": [
+                { "key": "stock",         "value": "1"  },
+                { "key": "id_product_fk", "value": "10", "description": "ID do produto" }
+              ]
+            },
+            "description": "Retorna o estoque atual de um produto específico."
+          }
+        },
+        {
+          "name": "Histórico de movimentações",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/stock?history=1&id_product_fk=10",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "stock"],
+              "query": [
+                { "key": "history",       "value": "1",  "description": "Habilita consulta de histórico" },
+                { "key": "id_product_fk", "value": "10", "description": "ID do produto — OBRIGATÓRIO" }
+              ]
+            },
+            "description": "Retorna todas as movimentações (entradas e saídas) de um produto.\n\nid_product_fk é OBRIGATÓRIO para esta query."
+          }
+        },
+        {
+          "name": "Produtos com produção pendente (paginado)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/epp/stock?pending_production=1&page=1",
+              "host": ["{{base_url}}"],
+              "path": ["epp", "stock"],
+              "query": [
+                { "key": "pending_production", "value": "1", "description": "Habilita consulta de pendentes" },
+                { "key": "page",               "value": "1", "description": "Número da página (padrão: 1)" }
+              ]
+            },
+            "description": "Retorna produtos que têm pedidos mas estoque insuficiente para produzi-los. Resultado paginado."
+          }
+        },
+        {
+          "name": "Registrar entrada de estoque",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/epp/stock", "host": ["{{base_url}}"], "path": ["epp", "stock"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_product_fk\": 10,\n  \"stock_quantity\": 50,\n  \"created_by\": 42,\n  \"updated_by\": 42,\n  \"measure\": \"UN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Registra uma ENTRADA de estoque (stock_quantity positivo).\n\nCampos OBRIGATÓRIOS: id_product_fk, stock_quantity, created_by, updated_by, measure\n\nDica: use stock_quantity NEGATIVO para registrar uma SAÍDA.\n\nPermissão: USE_EPP | EPP_ORDERS | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Registrar saída de estoque",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/epp/stock", "host": ["{{base_url}}"], "path": ["epp", "stock"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_product_fk\": 10,\n  \"stock_quantity\": -10,\n  \"created_by\": 42,\n  \"updated_by\": 42,\n  \"measure\": \"UN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Registra uma SAÍDA de estoque (stock_quantity negativo).\n\nPermissão: USE_EPP | EPP_ORDERS | MANAGE_EPP"
+          }
+        },
+        {
+          "name": "Corrigir registro de estoque (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/epp/stock/1", "host": ["{{base_url}}"], "path": ["epp", "stock", "1"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"updated_by\": 42,\n  \"stock_quantity\": 45,\n  \"status_stock\": 1,\n  \"stock_delete\": 0\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Corrige um registro de estoque existente (uso administrativo).\n\nCampo OBRIGATÓRIO: updated_by\nOpcionais: id_product_fk, stock_quantity, status_stock, stock_delete, serie\n\nPermissão: MANAGE_EPP (exclusivo)"
+          }
+        }
+      ]
+    }
+
+  ]
+}

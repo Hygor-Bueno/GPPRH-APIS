@@ -25,20 +25,6 @@ class JwtService {
     verifyRefreshToken(token) {
         return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
     }
-
-    refreshAccessToken(refreshToken) {
-        const decoded = this.verifyRefreshToken(refreshToken);
-
-        // remove claims automáticas
-        const { iat, exp, nbf, jti, aud, iss, ...payload } = decoded;
-
-        const newAccessToken = this.generateAccessToken(payload);
-
-        return {
-            accessToken: newAccessToken,
-            user: payload
-        };
-    }
 }
 
 module.exports = new JwtService();

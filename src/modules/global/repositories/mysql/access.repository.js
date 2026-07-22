@@ -21,7 +21,6 @@ const PATCH_USER_FIELDS = {
     name:          'string',
     registration:  'string',
     branch_code:   'string',
-    status:        'bit',
     administrator: 'bit',
     table_protheus:'string',
     ad_status:     'string',
@@ -32,7 +31,7 @@ const PATCH_USER_FIELDS = {
  * Retorna usuários com seus papéis agregados, suportando filtros dinâmicos.
  *
  * @param {Object}  [filters={}]               - Filtros opcionais.
- * @param {0|1}     [filters.status]           - 1 = ativo, 0 = inativo.
+ * @param {string}  [filters.ad_status]        - 'pending' | 'active' | 'blocked' | 'delete'.
  * @param {string}  [filters.name]             - Filtro parcial por nome (LIKE).
  * @param {string}  [filters.registration]     - Matrícula exata.
  * @param {string}  [filters.branch_code]      - Código de filial exato.
@@ -43,9 +42,9 @@ function sqlGetUsers(filters = {}) {
         SELECT
             u.id,
             u.user,
-            u.name,
-            u.registration,
-            u.branch_code,
+            UPPER(TRIM(IF(u.name IS NULL, e.name, u.name)))                                   AS name,
+            IF(u.registration IS NULL, u.id, u.registration)                                  AS registration,
+            IF(u.branch_code  IS NULL, CONCAT('CSDS:', LPAD(e.com_shop_dep_sub_id, 4, '0')), u.branch_code) AS branch_code,
             u.status,
             u.administrator,
             u.ad_guid,
@@ -57,28 +56,29 @@ function sqlGetUsers(filters = {}) {
         FROM _user u
         LEFT JOIN _user_roles  ur ON ur.user_id = u.id
         LEFT JOIN _roles       r  ON r.id       = ur.role_id
+        LEFT JOIN _employee    e  ON e.id       = u.id
         WHERE 1=1
     `;
     const params = [];
 
-    if (filters.status !== undefined) {
-        sql += ` AND u.status = ?`;
-        params.push(Number(filters.status));
+    if (filters.ad_status !== undefined) {
+        sql += ` AND u.ad_status = ?`;
+        params.push(filters.ad_status);
     }
     if (filters.name) {
-        sql += ` AND u.name LIKE ?`;
-        params.push(`%${filters.name}%`);
+        sql += ` AND UPPER(TRIM(IF(u.name IS NULL, e.name, u.name))) LIKE ?`;
+        params.push(`%${filters.name.toUpperCase()}%`);
     }
     if (filters.registration) {
-        sql += ` AND u.registration = ?`;
+        sql += ` AND IF(u.registration IS NULL, u.id, u.registration) = ?`;
         params.push(filters.registration);
     }
     if (filters.branch_code) {
-        sql += ` AND u.branch_code = ?`;
+        sql += ` AND IF(u.branch_code IS NULL, CONCAT('CSDS:', LPAD(e.com_shop_dep_sub_id, 4, '0')), u.branch_code) = ?`;
         params.push(filters.branch_code);
     }
 
-    sql += ` GROUP BY u.id ORDER BY u.name`;
+    sql += ` GROUP BY u.id ORDER BY UPPER(TRIM(IF(u.name IS NULL, e.name, u.name)))`;
     return { sql, params };
 }
 
@@ -116,21 +116,21 @@ function sqlGetUserById() {
 
 /**
  * Insere um novo usuário.
- * Parâmetros: `[user, password, name, registration, branch_code, status, administrator, table_protheus, created_by, updated_by]`
+ * Parâmetros: `[user, password, name, registration, branch_code, ad_status, administrator, table_protheus, created_by, updated_by]`
  *
  * @returns {string}
  */
 function sqlInsertUser() {
     return `
         INSERT INTO _user
-            (user, password, name, registration, branch_code, status, administrator, table_protheus, created_by, updated_by)
+            (user, password, name, registration, branch_code, ad_status, administrator, table_protheus, created_by, updated_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 }
 
 /**
  * Atualiza todos os campos editáveis de um usuário (PUT).
- * Parâmetros: `[name, registration, branch_code, status, administrator, table_protheus, updated_by, id]`
+ * Parâmetros: `[name, registration, branch_code, ad_status, administrator, table_protheus, updated_by, id]`
  *
  * @returns {string}
  */
@@ -141,7 +141,7 @@ function sqlUpdateUser() {
             name           = ?,
             registration   = ?,
             branch_code    = ?,
-            status         = ?,
+            ad_status      = ?,
             administrator  = ?,
             table_protheus = ?,
             updated_by     = ?
@@ -172,13 +172,13 @@ function sqlPatchUser(fieldNames) {
 }
 
 /**
- * Desativa um usuário (soft-delete: `status = 0`).
+ * Desativa um usuário (soft-delete: `ad_status = 'delete'`).
  * Parâmetros: `[updated_by, id]`
  *
  * @returns {string}
  */
 function sqlDeactivateUser() {
-    return `UPDATE _user SET status = 0, updated_by = ? WHERE id = ?`;
+    return `UPDATE _user SET ad_status = 'delete', updated_by = ? WHERE id = ?`;
 }
 
 // ─── Papéis (Roles) ────────────────────────────────────────────────────────────

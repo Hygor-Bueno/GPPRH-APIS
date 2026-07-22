@@ -1,0 +1,1423 @@
+# EPP — Encomendas por Pedido
+## Documentação da API para Frontend
+
+> **Base URL:** `http://<servidor>:4000/global`
+> **Autenticação:** Cookie JWT (`accessToken`) obtido via `POST /global/login`
+> **Content-Type:** `application/json` em todas as requisições com body
+
+---
+
+## Sumário
+
+1. [Autenticação e Permissões](#1-autenticação-e-permissões)
+2. [Produtos](#2-produtos)
+3. [Categorias](#3-categorias)
+4. [Menus](#4-menus)
+5. [Log de Menus (Produto × Menu)](#5-log-de-menus-produto--menu)
+6. [Pedidos](#6-pedidos)
+7. [Log de Vendas (Itens do Pedido)](#7-log-de-vendas-itens-do-pedido)
+8. [Estoque](#8-estoque)
+9. [Códigos de Erro](#9-códigos-de-erro)
+10. [Diagrama de Fluxo](#10-diagrama-de-fluxo)
+
+---
+
+## 1. Autenticação e Permissões
+
+### Login
+```
+POST /global/login
+```
+
+**Body:**
+```json
+{
+  "username": "matricula_ou_login",
+  "password": "senha"
+}
+```
+
+**Resposta 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 42,
+    "name": "João Silva",
+    "roles": ["SYSTEM_OWNER"],
+    "permissions": ["USE_EPP", "MANAGE_EPP"]
+  }
+}
+```
+> O token JWT é enviado automaticamente via **cookie HttpOnly** (`accessToken`). Não precisa armazená-lo manualmente.
+
+---
+
+### Permissões do módulo EPP
+
+| Permissão     | O que permite                                          |
+|---------------|--------------------------------------------------------|
+| `USE_EPP`     | Leitura geral — consultar produtos, menus, pedidos, estoque |
+| `MANAGE_EPP`  | Escrita — criar, editar e excluir qualquer entidade EPP |
+
+> **Nota:** Algumas rotas de escrita (ex: criar pedido, lançar estoque) requerem apenas `USE_EPP`. As rotas destrutivas (deletar pedido com histórico, alterar estoque administrativamente) requerem `MANAGE_EPP`.
+
+---
+
+## 2. Produtos
+
+### 2.1 Listar produtos ativos
+
+```
+GET /global/epp/products
+```
+
+**Permissão:** `USE_EPP`
+
+**Resposta 200:**
+```json
+[
+  {
+    "id_product": 101,
+    "description": "Bolo de Chocolate P",
+    "price": 45.90,
+    "status_prod": 1,
+    "category": "Bolos",
+    "id_category": 3,
+    "measure": "un",
+    "id_category_fk": 3
+  }
+]
+```
+
+**Campos de retorno:**
+
+| Campo           | Tipo    | Descrição                          |
+|-----------------|---------|------------------------------------|
+| `id_product`    | integer | Código do produto (PLU/ERP)        |
+| `description`   | string  | Nome do produto                    |
+| `price`         | float   | Preço unitário                     |
+| `status_prod`   | integer | `1` = ativo, `0` = inativo         |
+| `category`      | string  | Nome da categoria                  |
+| `id_category`   | integer | ID da categoria                    |
+| `measure`       | string  | Unidade: `"un"`, `"kg"`, `"g"`, etc. |
+| `id_category_fk`| integer | FK da categoria (igual a `id_category`) |
+
+---
+
+### 2.2 Listar todos os produtos (ativos + inativos)
+
+```
+GET /global/epp/products?complete=1
+```
+
+**Permissão:** `USE_EPP`
+
+> Retorna os mesmos campos de 2.1, incluindo produtos com `status_prod = 0`.
+
+---
+
+### 2.3 Buscar produtos com filtros
+
+```
+GET /global/epp/products?id_product=101
+GET /global/epp/products?id_category_fk=3
+GET /global/epp/products?status_prod=0
+GET /global/epp/products?id_category_fk=3&status_prod=1
+```
+
+**Permissão:** `USE_EPP`
+
+**Query params (todos opcionais, pelo menos um obrigatório para ativar modo busca):**
+
+| Param            | Tipo    | Descrição                       |
+|------------------|---------|---------------------------------|
+| `id_product`     | integer | ID exato do produto             |
+| `id_category_fk` | integer | Filtrar por categoria           |
+| `status_prod`    | integer | `1` = ativo, `0` = inativo      |
+
+> Podem ser combinados. Retorna os mesmos campos de 2.1.
+
+---
+
+### 2.4 Buscar produto por ID
+
+```
+GET /global/epp/products/:id
+```
+
+**Permissão:** `USE_EPP`
+
+**Exemplo:** `GET /global/epp/products/101`
+
+**Resposta 200:**
+```json
+{
+  "id_product": 101,
+  "description": "Bolo de Chocolate P",
+  "price": 45.90,
+  "status_prod": 1,
+  "category": "Bolos",
+  "id_category": 3,
+  "measure": "un",
+  "id_category_fk": 3
+}
+```
+
+**Erro 404:**
+```json
+{ "success": false, "message": "Produto não encontrado" }
+```
+
+---
+
+### 2.5 Consultar produto no ERP Consinco (Oracle)
+
+```
+GET /global/epp/products/consinco?codigo_acesso=7891234567890&lojas=1,2,3
+```
+
+**Permissão:** `USE_EPP`
+
+> ⚠️ **Requer Oracle configurado.** Consulta o ERP Consinco para obter preço por loja e dados do produto.
+
+**Query params:**
+
+| Param           | Obrigatório | Descrição                                                             |
+|-----------------|-------------|-----------------------------------------------------------------------|
+| `codigo_acesso` | ✅ Sim      | Código de barras ou código de acesso do produto no Consinco           |
+| `lojas`         | ✅ Sim      | IDs de loja separados por vírgula: `"1,2,3"`                          |
+| `full_store`    | ❌ Não      | Se `"1"`, ignora `lojas` e usa todas as lojas (`1,2,3,7,8,9`)        |
+
+**Resposta 200:**
+```json
+[
+  {
+    "SEQPRODUTO": 12345,
+    "PRODUTO": "BOLO CHOCOLATE P",
+    "CODIGOACESSO": "7891234567890",
+    "PRECOUNITARIO": 45.90,
+    "SEQFILIAL": 1,
+    "DESCRICAOFILIAL": "LOJA CENTRO"
+  }
+]
+```
+
+> Retorna um registro por loja encontrada para o produto.
+
+---
+
+### 2.6 Criar produto
+
+```
+POST /global/epp/products
+```
+
+**Permissão:** `MANAGE_EPP`
+
+**Body:**
+```json
+{
+  "id_product": 101,
+  "description": "Bolo de Chocolate P",
+  "price": 45.90,
+  "status_prod": 1,
+  "id_category_fk": 3,
+  "measure": "un"
+}
+```
+
+**Campos do body:**
+
+| Campo           | Tipo    | Obrigatório | Descrição                                |
+|-----------------|---------|-------------|------------------------------------------|
+| `id_product`    | integer | ✅ Sim      | Código do produto (PLU). Deve ser único. |
+| `description`   | string  | ✅ Sim      | Nome do produto                          |
+| `price`         | float   | ✅ Sim      | Preço unitário                           |
+| `status_prod`   | integer | ✅ Sim      | `1` = ativo, `0` = inativo               |
+| `id_category_fk`| integer | ✅ Sim      | ID da categoria (ver endpoint 3.1)       |
+| `measure`       | string  | ✅ Sim      | Unidade: `"un"`, `"kg"`, `"g"`, `"l"`, etc. |
+
+**Resposta 201:** Retorna o produto criado (mesmo formato de 2.4).
+
+**Erro 409:** `id_product` já cadastrado.
+
+---
+
+### 2.7 Atualizar produto
+
+```
+PUT /global/epp/products/:id
+```
+
+**Permissão:** `MANAGE_EPP`
+
+**Exemplo:** `PUT /global/epp/products/101`
+
+**Body:** Mesmos campos do POST, **exceto** `id_product` (vem na URL).
+
+```json
+{
+  "description": "Bolo de Chocolate Médio",
+  "price": 55.00,
+  "status_prod": 1,
+  "id_category_fk": 3,
+  "measure": "un"
+}
+```
+
+**Resposta 200:** Retorna o produto atualizado.
+
+---
+
+### 2.8 Alterar status do produto
+
+```
+PATCH /global/epp/products/:id/status
+```
+
+**Permissão:** `MANAGE_EPP`
+
+> Use para ativar/desativar sem precisar enviar todos os campos.
+
+**Body:**
+```json
+{
+  "status_prod": 0
+}
+```
+
+**Resposta 200:**
+```json
+{
+  "id_product": 101,
+  "status_prod": 0
+}
+```
+
+---
+
+### 2.9 Excluir produto
+
+```
+DELETE /global/epp/products/:id
+```
+
+**Permissão:** `MANAGE_EPP`
+
+**Resposta 200:**
+```json
+{ "success": true, "message": "Produto excluído com sucesso" }
+```
+
+**Erro 409:** Produto possui pedidos vinculados — não pode ser excluído.
+
+---
+
+## 3. Categorias
+
+### 3.1 Listar categorias
+
+```
+GET /global/epp/products?category=1
+```
+
+**Permissão:** `USE_EPP`
+
+**Resposta 200:**
+```json
+[
+  { "id_category": 1, "cat_description": "Bebidas" },
+  { "id_category": 2, "cat_description": "Bolos Salgados" },
+  { "id_category": 3, "cat_description": "Bolos Doces" }
+]
+```
+
+> ℹ️ As categorias são retornadas pela mesma rota de produtos, usando `?category=1`.
+
+---
+
+## 4. Menus
+
+> Um **menu** é um conjunto de produtos composto (ex: "Kit Festa 10 pessoas"). Produtos de menu têm receita técnica no ERP Consinco.
+
+### 4.1 Listar menus ativos
+
+```
+GET /global/epp/menus
+```
+
+**Permissão:** `USE_EPP`
+
+**Resposta 200:**
+```json
+[
+  { "id_menu": 1, "description": "Kit Festa Infantil", "status": 1 },
+  { "id_menu": 2, "description": "Kit Almoço Executivo", "status": 1 }
+]
+```
+
+---
+
+### 4.2 Listar todos os menus (ativos + inativos)
+
+```
+GET /global/epp/menus?registration=1
+```
+
+**Permissão:** `USE_EPP`
+
+---
+
+### 4.3 Buscar menus com filtros
+
+```
+GET /global/epp/menus?id_menu=1
+GET /global/epp/menus?status=0
+GET /global/epp/menus?description=festa
+GET /global/epp/menus?status=1&description=kit
+```
+
+**Query params (pelo menos um ativa modo de busca):**
+
+| Param         | Tipo    | Descrição                        |
+|---------------|---------|----------------------------------|
+| `id_menu`     | integer | ID exato do menu                 |
+| `status`      | integer | `1` = ativo, `0` = inativo       |
+| `description` | string  | Busca por nome (LIKE, parcial)   |
+
+---
+
+### 4.4 Criar menu
+
+```
+POST /global/epp/menus
+```
+
+**Permissão:** `MANAGE_EPP`
+
+**Body:**
+```json
+{
+  "description": "Kit Festa Adulto",
+  "status": 1
+}
+```
+
+| Campo         | Tipo    | Obrigatório | Descrição                    |
+|---------------|---------|-------------|------------------------------|
+| `description` | string  | ✅ Sim      | Nome do menu                 |
+| `status`      | integer | ❌ Não      | `1` = ativo (padrão), `0` = inativo |
+
+**Resposta 201:** Retorna o menu criado.
+
+---
+
+### 4.5 Atualizar menu
+
+```
+PUT /global/epp/menus/:id
+```
+
+**Permissão:** `MANAGE_EPP`
+
+**Body:**
+```json
+{
+  "description": "Kit Festa Adulto Premium",
+  "status": 1
+}
+```
+
+Ambos os campos são obrigatórios no PUT.
+
+**Resposta 200:** Retorna o menu atualizado.
+
+---
+
+### 4.6 Excluir menu
+
+```
+DELETE /global/epp/menus/:id
+```
+
+**Permissão:** `MANAGE_EPP`
+
+**Resposta 200:**
+```json
+{ "success": true, "message": "Menu excluído com sucesso" }
+```
+
+**Erro 409:** Menu possui itens configurados em `log_menus` — exclua os itens antes.
+
+---
+
+## 5. Log de Menus (Produto × Menu)
+
+> O **log_menu** define quais produtos compõem cada menu e com qual PLU. Pense como a "ficha técnica" do menu.
+
+### 5.1 Listar todos os itens de menu
+
+```
+GET /global/epp/log-menus
+```
+
+**Permissão:** `USE_EPP`
+
+**Resposta 200:**
+```json
+[
+  {
+    "epp_log_id": 1,
+    "plu_menu": 5001,
+    "status_log_menu": 1,
+    "type_base": "kg",
+    "epp_id_menu": 1,
+    "epp_id_product": 101,
+    "id_menu": 1,
+    "description_menu": "Kit Festa Infantil",
+    "status_menu": 1,
+    "id_product": 101,
+    "description_product": "Bolo de Chocolate P",
+    "price": 45.90,
+    "status_prod": 1,
+    "category": 3,
+    "measure": "un"
+  }
+]
+```
+
+**Campos de retorno:**
+
+| Campo                | Tipo    | Descrição                          |
+|----------------------|---------|------------------------------------|
+| `epp_log_id`         | integer | ID do item de log_menu             |
+| `plu_menu`           | integer | PLU deste item no menu             |
+| `status_log_menu`    | integer | `1` = ativo                        |
+| `type_base`          | string  | Unidade base da receita            |
+| `epp_id_menu`        | integer | FK do menu                         |
+| `epp_id_product`     | integer | FK do produto                      |
+| `description_menu`   | string  | Nome do menu                       |
+| `description_product`| string  | Nome do produto                    |
+| `price`              | float   | Preço do produto                   |
+
+---
+
+### 5.2 Listar itens de menu por PLU
+
+```
+GET /global/epp/log-menus?plu_menu=5001
+```
+
+**Permissão:** `USE_EPP`
+
+> Filtra todos os itens de menu associados ao PLU informado. Retorna os mesmos campos de 5.1.
+
+---
+
+### 5.3 Criar item de menu
+
+```
+POST /global/epp/log-menus
+```
+
+**Permissão:** `MANAGE_EPP`
+
+**Body:**
+```json
+{
+  "epp_id_menu": 1,
+  "epp_id_product": 101,
+  "plu_menu": 5001,
+  "type_base": "kg",
+  "status_log_menu": 1
+}
+```
+
+| Campo             | Tipo    | Obrigatório | Descrição                         |
+|-------------------|---------|-------------|-----------------------------------|
+| `epp_id_menu`     | integer | ✅ Sim      | ID do menu                        |
+| `epp_id_product`  | integer | ✅ Sim      | ID do produto                     |
+| `plu_menu`        | integer | ✅ Sim      | PLU do item dentro do menu        |
+| `type_base`       | string  | ❌ Não      | Unidade da receita (`"kg"`, `"un"`, etc.) |
+| `status_log_menu` | integer | ❌ Não      | `1` = ativo (padrão)              |
+
+**Resposta 201:** Retorna `{ insertId }` do novo registro.
+
+---
+
+### 5.4 Atualizar item de menu
+
+```
+PUT /global/epp/log-menus/:id
+```
+
+**Permissão:** `MANAGE_EPP`
+
+**Body:** Mesmo formato do POST (todos os campos obrigatórios).
+
+```json
+{
+  "epp_id_menu": 1,
+  "epp_id_product": 102,
+  "plu_menu": 5001,
+  "type_base": "un",
+  "status_log_menu": 1
+}
+```
+
+**Resposta 200:** Retorna `{ affectedRows }`.
+
+---
+
+### 5.5 Excluir item de menu por ID
+
+```
+DELETE /global/epp/log-menus/:id
+```
+
+**Permissão:** `MANAGE_EPP`
+
+**Resposta 200:**
+```json
+{ "success": true, "message": "Item de menu excluído com sucesso" }
+```
+
+---
+
+### 5.6 Excluir todos os itens de um PLU em um menu
+
+```
+DELETE /global/epp/log-menus/menu
+```
+
+**Permissão:** `MANAGE_EPP`
+
+> ⚠️ Remove **todos** os itens com o PLU informado dentro do menu especificado.
+
+**Body:**
+```json
+{
+  "plu_menu": 5001,
+  "epp_id_menu": 1
+}
+```
+
+**Resposta 200:** Retorna `{ affectedRows }`.
+
+---
+
+## 6. Pedidos
+
+> Um **pedido** (`epp_orders`) representa uma encomenda de um cliente. Pode ter um ou mais itens (`epp_log_sale`).
+
+### 6.1 Listar pedidos pendentes
+
+```
+GET /global/epp/orders
+GET /global/epp/orders?delivery_store=2
+```
+
+**Permissão:** `USE_EPP`
+
+**Query params:**
+
+| Param            | Tipo    | Obrigatório | Descrição                    |
+|------------------|---------|-------------|------------------------------|
+| `delivery_store` | integer | ❌ Não      | Filtra por loja de entrega   |
+
+> Retorna apenas pedidos com `delivered = 0` (pendentes), ordenados por data de entrega decrescente.
+
+**Resposta 200:**
+```json
+[
+  {
+    "id_order": 500,
+    "user_id": 42,
+    "store": 1,
+    "name_client": "Maria Oliveira",
+    "date_order": "2026-06-01",
+    "delivery_date": "2026-06-10",
+    "delivery_hour": "14:00",
+    "delivery_store": 2,
+    "total": 155.90,
+    "fone": "11999999999",
+    "email": "maria@email.com",
+    "signal_value": 50.00,
+    "menu": 1,
+    "id_menu": 1,
+    "plu_menu": 5001,
+    "type_rice": null,
+    "description": "Sem nozes",
+    "delivered": 0,
+    "dessert": "Brigadeiro",
+    "observation": null
+  }
+]
+```
+
+**Campos de retorno:**
+
+| Campo            | Tipo    | Descrição                                         |
+|------------------|---------|---------------------------------------------------|
+| `id_order`       | integer | ID do pedido                                      |
+| `user_id`        | integer | ID do usuário que criou o pedido                  |
+| `store`          | integer | Loja de origem do pedido                          |
+| `name_client`    | string  | Nome do cliente                                   |
+| `date_order`     | string  | Data do pedido (`YYYY-MM-DD`)                     |
+| `delivery_date`  | string  | Data de entrega (`YYYY-MM-DD`)                    |
+| `delivery_hour`  | string  | Horário de entrega (`HH:MM`)                      |
+| `delivery_store` | integer | Loja de entrega                                   |
+| `total`          | float   | Valor total do pedido                             |
+| `fone`           | string  | Telefone do cliente (nullable)                    |
+| `email`          | string  | E-mail do cliente (nullable)                      |
+| `signal_value`   | float   | Valor de sinal/entrada (nullable)                 |
+| `menu`           | integer | `1` = pedido com menu composto, `0` = produto simples |
+| `id_menu`        | integer | ID do menu (nullable)                             |
+| `plu_menu`       | integer | PLU do item de menu (nullable)                    |
+| `type_rice`      | string  | Tipo de acompanhamento (nullable)                 |
+| `description`    | string  | Observações do produto (nullable)                 |
+| `delivered`      | integer | `0` = pendente, `1` = entregue, `2` = cancelado   |
+| `dessert`        | string  | Sobremesa (nullable)                              |
+| `observation`    | string  | Observações gerais (nullable)                     |
+
+---
+
+### 6.2 Buscar pedido por ID
+
+```
+GET /global/epp/orders/:id
+```
+
+**Permissão:** `USE_EPP`
+
+**Exemplo:** `GET /global/epp/orders/500`
+
+**Resposta 200:** Mesmo formato de 6.1 (objeto único).
+
+**Erro 404:** `{ "success": false, "message": "Pedido não encontrado" }`
+
+---
+
+### 6.3 Criar pedido
+
+```
+POST /global/epp/orders
+```
+
+**Permissão:** `USE_EPP`
+
+> ⚠️ **Regra de data:** `delivery_date` deve estar entre **hoje − 15 dias** e o **último dia do mês corrente**. Fora desse range retorna erro `422`.
+
+**Body:**
+```json
+{
+  "user_id": 42,
+  "store": 1,
+  "name_client": "Maria Oliveira",
+  "date_order": "2026-06-01",
+  "delivery_date": "2026-06-10",
+  "delivery_hour": "14:00",
+  "delivery_store": 2,
+  "total": 155.90,
+  "fone": "11999999999",
+  "email": "maria@email.com",
+  "signal_value": 50.00,
+  "menu": 1,
+  "id_menu": 1,
+  "plu_menu": 5001,
+  "type_rice": null,
+  "description": "Sem nozes",
+  "dessert": "Brigadeiro",
+  "observation": null
+}
+```
+
+**Campos obrigatórios:**
+
+| Campo            | Tipo    | Descrição                         |
+|------------------|---------|-----------------------------------|
+| `user_id`        | integer | ID do usuário logado              |
+| `store`          | integer | Loja de origem                    |
+| `name_client`    | string  | Nome do cliente                   |
+| `date_order`     | string  | Data do pedido (`YYYY-MM-DD`)     |
+| `delivery_date`  | string  | Data de entrega (`YYYY-MM-DD`)    |
+| `delivery_hour`  | string  | Horário de entrega (`HH:MM`)      |
+| `delivery_store` | integer | Loja de entrega                   |
+| `total`          | float   | Valor total                       |
+
+**Campos opcionais:**
+
+| Campo           | Tipo    | Padrão | Descrição                           |
+|-----------------|---------|--------|-------------------------------------|
+| `fone`          | string  | null   | Telefone                            |
+| `email`         | string  | null   | E-mail                              |
+| `signal_value`  | float   | null   | Valor de entrada/sinal              |
+| `menu`          | integer | null   | `1` se for menu composto            |
+| `id_menu`       | integer | null   | ID do menu selecionado              |
+| `plu_menu`      | integer | null   | PLU do item de menu                 |
+| `type_rice`     | string  | null   | Tipo de acompanhamento              |
+| `description`   | string  | null   | Observação do produto               |
+| `delivered`     | integer | `0`    | Status (`0` = pendente)             |
+| `dessert`       | string  | null   | Sobremesa                           |
+| `observation`   | string  | null   | Observação geral                    |
+
+**Resposta 201:** Retorna o pedido criado.
+
+**Erro 422:**
+```json
+{
+  "success": false,
+  "message": "Data de entrega fora do range permitido. Permitido: 2026-05-24 a 2026-06-30"
+}
+```
+
+---
+
+### 6.4 Atualizar pedido
+
+```
+PUT /global/epp/orders/:id
+```
+
+**Permissão:** `USE_EPP`
+
+**Body:** Mesmos campos do POST (todos).
+
+**Resposta 200:** Retorna o pedido atualizado.
+
+---
+
+### 6.5 Alterar status do pedido
+
+```
+PATCH /global/epp/orders/:id/status
+```
+
+**Permissão:** `USE_EPP`
+
+> Use para marcar um pedido como entregue ou cancelado sem precisar enviar todos os campos.
+
+**Body:**
+```json
+{ "delivered": 1 }
+```
+
+| Valor | Significado           |
+|-------|-----------------------|
+| `1`   | Entregue              |
+| `2`   | Cancelado             |
+
+> ⚠️ Cancelar define automaticamente `observation = 'Cancelado'`.
+
+**Resposta 200:**
+```json
+{ "id_order": 500, "delivered": 1 }
+```
+
+---
+
+### 6.6 Excluir pedido
+
+```
+DELETE /global/epp/orders/:id
+```
+
+**Permissão:** `MANAGE_EPP`
+
+**Resposta 200:**
+```json
+{ "success": true, "message": "Pedido excluído com sucesso" }
+```
+
+**Erro 409:** Pedido possui itens de venda vinculados. Use `DELETE /global/epp/log-sales/order/:orderId` antes.
+
+---
+
+## 7. Log de Vendas (Itens do Pedido)
+
+> Um `log_sale` é um **item** dentro de um pedido — qual produto foi pedido, em qual quantidade e por qual preço.
+
+### 7.1 Listar itens por pedido
+
+```
+GET /global/epp/log-sales?epp_id_order=500
+```
+
+**Permissão:** `USE_EPP`
+
+**Query params:**
+
+| Param           | Tipo    | Descrição                  |
+|-----------------|---------|----------------------------|
+| `epp_id_order`  | integer | ID do pedido               |
+
+**Resposta 200:**
+```json
+[
+  {
+    "epp_id_log": 1001,
+    "epp_id_order": 500,
+    "epp_id_product": 101,
+    "quantity": 2,
+    "price": 45.90,
+    "menu": 0
+  }
+]
+```
+
+| Campo            | Tipo    | Descrição                              |
+|------------------|---------|----------------------------------------|
+| `epp_id_log`     | integer | ID do item de venda                    |
+| `epp_id_order`   | integer | ID do pedido                           |
+| `epp_id_product` | integer | ID do produto                          |
+| `quantity`       | float   | Quantidade pedida                      |
+| `price`          | float   | Preço unitário no momento do pedido    |
+| `menu`           | integer | `1` = produto de menu composto, `0` = simples |
+
+---
+
+### 7.2 Visão Controller (itens com dados completos do pedido)
+
+```
+GET /global/epp/log-sales?controller=1
+GET /global/epp/log-sales?controller=1&delivered=0
+GET /global/epp/log-sales?controller=1&delivery_store=2&delivered=0,1
+GET /global/epp/log-sales?controller=1&delivery_date_from=2026-06-01&delivery_date_to=2026-06-30
+GET /global/epp/log-sales?controller=1&name_client=Maria
+```
+
+**Permissão:** `USE_EPP`
+
+**Filtros disponíveis** (além de `controller=1`):
+
+| Param                  | Tipo    | Descrição                                                  |
+|------------------------|---------|------------------------------------------------------------|
+| `epp_id_product`       | integer | Filtrar por produto                                        |
+| `epp_id_order`         | integer | Filtrar por pedido                                         |
+| `store`                | integer | Filtrar por loja de origem                                 |
+| `delivery_store`       | integer | Filtrar por loja de entrega                                |
+| `name_client`          | string  | Filtrar por nome do cliente (LIKE, parcial)                |
+| `fone`                 | string  | Filtrar por telefone (exato)                               |
+| `delivered`            | string  | Status: `"0"`, `"1"`, `"2"` ou combinados: `"0,1"`        |
+| `date_order_from`      | string  | Início do range da data do pedido (`YYYY-MM-DD`)           |
+| `date_order_to`        | string  | Fim do range da data do pedido (`YYYY-MM-DD`)              |
+| `delivery_date_from`   | string  | Início do range da data de entrega (`YYYY-MM-DD`)          |
+| `delivery_date_to`     | string  | Fim do range da data de entrega (`YYYY-MM-DD`)             |
+| `delivery_hour_from`   | string  | Início do range de horário (`HH:MM`)                       |
+| `delivery_hour_to`     | string  | Fim do range de horário (`HH:MM`)                          |
+
+> ⚠️ Ranges de data precisam dos **dois** parâmetros (from + to).
+
+**Resposta 200:**
+```json
+[
+  {
+    "epp_id_product": 101,
+    "epp_id_order": 500,
+    "menu": 0,
+    "quantity": 2,
+    "store": 1,
+    "name_client": "Maria Oliveira",
+    "delivery_store": 2,
+    "fone": "11999999999",
+    "date_order": "2026-06-01",
+    "delivery_date": "2026-06-10",
+    "delivery_hour": "14:00",
+    "observation": null,
+    "delivered": 0,
+    "description": "Bolo de Chocolate P",
+    "measure": "un"
+  }
+]
+```
+
+---
+
+### 7.3 Visão Mobile (lista consolidada de produção)
+
+```
+GET /global/epp/log-sales?mobile=1
+```
+
+**Permissão:** `USE_EPP`
+
+> Retorna a lista consolidada de ingredientes/matérias-primas necessárias para produzir **todos os pedidos pendentes**. Cruza MySQL (pedidos) + Oracle (receitas técnicas do Consinco). Use na tela de produção da cozinha.
+
+**Resposta 200:**
+```json
+[
+  {
+    "epp_id_product": 2001,
+    "quantity": 3.5,
+    "menu": 0,
+    "description": "FARINHA DE TRIGO"
+  },
+  {
+    "epp_id_product": 2002,
+    "quantity": 12,
+    "menu": 0,
+    "description": "OVO"
+  }
+]
+```
+
+| Campo            | Tipo   | Descrição                                        |
+|------------------|--------|--------------------------------------------------|
+| `epp_id_product` | integer | Código da matéria-prima (produto Consinco)       |
+| `quantity`       | float  | Quantidade total necessária (pedidos + receitas) |
+| `menu`           | integer | Sempre `0` (itens já desmembrados)              |
+| `description`    | string | Nome do ingrediente/produto                      |
+
+> Se Oracle estiver indisponível, retorna lista parcial apenas com produtos simples.
+
+---
+
+### 7.4 Receita técnica Oracle de um produto
+
+```
+GET /global/epp/log-sales?oracle_receipe=1&seq_produto=12345
+```
+
+**Permissão:** `USE_EPP`
+
+> ⚠️ **Requer Oracle.** Retorna a ficha técnica (receita) de um produto no Consinco.
+
+**Query params:**
+
+| Param           | Obrigatório | Descrição                               |
+|-----------------|-------------|-----------------------------------------|
+| `oracle_receipe`| ✅ Sim      | Deve ser `"1"` para ativar essa visão   |
+| `seq_produto`   | ✅ Sim      | `SEQPRODUTO` do produto no Consinco     |
+
+**Resposta 200:**
+```json
+[
+  {
+    "SEQPRODUTO": 12345,
+    "COD_PROD_FINAL": 12345,
+    "DESCRICAO_FINAL": "BOLO CHOCOLATE P",
+    "COD_PROD_MAT_PRIMA": 2001,
+    "DESCRICAO_MAT_PRIMA": "FARINHA DE TRIGO",
+    "QTDUNIDUTILIZADA": 0.350,
+    "UNIDADE": "KG"
+  }
+]
+```
+
+---
+
+### 7.5 Listar todos os itens de venda
+
+```
+GET /global/epp/log-sales
+```
+
+**Permissão:** `USE_EPP`
+
+> Sem filtros — retorna todos os registros em ordem decrescente de ID.
+
+---
+
+### 7.6 Criar item de venda
+
+```
+POST /global/epp/log-sales
+```
+
+**Permissão:** `USE_EPP`
+
+**Body:**
+```json
+{
+  "epp_id_order": 500,
+  "epp_id_product": 101,
+  "quantity": 2,
+  "price": 45.90,
+  "menu": 0
+}
+```
+
+| Campo            | Tipo    | Obrigatório | Descrição                              |
+|------------------|---------|-------------|----------------------------------------|
+| `epp_id_order`   | integer | ✅ Sim      | ID do pedido (deve existir)            |
+| `epp_id_product` | integer | ✅ Sim      | ID do produto                          |
+| `quantity`       | float   | ✅ Sim      | Quantidade                             |
+| `price`          | float   | ✅ Sim      | Preço unitário                         |
+| `menu`           | integer | ❌ Não      | `1` = produto de menu, `0` = simples (padrão `0`) |
+
+**Resposta 201:** Retorna o item criado.
+
+**Erro 404:** Pedido não encontrado.
+
+---
+
+### 7.7 Atualizar item de venda
+
+```
+PUT /global/epp/log-sales/:id
+```
+
+**Permissão:** `USE_EPP`
+
+**Body:** Mesmo formato do POST (todos os campos obrigatórios).
+
+**Resposta 200:** Retorna o item atualizado.
+
+---
+
+### 7.8 Excluir item de venda por ID
+
+```
+DELETE /global/epp/log-sales/:id
+```
+
+**Permissão:** `USE_EPP`
+
+**Resposta 200:**
+```json
+{ "success": true, "message": "Item de venda excluído com sucesso" }
+```
+
+---
+
+### 7.9 Excluir todos os itens de um pedido
+
+```
+DELETE /global/epp/log-sales/order/:orderId
+```
+
+**Permissão:** `MANAGE_EPP`
+
+**Exemplo:** `DELETE /global/epp/log-sales/order/500`
+
+**Resposta 200:**
+```json
+{ "deleted": 3 }
+```
+> `deleted` = número de itens removidos.
+
+---
+
+## 8. Estoque
+
+> O estoque usa movimentações: cada registro é uma **entrada** (quantidade positiva) ou **saída** (negativo). O saldo é a soma de todas as movimentações.
+
+### 8.1 Consultar estoque atual
+
+```
+GET /global/epp/stock?stock=1
+GET /global/epp/stock?stock=1&id_product_fk=101
+```
+
+**Permissão:** `USE_EPP`
+
+**Query params:**
+
+| Param            | Obrigatório | Descrição                             |
+|------------------|-------------|---------------------------------------|
+| `stock`          | ✅ Sim      | Deve ser `"1"` para esta visão        |
+| `id_product_fk`  | ❌ Não      | Filtrar pelo ID do produto            |
+
+**Resposta 200:**
+```json
+[
+  {
+    "id_product_fk": 101,
+    "serie": null,
+    "status_stock": 1,
+    "description": "Bolo de Chocolate P",
+    "category": 3,
+    "measure": "un",
+    "status_prod": 1,
+    "quantity": 5,
+    "stock_quantity": 12.0,
+    "input_quantity": 20.0,
+    "output_quantity": -8.0,
+    "percent": 100
+  }
+]
+```
+
+| Campo             | Tipo   | Descrição                                                  |
+|-------------------|--------|------------------------------------------------------------|
+| `id_product_fk`   | integer | ID do produto                                             |
+| `description`     | string | Nome do produto                                           |
+| `measure`         | string | Unidade                                                   |
+| `quantity`        | float  | Quantidade em pedidos pendentes (MySQL)                   |
+| `stock_quantity`  | float  | Saldo atual + demanda de menus pendentes (Oracle)         |
+| `input_quantity`  | float  | Total de entradas                                         |
+| `output_quantity` | float  | Total de saídas (negativo)                                |
+| `percent`         | float  | Percentual (reservado para uso futuro)                    |
+
+> ℹ️ `stock_quantity` já inclui o cálculo Oracle de menus pendentes. Se Oracle falhar, retorna apenas o saldo MySQL.
+
+---
+
+### 8.2 Histórico de movimentações
+
+```
+GET /global/epp/stock?history=1&id_product_fk=101
+```
+
+**Permissão:** `USE_EPP`
+
+**Query params:**
+
+| Param            | Obrigatório | Descrição                |
+|------------------|-------------|--------------------------|
+| `history`        | ✅ Sim      | Deve ser `"1"`           |
+| `id_product_fk`  | ✅ Sim      | ID do produto            |
+
+**Resposta 200:**
+```json
+[
+  {
+    "id_stock": 201,
+    "id_product_fk": 101,
+    "stock_quantity": 20,
+    "status_stock": 1,
+    "stock_delete": 0,
+    "serie": null,
+    "created_by": 42,
+    "updated_by": 42,
+    "created_at": "2026-06-01T10:00:00.000Z",
+    "measure": "un",
+    "creators_name": "João Silva",
+    "editors_name": "João Silva"
+  },
+  {
+    "id_stock": 202,
+    "id_product_fk": 101,
+    "stock_quantity": -8,
+    "status_stock": 1,
+    "stock_delete": 0,
+    "serie": null,
+    "created_by": 42,
+    "updated_by": 42,
+    "created_at": "2026-06-05T14:30:00.000Z",
+    "measure": "un",
+    "creators_name": "João Silva",
+    "editors_name": "João Silva"
+  }
+]
+```
+
+| Campo            | Tipo    | Descrição                                        |
+|------------------|---------|--------------------------------------------------|
+| `id_stock`       | integer | ID da movimentação                               |
+| `stock_quantity` | float   | Quantidade (positivo = entrada, negativo = saída)|
+| `status_stock`   | integer | `1` = ativo                                      |
+| `stock_delete`   | integer | `1` = deletado logicamente                       |
+| `created_by`     | integer | ID do usuário que criou                          |
+| `creators_name`  | string  | Nome do criador                                  |
+| `created_at`     | string  | Timestamp da movimentação                        |
+
+---
+
+### 8.3 Produtos sem estoque (produção pendente)
+
+```
+GET /global/epp/stock?pending_production=1
+GET /global/epp/stock?pending_production=1&page=2
+```
+
+**Permissão:** `USE_EPP`
+
+> Retorna produtos ativos que **não possuem** estoque ativo cadastrado. Paginado, 20 itens por página.
+
+**Query params:**
+
+| Param               | Obrigatório | Descrição                        |
+|---------------------|-------------|----------------------------------|
+| `pending_production`| ✅ Sim      | Deve ser `"1"`                   |
+| `page`              | ❌ Não      | Número da página (padrão: `1`)   |
+
+**Resposta 200:**
+```json
+{
+  "data": [
+    {
+      "id_product": 105,
+      "description": "Salgado Assado",
+      "price": 3.50,
+      "status_prod": 1,
+      "id_category_fk": 2,
+      "measure": "un"
+    }
+  ],
+  "pages": 3,
+  "page": 1,
+  "total": 47
+}
+```
+
+| Campo   | Descrição                         |
+|---------|-----------------------------------|
+| `data`  | Array de produtos sem estoque     |
+| `pages` | Total de páginas                  |
+| `page`  | Página atual                      |
+| `total` | Total de produtos                 |
+
+---
+
+### 8.4 Lançar movimentação de estoque
+
+```
+POST /global/epp/stock
+```
+
+**Permissão:** `USE_EPP`
+
+> Use quantidade **positiva** para entrada e **negativa** para saída.
+
+**Body:**
+```json
+{
+  "id_product_fk": 101,
+  "stock_quantity": 20,
+  "created_by": 42,
+  "updated_by": 42,
+  "measure": "un"
+}
+```
+
+| Campo            | Tipo    | Obrigatório | Descrição                                          |
+|------------------|---------|-------------|----------------------------------------------------|
+| `id_product_fk`  | integer | ✅ Sim      | ID do produto                                      |
+| `stock_quantity` | float   | ✅ Sim      | Positivo = entrada, negativo = saída               |
+| `created_by`     | integer | ✅ Sim      | ID do usuário que criou                            |
+| `updated_by`     | integer | ✅ Sim      | ID do usuário (pode ser igual a `created_by`)      |
+| `measure`        | string  | ✅ Sim      | Unidade do produto (para validação de inteiro `un`)|
+
+**Validações:**
+- Se `measure = "un"`: `stock_quantity` deve ser **inteiro** (sem decimais).
+- Se `stock_quantity < 0` (saída): não pode exceder o saldo atual.
+
+**Resposta 201:** Retorna o registro de estoque criado.
+
+**Erro 400:**
+```json
+{ "success": false, "message": "Quantidade inválida: produto vendido em unidades deve ser inteiro" }
+{ "success": false, "message": "Saída maior que o estoque atual" }
+```
+
+---
+
+### 8.5 Atualizar movimentação de estoque (admin)
+
+```
+PUT /global/epp/stock/:id
+```
+
+**Permissão:** `MANAGE_EPP`
+
+> ⚠️ Uso administrativo. Altera um registro de estoque existente. Apenas campos informados são atualizados.
+
+**Body:**
+```json
+{
+  "updated_by": 42,
+  "stock_quantity": -5,
+  "status_stock": 1,
+  "stock_delete": 0,
+  "serie": "A"
+}
+```
+
+| Campo            | Tipo    | Obrigatório | Descrição                              |
+|------------------|---------|-------------|----------------------------------------|
+| `updated_by`     | integer | ✅ Sim      | ID do usuário que está atualizando     |
+| `id_product_fk`  | integer | ❌ Não      | Mover para outro produto               |
+| `stock_quantity` | float   | ❌ Não      | Nova quantidade                        |
+| `status_stock`   | integer | ❌ Não      | `1` = ativo, `0` = inativo             |
+| `stock_delete`   | integer | ❌ Não      | `1` = marcar como deletado             |
+| `serie`          | string  | ❌ Não      | Série/lote                             |
+
+**Resposta 200:** Retorna o registro atualizado.
+
+---
+
+## 9. Códigos de Erro
+
+| HTTP | Significado                                                             |
+|------|-------------------------------------------------------------------------|
+| 400  | Parâmetros obrigatórios ausentes ou inválidos                           |
+| 401  | Não autenticado (token ausente ou expirado)                             |
+| 403  | Sem permissão (não tem `USE_EPP` ou `MANAGE_EPP`)                       |
+| 404  | Recurso não encontrado                                                  |
+| 409  | Conflito: duplicidade ou dependência que impede a operação              |
+| 422  | Dados válidos mas regra de negócio violada (ex: data fora do range)     |
+| 500  | Erro interno do servidor                                                |
+
+**Formato padrão de erro:**
+```json
+{
+  "success": false,
+  "message": "Descrição do erro",
+  "statusCode": 422
+}
+```
+
+---
+
+## 10. Diagrama de Fluxo
+
+### Fluxo básico de criação de pedido
+
+```
+1. GET /global/epp/products            → Lista produtos disponíveis
+2. GET /global/epp/menus               → Lista menus disponíveis (se necessário)
+3. GET /global/epp/log-menus?plu_menu= → Verifica itens do menu selecionado
+4. POST /global/epp/orders             → Cria o pedido (cabeçalho)
+5. POST /global/epp/log-sales          → Adiciona itens ao pedido (repetir por item)
+6. PATCH /global/epp/orders/:id/status → Marcar como entregue quando concluído
+```
+
+### Fluxo de controle de produção (cozinha)
+
+```
+1. GET /global/epp/log-sales?mobile=1            → Lista o que precisa ser produzido hoje
+2. GET /global/epp/stock?stock=1                 → Verifica estoque disponível
+3. POST /global/epp/stock                        → Lança saída (stock_quantity negativo)
+4. GET /global/epp/stock?pending_production=1    → Verifica o que ainda não tem estoque
+```
+
+### Fluxo de administração de produtos
+
+```
+1. GET /global/epp/products?category=1            → Lista categorias disponíveis
+2. GET /global/epp/products/consinco?codigo_acesso=...&lojas=... → Busca no ERP
+3. POST /global/epp/products                      → Cadastra o produto
+4. PATCH /global/epp/products/:id/status          → Ativa/desativa
+5. DELETE /global/epp/products/:id                → Remove (se sem pedidos)
+```
+
+---
+
+## Observações Finais
+
+### Sobre o Oracle (Consinco)
+As rotas que dependem do Oracle são:
+- `GET /epp/products/consinco`
+- `GET /epp/log-sales?mobile=1`
+- `GET /epp/log-sales?oracle_receipe=1`
+- `GET /epp/stock?stock=1` (enriquecimento opcional — degrada graciosamente)
+
+Se o Oracle não estiver configurado ou indisponível, as rotas Oracle retornam erro `500` com mensagem descritiva. A rota de estoque (`?stock=1`) ainda funciona, retornando apenas os dados MySQL sem o enriquecimento de menus.
+
+### Sobre datas
+Todas as datas seguem o formato **`YYYY-MM-DD`** (ISO 8601). Horários seguem **`HH:MM`** (24h).
+
+### Sobre `delivered` (status do pedido)
+| Valor | Status    |
+|-------|-----------|
+| `0`   | Pendente  |
+| `1`   | Entregue  |
+| `2`   | Cancelado |
+
+### Sobre `menu` (campo em pedidos e log_sales)
+| Valor | Significado                                                    |
+|-------|----------------------------------------------------------------|
+| `0`   | Produto simples (ingrediente/matéria-prima direto)            |
+| `1`   | Produto composto (tem receita técnica no Consinco)            |

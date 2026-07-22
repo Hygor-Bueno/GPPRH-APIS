@@ -18,6 +18,16 @@ module.exports = async (req, res, next) => {
       });
     }
 
+    // Sessões do módulo global carregam `status` (= ad_status) no token.
+    // Outras sessões (ex.: portal de candidatos do gpprh) não têm esse campo
+    // e não são afetadas por esta checagem.
+    if (user.status !== undefined && user.status !== 'active') {
+      return res.status(403).json({
+        error: true,
+        message: 'Usuário inativo ou bloqueado'
+      });
+    }
+
     req.user = user;
     next();
 

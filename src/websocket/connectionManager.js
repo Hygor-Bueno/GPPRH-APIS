@@ -3,19 +3,22 @@ class ConnectionManager {
   constructor() {
     // Map: userId -> Set of WebSocket connections
     this.users = new Map();
+    // Map: userId -> metadata (user data + connection info)
+    this.metadata = new Map();
   }
 
   /**
    * Adiciona uma conexão WS para um usuário
    */
-  add(ws, userId) {
-    ws.userId = userId; // associa o WS ao usuário
+  add(ws, userId, meta = {}) {
+    ws.userId = userId;
 
     if (!this.users.has(userId)) {
       this.users.set(userId, new Set());
     }
 
     this.users.get(userId).add(ws);
+    this.metadata.set(userId, { ...meta, connected_at: new Date().toISOString() });
     console.log(`✅ WS adicionado para userId=${userId}. Total conexões: ${this.users.get(userId).size}`);
   }
 
@@ -31,6 +34,7 @@ class ConnectionManager {
       set.delete(ws);
       if (set.size === 0) {
         this.users.delete(userId);
+        this.metadata.delete(userId);
       }
       console.log(`❌ WS removido para userId=${userId}. Conexões restantes: ${set.size}`);
     }
@@ -67,10 +71,20 @@ class ConnectionManager {
   }
 
   /**
-   * Retorna lista de usuários online
+   * Retorna lista de userIds online
    */
   getOnlineUsers() {
     return Array.from(this.users.keys());
+  }
+
+  /**
+   * Retorna lista enriquecida de usuários online com metadados
+   */
+  getOnlineUsersData() {
+    return Array.from(this.users.keys()).map(userId => ({
+      userId,
+      ...(this.metadata.get(userId) || {})
+    }));
   }
 }
 

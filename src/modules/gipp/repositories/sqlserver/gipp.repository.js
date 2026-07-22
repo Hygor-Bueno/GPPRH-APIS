@@ -67,23 +67,18 @@ function sqlGetTimeRecordsByCodWork() {
     return `
         SELECT
             REC.*,
-            RTRIM(LTRIM(EMPL.RA_NOME))                            AS employee_name,
+            RTRIM(LTRIM(EMPL.EmployeeName))                       AS employee_name,
             CONVERT(VARCHAR(10), CAST(REC.times AS DATE), 103)    AS date,
             CONVERT(VARCHAR(5),  CAST(REC.times AS TIME), 108)    AS hour,
-            LTRIM(RTRIM(CC.CTT_DESC01))                           AS cost_center_description,
-            LTRIM(RTRIM(CP.M0_FILIAL))                            AS branch_name
+            EMPL.CostCenterDescription                            AS cost_center_description,
+            EMPL.BranchName                                       AS branch_name
         FROM GIPP.dbo.cf_time_records REC
         LEFT JOIN GIPP.dbo.cf_work_schedules WS
             ON REC.cod_work_schedule = WS.cod_work_schedule
-        LEFT JOIN TMPPRD12.dbo.SRA020 EMPL
-            ON WS.employee_id        = EMPL.RA_MAT
-            AND WS.branch_time_record = EMPL.RA_FILIAL
-        LEFT JOIN TMPPRD12.dbo.CTT020 CC
-            ON CC.CTT_CUSTO = EMPL.RA_CC
-        LEFT JOIN TMPPRD12.dbo.SYS_COMPANY CP
-            ON CP.M0_CODFIL = EMPL.RA_FILIAL
+        LEFT JOIN GIPP.dbo.view_employee_with_company_info EMPL
+            ON RIGHT('000000' + LTRIM(RTRIM(WS.employee_id)), 6) = EMPL.EmployeeID
+            AND RIGHT('0000' + LTRIM(RTRIM(WS.branch_time_record)), 4) = EMPL.BranchCode
         WHERE WS.id_status_fk <= 2
-          AND EMPL.RA_DEMISSA   = ''
           AND REC.cod_work_schedule = @codWorkSchedule
         ORDER BY REC.cod_work_schedule DESC, REC.id_time_records;
     `;
@@ -201,25 +196,23 @@ function sqlGetPayments(scheduleList) {
     const sql = `
         WITH Base AS (
             SELECT
-                empl.RA_MAT,
-                empl.RA_CIC,
-                empl.RA_NOMECMP,
-                empl.RA_FILIAL,
-                empl.RA_SALARIO,
-                empl.RA_HRSMES,
-                empl.RA_HRSDIA,
+                empl.EmployeeID        AS RA_MAT,
+                empl.EmployeeCPF       AS RA_CIC,
+                empl.EmployeeFullName  AS RA_NOMECMP,
+                empl.BranchCode        AS RA_FILIAL,
+                empl.EmployeeSalary    AS RA_SALARIO,
+                empl.EmployeeMonthHours AS RA_HRSMES,
+                empl.EmployeeDayHours  AS RA_HRSDIA,
                 CAST(times AS DATETIME) AS record_times,
                 id_record_type_fk,
                 WS.cod_work_schedule
             FROM GIPP.dbo.cf_time_records
             LEFT JOIN GIPP.dbo.cf_work_schedules WS
                 ON cf_time_records.cod_work_schedule = WS.cod_work_schedule
-            INNER JOIN TMPPRD12.dbo.SRA020 empl
-                ON empl.RA_MAT    = WS.employee_id
-                AND empl.RA_FILIAL = WS.branch_time_record
+            INNER JOIN GIPP.dbo.view_employee_with_company_info empl
+                ON RIGHT('000000' + LTRIM(RTRIM(WS.employee_id)), 6)       = empl.EmployeeID
+                AND RIGHT('0000' + LTRIM(RTRIM(WS.branch_time_record)), 4) = empl.BranchCode
             WHERE WS.cod_work_schedule IN (${placeholders.join(', ')})
-              AND D_E_L_E_T_ <> '*'
-              AND LTRIM(RTRIM(empl.RA_DEMISSA)) = ''
         ),
         Calculated AS (
             SELECT *,
@@ -318,17 +311,15 @@ function sqlGetWorkScheduleData() {
             WS.employee_id,
             WS.branch_time_record,
             WS.id_status_fk,
-            LTRIM(RTRIM(EMP.RA_NOME))    AS employee_name,
-            LTRIM(RTRIM(COMP.M0_CODIGO)) AS company_code,
-            LTRIM(RTRIM(COMP.M0_FILIAL)) AS branch_name
+            LTRIM(RTRIM(EMP.EmployeeName)) AS employee_name,
+            LTRIM(RTRIM(COMP.M0_CODIGO))   AS company_code,
+            LTRIM(RTRIM(EMP.BranchName))   AS branch_name
         FROM GIPP.dbo.cf_work_schedules WS
-        INNER JOIN TMPPRD12.dbo.SRA020 EMP
-            ON EMP.RA_MAT     = WS.employee_id
-            AND EMP.RA_FILIAL  = WS.branch_time_record
-            AND EMP.D_E_L_E_T_ <> '*'
-            AND EMP.RA_DEMISSA = ''
+        INNER JOIN GIPP.dbo.view_employee_with_company_info EMP
+            ON RIGHT('000000' + LTRIM(RTRIM(WS.employee_id)), 6)       = EMP.EmployeeID
+            AND RIGHT('0000' + LTRIM(RTRIM(WS.branch_time_record)), 4) = EMP.BranchCode
         INNER JOIN TMPPRD12.dbo.SYS_COMPANY COMP
-            ON COMP.M0_CODFIL  = WS.branch_time_record
+            ON COMP.M0_CODFIL   = EMP.BranchCode
             AND COMP.D_E_L_E_T_ <> '*'
         WHERE WS.cod_work_schedule = @cod_work_schedule;
     `;
@@ -416,14 +407,13 @@ function sqlGetWorkDurations() {
             SELECT
                 CAST(tr.times AS DATETIME) AS record_times,
                 tr.id_record_type_fk,
-                empl.RA_HRSDIA
+                empl.EmployeeDayHours AS RA_HRSDIA
             FROM GIPP.dbo.cf_time_records tr
             LEFT JOIN GIPP.dbo.cf_work_schedules WS
                 ON tr.cod_work_schedule = WS.cod_work_schedule
-            INNER JOIN TMPPRD12.dbo.SRA020 empl
-                ON empl.RA_MAT     = WS.employee_id
-               AND empl.RA_FILIAL  = WS.branch_time_record
-               AND empl.D_E_L_E_T_ <> '*'
+            INNER JOIN GIPP.dbo.view_employee_with_company_info empl
+                ON RIGHT('000000' + LTRIM(RTRIM(WS.employee_id)), 6)       = empl.EmployeeID
+                AND RIGHT('0000' + LTRIM(RTRIM(WS.branch_time_record)), 4) = empl.BranchCode
             WHERE tr.cod_work_schedule = @cod_work_schedule
         ),
         Calculated AS (

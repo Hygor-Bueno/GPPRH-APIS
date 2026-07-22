@@ -49,21 +49,24 @@ async function putTimeRecord(req, res) {
     const { user, body } = req;
     const service = new GippService();
 
-    if (body.cod_work_schedule) {
-        // Cancelar jornada
-        await service.cancelWorkSchedule(body.cod_work_schedule);
-        return respond.ok(res, { message: 'Work schedule cancelled successfully' });
+    if (!body.times || !body.id_time_records) {
+        throw new BadRequestError("Provide 'times' and 'id_time_records' to update a time record");
     }
 
-    if (body.times && body.id_time_records) {
-        // Alterar horário de marcação
-        const data = await service.updateTimeRecord(body, user.id);
-        return respond.ok(res, data);
+    const data = await service.updateTimeRecord(body, user.id);
+    return respond.ok(res, data);
+}
+
+async function discardTimeRecord(req, res) {
+    const { body } = req;
+    const service = new GippService();
+
+    if (!body.cod_work_schedule) {
+        throw new BadRequestError("Provide 'cod_work_schedule' to discard a work schedule");
     }
 
-    throw new BadRequestError(
-        "Provide 'cod_work_schedule' (to cancel) or 'times' + 'id_time_records' (to update)"
-    );
+    await service.cancelWorkSchedule(body.cod_work_schedule);
+    return respond.message(res, 'Work schedule discarded successfully');
 }
 
 async function postPayments(req, res) {
@@ -114,6 +117,7 @@ module.exports = {
     getTimeRecords,
     postTimeRecord,
     putTimeRecord,
+    discardTimeRecord,
     postPayments,
     postPaymentsClose
 };

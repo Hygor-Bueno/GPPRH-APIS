@@ -16,7 +16,7 @@ const { respond }       = require('../../../utils/respond');
 /**
  * Lista usuários com filtros opcionais via query string.
  *
- * Query params: `status` (0|1), `name`, `registration`, `branch_code`.
+ * Query params: `ad_status` (pending|active|blocked|delete), `name`, `registration`, `branch_code`.
  *
  * @route GET /access/users
  * @param {import('express').Request}  req - Requisição Express.
@@ -27,7 +27,7 @@ async function getUsers(req, res) {
     const q       = req.query;
     const filters = {};
 
-    if (q.status      !== undefined) filters.status      = Number(q.status);
+    if (q.ad_status   !== undefined) filters.ad_status   = q.ad_status;
     if (q.name        !== undefined) filters.name        = q.name;
     if (q.registration!== undefined) filters.registration= q.registration;
     if (q.branch_code !== undefined) filters.branch_code = q.branch_code;
@@ -87,7 +87,7 @@ async function putUser(req, res) {
 /**
  * Atualiza parcialmente um usuário (PATCH).
  *
- * Campos aceitos: `name`, `registration`, `branch_code`, `status`, `administrator`,
+ * Campos aceitos: `name`, `registration`, `branch_code`, `administrator`,
  * `table_protheus`, `ad_status`, `password`. Campos não reconhecidos são ignorados.
  *
  * @route PATCH /access/users/:id
@@ -106,7 +106,7 @@ async function patchUser(req, res) {
 }
 
 /**
- * Desativa um usuário (soft-delete: `status = 0`).
+ * Desativa um usuário (soft-delete: `ad_status = 'delete'`).
  *
  * @route DELETE /access/users/:id
  * @param {import('express').Request}  req - Requisição com `params.id` e `user`.

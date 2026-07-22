@@ -40,11 +40,10 @@ const postUserSchema = {
         required:  false,
         maxLength: 4
     },
-    status: {
-        type:     'number',
+    ad_status: {
+        type:     'string',
         required: false,
-        min:      0,
-        max:      1
+        enum:     ['pending', 'active', 'blocked', 'delete']
     },
     administrator: {
         type:     'number',
@@ -78,11 +77,10 @@ const putUserSchema = {
         required:  false,
         maxLength: 4
     },
-    status: {
-        type:     'number',
+    ad_status: {
+        type:     'string',
         required: true,
-        min:      0,
-        max:      1
+        enum:     ['pending', 'active', 'blocked', 'delete']
     },
     administrator: {
         type:     'number',
@@ -116,12 +114,6 @@ const patchUserSchema = {
         type:      'string',
         required:  false,
         maxLength: 4
-    },
-    status: {
-        type:     'number',
-        required: false,
-        min:      0,
-        max:      1
     },
     administrator: {
         type:     'number',

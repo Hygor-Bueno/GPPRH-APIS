@@ -1,0 +1,518 @@
+<h1>Módulo Active</h1>
+
+<p>
+  O <strong>Módulo Active</strong> é responsável pela gestão de ativos dentro do sistema,
+  concentrando componentes de interface, regras de montagem de dados, mapeamentos e contratos de tipagem.
+</p>
+
+<h2>📁 Estrutura do Módulo</h2>
+
+<pre>
+Active
+├── Adapters
+│   └── Adapters.tsx
+│
+├── Component
+│   ├── BuildFunction
+│   │   └── BuildFunction.ts
+│   │
+│   ├── DataMapper
+│   │   └── DataMapper.ts
+│   │
+│   ├── FormActive
+│   │   ├── FormSchema
+│   │   │   ├── FormActive.schema.ts
+│   │   │   ├── FormAddress.schema.ts
+│   │   │   └── FormVehicle.schema.ts
+│   │   │
+│   │   └── FormActive.tsx
+│   │
+│   ├── ListAddItem
+│   │   └── ListAdd.tsx
+│   │
+│   ├── ActiveTable.tsx
+│   │
+│   └── ConfigurationTable
+│       └── ConfigurationTable.ts
+│
+├── Interfaces
+│   └── Interfaces.ts
+│
+└── Active.tsx
+</pre>
+
+<h2>🧠 Descrição Arquitetural</h2>
+
+<h3>🔹 Active.tsx</h3>
+<p>
+  Arquivo principal do módulo, responsável por orquestrar os componentes, controlar o fluxo da tela
+  e integrar as funcionalidades de listagem, formulário e configuração.
+</p>
+
+<h3>🔹 Adapters/Adapters.tsx</h3>
+<p>Camada de adaptação entre os dados vindos da API e o formato utilizado pela aplicação.</p>
+<ul>
+  <li>Normalizar dados externos</li>
+  <li>Converter estruturas de resposta</li>
+  <li>Preparar dados para uso nos componentes internos</li>
+</ul>
+<h3>🔹 Interfaces/Interfaces.ts</h3>
+<p>Define os contratos de tipagem do módulo.</p>
+<ul>
+  <li>Centralizar interfaces e tipos TypeScript</li>
+  <li>Garantir padronização dos modelos de dados</li>
+  <li>Aumentar a segurança e previsibilidade do código</li>
+</ul>
+
+<h3>🔹 Component/BuildFunction/BuildFunction.ts</h3>
+<p>Responsável por funções de construção e preparação de estruturas de dados.</p>
+
+<ul>
+  <li>Montar payloads para envio</li>
+  <li>Criar objetos de configuração</li>
+  <li>Preparar dados para consumo em outros componentes</li>
+</ul>
+
+<h3>🔹 Component/DataMapper/DataMapper.ts</h3>
+<p>Camada de mapeamento de dados entre:</p>
+<ul>
+  <li>Estrutura da API</li>
+  <li>Estrutura interna da aplicação</li>
+  <li>Estrutura esperada pelos componentes de UI</li>
+</ul>
+<p>Ajuda a manter o desacoplamento entre backend e frontend.</p>
+
+<h3>🔹 Component/FormActive/FormActive.tsx</h3>
+<p>Componente responsável pela tela de cadastro/edição do ativo.</p>
+<ul>
+  <li>Estado do formulário</li>
+  <li>Validações</li>
+  <li>Submissão de dados</li>
+  <li>Integração com schemas e mapeadores</li>
+</ul>
+
+<h4>FormSchema</h4>
+<p>Contém os schemas de validação e definição estrutural dos formulários:</p>
+<ul>
+  <li>FormActive.schema.ts → Regras do formulário principal do ativo</li>
+  <li>FormAddress.schema.ts → Regras do formulário de endereço</li>
+  <li>FormVehicle.schema.ts → Regras do formulário de veículo</li>
+</ul>
+
+<p>Essa separação melhora:</p>
+<ul>
+  <li>Organização</li>
+  <li>Reuso</li>
+  <li>Manutenibilidade</li>
+  <li>Clareza das regras de negócio</li>
+</ul>
+
+<h3>🔹 Component/ListAddItem/ListAdd.tsx</h3>
+<p>
+  Componente responsável por gerenciar listas dinâmicas de itens, permitindo inclusão e manipulação
+  de registros associados ao ativo.
+</p>
+
+<h3>🔹 Component/ActiveTable.tsx</h3>
+<p>Responsável pela exibição tabular dos ativos.</p>
+<ul>
+  <li>Renderização da listagem</li>
+  <li>Exibição de colunas e ações</li>
+  <li>Integração com configurações de tabela</li>
+</ul>
+
+<h3>🔹 Component/ConfigurationTable/ConfigurationTable.ts</h3>
+<p>Define a configuração estrutural da tabela, como:</p>
+<ul>
+  <li>Colunas</li>
+  <li>Formatação de dados</li>
+  <li>Regras de exibição</li>
+  <li>Comportamento visual</li>
+</ul>
+
+<h2>🏗️ Visão Arquitetural Resumida</h2>
+
+<ul>
+  <li><strong>Active.tsx</strong> → Orquestrador do módulo</li>
+  <li><strong>Adapters / DataMapper / BuildFunction</strong> → Camada de transformação e preparação de dados</li>
+  <li><strong>Interfaces</strong> → Contratos e tipagem</li>
+  <li><strong>FormActive + Schemas</strong> → Entrada e validação de dados</li>
+  <li><strong>ActiveTable + ConfigurationTable</strong> → Exibição e configuração de dados</li>
+  <li><strong>ListAddItem</strong> → Gestão de listas dinâmicas</li>
+</ul>
+
+<br/>
+<br/>
+<br/>
+
+<h1>📘 Contratos e Modelos de Dados (Interfaces)</h1>
+
+<p>
+  Esta seção documenta os principais <strong>contratos de dados</strong> do Módulo Active.
+  Essas interfaces representam o <strong>modelo de domínio</strong>, os <strong>dados de formulário</strong>,
+  os <strong>dados vindos da API</strong> e as <strong>estruturas usadas pela UI</strong>.
+</p>
+
+<p>Elas ficam centralizadas em <code>Interfaces/Interfaces.ts</code> e servem como:</p>
+
+<ul>
+  <li>Contrato entre frontend e backend</li>
+  <li>Fonte de verdade para tipagem</li>
+  <li>Base para validações e mapeamentos</li>
+  <li>Documentação viva do domínio de Ativos</li>
+</ul>
+
+<hr />
+
+<h2>📌 Contratos Base</h2>
+
+<h3>Schema</h3>
+<p>Contrato padrão usado pelos schemas de formulário.</p>
+
+<pre><code>
+export interface Schema { label: string; value: string }[]
+</code></pre>
+
+<h3>FetchConfig</h3>
+<p>Contrato padrão para configuração de buscas na API.</p>
+
+<pre><code>
+export interface FetchConfig {
+  pathFile: string;
+  urlComplement?: string;
+  params?: {};
+}
+</code></pre>
+
+<hr />
+
+<h2>🧩 Conjunto de Dados da Tela</h2>
+
+<h3>ActiveTableData</h3>
+<p>Representa o pacote completo de dados que a tela de Ativos precisa para funcionar.</p>
+
+<p>Inclui:</p>
+<ul>
+  <li>Dados do ativo</li>
+  <li>Dados do veículo (se aplicável)</li>
+  <li>Listas de apoio (motoristas, empresas, unidades, tipos, etc)</li>
+</ul>
+
+<pre><code>
+export interface ActiveTableData {
+  active: ActiveFormValues;
+  vehicle: VehicleFormValues;
+  driver: Driver[];
+  company: Company[];
+  unit: Unit[];
+  activeType: ActiveType[];
+  fuelType: FuelType[];
+  departament: Departament[];
+}
+</code></pre>
+
+<hr />
+
+<h2>📍 Endereços</h2>
+
+<h3>PlaceAddress</h3>
+<p>
+  Representa o endereço onde o ativo foi comprado ou adquirido.
+  É flexível, pois pode estar incompleto durante o cadastro.
+</p>
+
+<pre><code>
+export interface PlaceAddress {
+  city?: string;
+  state?: string;
+  store?: string;
+  number?: string;
+  zip_code?: string;
+  complement?: string;
+  neighborhood?: string;
+  public_place?: string;  
+}
+</code></pre>
+
+<hr />
+
+<h2>🏢 Estrutura Organizacional</h2>
+
+<h3>Departament</h3>
+<p>Representa um departamento da empresa dentro da estrutura organizacional.</p>
+
+<p>Na regra de negócio, serve para:</p>
+<ul>
+  <li>Organizar onde o ativo está alocado</li>
+  <li>Relacionar ativo com unidade e empresa</li>
+</ul>
+
+<pre><code>
+export interface Departament {
+  dep_id: number;
+  dep_name: string;
+  status_dep: number;
+  unit_id_fk: number;
+  unit_id: number;
+  unit_number: number;
+  address: string;
+  unit_name: string;
+  cnpj: string;
+  status_unit: number;
+  comp_id_fk: number;
+  comp_id: number;
+  corporate_name: string;
+  fantasy_name: string;
+  status_comp: number;
+}
+</code></pre>
+
+<hr />
+
+<h2>🧾 Listas Dinâmicas</h2>
+
+<h3>IListAdd</h3>
+<p>
+  Representa as ações de negócio para gerenciar a lista de itens de um ativo
+  (ex: acessórios, componentes, itens vinculados).
+</p>
+
+<pre><code>
+export interface IListAdd {
+  newItemText: string;
+  setNewItemText: React.Dispatch&lt;React.SetStateAction&lt;string&gt;&gt;;
+  addItem: () =&gt; void;
+  activeValues: ActiveFormValues;
+  removeItem: (indexToRemove: number) =&gt; void;
+}
+</code></pre>
+
+<hr />
+
+<h2>📝 Formulário de Ativo</h2>
+
+<h3>ActiveFormValues</h3>
+<p>
+  Representa os dados do Ativo enquanto ele está sendo cadastrado ou editado.
+  É o “rascunho” do ativo antes de ser salvo.
+</p>
+
+<pre><code>
+export interface ActiveFormValues {
+  active_id?: number | null;         
+  brand?: string;                     
+  model?: string;                     
+  number_nf?: number | string;       
+  date_purchase?: string;            
+  place_purchase?: PlaceAddress;       
+  value_purchase?: number | string;  
+  photo?: File | string | null;      
+  change_date?: string | null;       
+  list_items?: {
+    list: string[];
+  };               
+  used_in?: number | string | null;  
+  is_vehicle?: boolean;              
+  status_active?: number | string;   
+  units_id_fk?: number | string | null;    
+  id_active_class_fk?: number | string | null; 
+  user_id_fk?: number | string | null;     
+  work_group_fk?: number | string | null;  
+}
+</code></pre>
+
+<h3>VehicleFormValues</h3>
+<p>Representa os dados específicos quando o ativo é um veículo.</p>
+
+<pre><code>
+export interface VehicleFormValues {
+  license_plates?: string;           
+  year?: number | string;            
+  year_model?: number | string;      
+  chassi?: string;                   
+  color?: string;                    
+  renavam?: string;                  
+  fuel_type?: string;                
+  power?: number | string;           
+  cylinder?: number | string;        
+  capacity?: number | string;        
+  fipe_table?: number | string;      
+  last_revision_date?: string | null;
+  last_revision_km?: number | string;
+  next_revision_date?: string | null;
+  next_revision_km?: number | string;
+  directed_by?: number | string | null; 
+  shielding?: boolean;               
+  fuel_type_id_fk?: number | string | null;
+}
+</code></pre>
+
+<hr />
+
+<h2>🏭 Entidades do Domínio</h2>
+
+<h3>Company</h3>
+<pre><code>
+export interface Company {
+  comp_id: number;
+  corporate_name: string;
+  fantasy_name: string;
+  status_comp: number;
+}
+</code></pre>
+
+<h3>ActiveType</h3>
+<p>Define a classificação do ativo (ex: veículo, equipamento, máquina, etc).</p>
+
+<pre><code>
+export interface ActiveType {
+  active_type_id: number;
+  desc_active_type: string;
+  date_active_type: string;
+  status_active_type: number;
+  group_id_fk: string;
+}
+</code></pre>
+
+<h3>FuelType</h3>
+<pre><code>
+export interface FuelType {
+  id_fuel_type: number;
+  description: string;
+}
+</code></pre>
+
+<h3>Unit</h3>
+<p>Representa uma unidade/filial da empresa.</p>
+
+<pre><code>
+export interface Unit {
+  unit_id: number;
+  unit_number: number;
+  address: AddressUnit;
+  unit_name: string;
+  cnpj: string;
+  status_unit: number;
+  comp_id_fk: number;
+  comp_id: number;
+  corporate_name: string;
+  fantasy_name: string;
+  status_comp: number;
+}
+</code></pre>
+
+<h3>Driver</h3>
+<p>Representa um motorista ou usuário responsável por veículos.</p>
+
+<pre><code>
+export interface Driver {
+  driver_id: number;
+  rg: string;
+  cpf: string;
+  cnh: string;
+  category: string;
+  validity_cnh: string;
+  status_driver: number;
+  cnh_img?: string;
+  user_id_fk: string;
+  sub_dep_id_fk: string;
+  level_id_fk: string;
+  user_id: string;
+  name: string;
+  access_code: string;
+  driver: string;
+  status_user: string;
+  level_id: string;
+  level_name: string;
+  level_pages: {
+    level: string[];
+  };
+  status_level: string;
+  group_id_fk: string;
+}
+</code></pre>
+
+<hr />
+
+<h2>📦 Entidade Principal</h2>
+
+<h3>Active</h3>
+<p>
+  Representa o Ativo já cadastrado no sistema, com todas as informações completas.
+  É o registro oficial usado para listagem, consulta e relatórios.
+</p>
+
+<pre><code>
+export interface Active extends ActiveRow {
+  active_id: string;
+  brand: string;
+  model: string;
+  number_nf: string;
+  status_active: string;
+  photo?: null;
+  change_date: string;
+  list_items: {
+    list: string[];
+  };
+  used_in: string;
+  date_purchase: string;
+  place_purchase: PlaceAddress;
+  value_purchase: string;
+  is_vehicle: number;
+  units_id_fk: string;
+  id_active_class_fk: string;
+  user_id_fk: string;
+  work_group_fk: string;
+  unit_id: number;
+  unit_number: number;
+  address: string;
+  unit_name: string;
+  cnpj: string;
+  status_unit: number;
+  comp_id_fk: number;
+  id_active_class: string;
+  desc_active_class: string;
+  status_active_class: string;
+  active_type_id_fk: string;
+  user_id: string;
+  name: string;
+  access_code: string;
+  driver: string;
+  status_user: string;
+  sub_dep_id_fk: string;
+  level_id_fk: string;
+  group_id: number;
+  group_name: string;
+  status_work_group: number;
+  dep_id_fk: number;
+}
+</code></pre>
+
+<hr />
+
+<h2>🧩 Props do Formulário</h2>
+
+<h3>FormActiveProps</h3>
+<p>Define os dados que o formulário de Ativo pode receber, permitindo:</p>
+
+<ul>
+  <li>Abrir em modo edição</li>
+  <li>Controlar abertura/fechamento de modal</li>
+  <li>Injetar dados vindos da API</li>
+</ul>
+
+<pre><code>
+export interface FormActiveProps {
+  apiData?: {
+    active?: ActiveFormValues;
+    departament?: Departament[];
+    vehicle?: VehicleFormValues;
+    driver?: Driver[];
+    company?: Company[];
+    unit?: Unit[];
+    activeType?: ActiveType[];
+    fuelType?: FuelType[];
+  };
+  openModal?: Dispatch&lt;SetStateAction&lt;boolean&gt;&gt;;
+}
+</code></pre>

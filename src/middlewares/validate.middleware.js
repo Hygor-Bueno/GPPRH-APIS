@@ -37,6 +37,12 @@ function validateSchema(data = {}, schema) {
             data[field] = value; // atualiza o objeto para que o controller receba o valor convertido
         }
 
+        // Coerção: "true"/"false" → boolean quando o schema espera boolean
+        if (rules.type === 'boolean' && typeof value === 'string') {
+            if (value === 'true')       { value = true;  data[field] = true;  }
+            else if (value === 'false') { value = false; data[field] = false; }
+        }
+
         if (rules.type === 'string' && typeof value !== 'string') {
             errors.push(`'${field}' must be a string`);
             continue;

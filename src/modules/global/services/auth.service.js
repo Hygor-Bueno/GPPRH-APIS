@@ -38,12 +38,20 @@ class GlobalService {
             if (conn) conn.release();
         }
     }
-    mapUserWithOrganization(user, orgData) {
+    _nicknameFromName(name) {
+        if (!name) return null;
+        const parts = name.trim().split(/\s+/);
+        return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1]}` : parts[0];
+    }
+
+    mapUserWithOrganization(user, orgData = {}) {
+        const name = user.name?.trim() ?? null;
         return {
             // USER
             id: user.id,
             username: user.user,
-            name: user.name?.trim(),
+            name,
+            nickname: this._nicknameFromName(name),
             registration: user.registration,
             status: user.ad_status,
 
@@ -54,16 +62,16 @@ class GlobalService {
                 : [],
 
             // COMPANY
-            company_code: orgData.M0_CODIGO?.trim(),
-            company_name: orgData.M0_NOMECOM?.trim(),
+            company_code: orgData.M0_CODIGO?.trim() ?? null,
+            company_name: orgData.M0_NOMECOM?.trim() ?? null,
 
             // BRANCH
             branch_code: orgData.M0_CODFIL?.trim() || user.branch_code,
-            branch_name: orgData.M0_FILIAL?.trim(),
+            branch_name: orgData.M0_FILIAL?.trim() ?? null,
 
             // COST CENTER
-            cost_center_code: orgData.CTT_CUSTO?.trim(),
-            cost_center_description: orgData.CTT_DESC01?.trim()
+            cost_center_code: orgData.CTT_CUSTO?.trim() ?? null,
+            cost_center_description: orgData.CTT_DESC01?.trim() ?? null
         };
     }
     async controlleLogin(username, password) {
@@ -86,10 +94,12 @@ class GlobalService {
                 "SELECT * FROM global._user WHERE user = ?",
                 [username]
             );
-            if (rows.length === 0 || !await this.authenticatePassword(password, rows[0].password)) {
-                throw new UnauthorizedError('Invalid username or password');
+            if (rows.length === 0) {
+                throw new UnauthorizedError('Usuário não encontrado');
             }
-
+            if (!await this.authenticatePassword(password, rows[0].password)) {
+                throw new UnauthorizedError('Senha incorreta');
+            }
             return rows[0];
         } catch (err) {
             throw err;
@@ -106,11 +116,27 @@ class GlobalService {
             ).authenticateUser(username, password);
             this.identifier = auth.guid;
 
-            // console.log(`name: ${auth.name}, email: ${auth.email}, guid: ${auth.guid}`);
+            // Verifica se o usuário já existe no MySQL pelo GUID do AD
+            const existingUser = await this.findUserByAdGuid(auth.guid);
+
+            if (existingUser) {
+                // Usuário já mapeado — atualiza senha e retorna sem consultar o Protheus
+                const knownUser = new User({
+                    user: username,
+                    name: existingUser.name,
+                    registration: existingUser.registration,
+                    branch_code: existingUser.branch_code,
+                    table_protheus: existingUser.table_protheus,
+                    ad_guid: auth.guid
+                });
+                await knownUser.setPassword(password);
+                await this.spGlobalAdLogin(knownUser);
+                return auth;
+            }
+
+            // Primeiro login — busca dados no Protheus
             const protheusEmployeeData = await this.getProtheusEmployeeData(auth.name);
             const employee = protheusEmployeeData[0];
-
-            // console.log("Dados do funcionário no Protheus:", employee['RA_NOME']);
             const newUser = new User({
                 user: username,
                 name: employee['RA_NOME'],
@@ -121,14 +147,32 @@ class GlobalService {
             });
 
             await newUser.setPassword(password);
-            const req = await this.spGlobalAdLogin(newUser);
-            // console.log(req,' <= spGlobalAdLogin');
+            await this.spGlobalAdLogin(newUser);
             return auth;
         } catch (err) {
             if (err.message?.includes("Invalid Credentials")) {
-                throw new UnauthorizedError("Invalid AD credentials");
+                throw new UnauthorizedError("Usuário ou senha inválidos no Active Directory");
+            }
+            if (err.message?.includes("LDAP") || err.message?.includes("connect")) {
+                throw new AppError("Serviço de autenticação (AD) indisponível", 503);
             }
             throw err;
+        }
+    }
+
+    async findUserByAdGuid(ad_guid) {
+        let conn;
+        try {
+            conn = await poolGlobal.getConnection();
+            const [rows] = await conn.execute(
+                "SELECT * FROM global._user WHERE ad_guid = ? LIMIT 1",
+                [ad_guid]
+            );
+            return rows.length > 0 ? rows[0] : null;
+        } catch (err) {
+            throw err;
+        } finally {
+            if (conn) conn.release();
         }
     }
     //sqlEmployeeData
@@ -138,7 +182,13 @@ class GlobalService {
             const result = await pool.request()
                 .input("name", sql.NVarChar(200), name)
                 .query(sqlEmployeeData()); // chama a função
-            if (!result.recordset || result.recordset.length > 1) throw new AppError("It was not possible to identify the user");
+            console.log(`[AD] getProtheusEmployeeData name="${name}" total=${result.recordset?.length}`, JSON.stringify(result.recordset));
+            if (!result.recordset || result.recordset.length === 0) {
+                throw new AppError(`Colaborador "${name}" não encontrado no Protheus`, 404);
+            }
+            if (result.recordset.length > 1) {
+                throw new AppError(`Múltiplos colaboradores encontrados no Protheus para o nome "${name}". Entre em contato com o suporte.`, 409);
+            }
             return result.recordset;
         } catch (err) {
             console.error("Erro ao buscar dados do funcionário:", err);

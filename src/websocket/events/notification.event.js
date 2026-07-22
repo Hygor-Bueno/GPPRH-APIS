@@ -21,9 +21,10 @@ async function notifyUserLogin(user) {
   await axios.post("http://localhost:4001/ws/emit-event", {
     event: "user-logged-in",
     payload: {
-      message: `${user.nickname} acabou de entrar`,
-      userId: user.id,
-      time: new Date().toISOString(),
+      userId:   user.id,
+      name:     user.nickname ?? user.name ?? null,
+      message:  `${user.nickname ?? user.name} acabou de entrar`,
+      time:     new Date().toISOString(),
     },
     options: {
       excludeUserId: user.id,
