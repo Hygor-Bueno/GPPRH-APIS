@@ -268,6 +268,29 @@ class FileService {
         return path.join(STORAGE_ROOT, fileRecord.file_path);
     }
 
+    /**
+     * Busca um arquivo ativo pelo nome físico salvo em disco (`{hash}.{ext}`).
+     *
+     * Os arquivos são nomeados pelo hash SHA-256 do conteúdo e organizados em
+     * subpastas por data (`Storage/{MODULO}/uploads/{YYYY}/{MM}/{DD}/{hash}.{ext}`),
+     * então o hash sozinho já identifica o registro em `_files` sem precisar
+     * conhecer módulo ou data.
+     *
+     * @param {string} filename - Nome do arquivo (ex: `<hash>.webp`).
+     * @returns {Promise<Object>} Registro de `_files`.
+     * @throws {AppError} 404 se não encontrado ou inativo.
+     */
+    static async findByFilename(filename) {
+        const hash = path.parse(filename).name;
+        const rows = await FileService._execute(sqlFindByHash(), [hash]);
+
+        if (rows.length === 0) {
+            throw new AppError('Arquivo não encontrado.', 404);
+        }
+
+        return rows[0];
+    }
+
     // ── Helpers privados ──────────────────────────────────────────────────────
 
     /**

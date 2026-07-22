@@ -49,17 +49,22 @@ function createUseCases() {
  * Serve um arquivo de chat diretamente pelo Express.
  *
  * Rota pública (sem auth) para que tags <img src="..."> e links de download
- * funcionem sem precisar enviar credenciais. Os nomes de arquivo são UUIDs
- * gerados aleatoriamente, portanto não são adivinháveis.
+ * funcionem sem precisar enviar credenciais. Os nomes de arquivo são o hash
+ * SHA-256 do conteúdo (`<hash>.<ext>`), portanto não são adivinháveis.
+ *
+ * O arquivo físico fica em subpastas por data (`Storage/{MODULO}/uploads/{YYYY}/{MM}/{DD}/`),
+ * então o caminho real é resolvido a partir do registro em `_files` (via `FileService`),
+ * não de um diretório fixo.
  *
  * @route GET /chat/uploads/:filename
- * @param {import('express').Request}  req - `params.filename` = nome do arquivo.
+ * @param {import('express').Request}  req - `params.filename` = nome do arquivo (`<hash>.<ext>`).
  * @param {import('express').Response} res - Resposta Express.
- * @returns {void}
+ * @returns {Promise<void>}
  */
-function serveFile(req, res) {
+async function serveFile(req, res) {
     const filename = path.basename(req.params.filename); // sanitiza path traversal
-    const filePath = path.join(CHAT_UPLOAD_DIR, filename);
+    const record   = await FileService.findByFilename(filename);
+    const filePath = FileService.absolutePath(record);
 
     res.sendFile(filePath, err => {
         if (err) res.status(404).json({ error: true, message: 'Arquivo não encontrado.' });
