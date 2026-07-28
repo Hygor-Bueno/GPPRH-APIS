@@ -1,24 +1,27 @@
-const ProtheusService = require('../services/protheus.service');
+const { ProtheusUseCases } = require('../application/protheus.use-cases');
+const { SqlServerProtheusRepository } = require('../infrastructure/sqlserver-protheus.repository');
+
+const useCases = new ProtheusUseCases({ repository: new SqlServerProtheusRepository() });
 
 async function listCostCenters(req, res) {
   const companyCode = req.params.code;
-  const data = await ProtheusService.getCostCenters(companyCode);
+  const data = await useCases.getCostCenters(companyCode);
   res.status(200).json({ error: false, data });
 }
 
 async function listBranches(req, res) {
   const companyCode = req.params.code;
-  const data = await ProtheusService.getBranches(companyCode);
+  const data = await useCases.getBranches(companyCode);
   res.status(200).json({ error: false, data });
 }
 
 async function listAllBranches(req, res) {
-  const data = await ProtheusService.getAllBranches();
+  const data = await useCases.getAllBranches();
   res.status(200).json({ error: false, data });
 }
 
 async function listCompanies(req, res) {
-  const data = await ProtheusService.getCompanies();
+  const data = await useCases.getCompanies();
   res.status(200).json({ error: false, data });
 }
 

@@ -5,16 +5,15 @@
 
 'use strict';
 
-const { AppError }           = require('../../../errors/app.error');
-const { respond }            = require('../../../utils/respond');
-const { poolGlobal }         = require('../../../config/mysql');
-const { broadcastGtppEvent } = require('../../../websocket/events/gtpp.event');
-const responseService        = require('../services/gtpp-task-item-response.service');
+const { respond } = require('../../../utils/respond');
+const { GtppTaskItemResponseUseCases } = require('../application/gtpp/task-item-response/gtpp-task-item-response.use-cases');
+const { MysqlTaskItemResponseRepository } = require('../infrastructure/gtpp/mysql-task-item-response.repository');
+const { HttpGtppEventPublisher } = require('../infrastructure/gtpp/http-gtpp-event.publisher');
 
-// Tipo 7 = novo comentário/evidência | Tipo 9 = comentário deletado | Tipo 10 = comentário editado
-const EV_RESPONSE_NEW     = 7;
-const EV_RESPONSE_DELETED = 9;
-const EV_RESPONSE_UPDATED = 10;
+const useCases = new GtppTaskItemResponseUseCases({
+    repository: new MysqlTaskItemResponseRepository(),
+    eventPublisher: new HttpGtppEventPublisher(),
+});
 
 /**
  * GET /gtpp/items/:itemId/responses
@@ -22,7 +21,7 @@ const EV_RESPONSE_UPDATED = 10;
  */
 async function getItemResponses(req, res) {
     const taskItemId = parseInt(req.params.itemId, 10);
-    const responses = await responseService.getItemResponses(taskItemId);
+    const responses = await useCases.getItemResponses(taskItemId);
     return respond.ok(res, responses);
 }
 
@@ -36,33 +35,16 @@ async function getItemResponses(req, res) {
 async function createItemResponse(req, res) {
     const taskItemId = parseInt(req.params.itemId, 10);
 
-    const [[item]] = await poolGlobal.execute(
-        'SELECT task_id FROM gt_task_item WHERE id = ?', [taskItemId]
-    );
-    if (!item) throw new AppError('Item não encontrado.', 404);
-
     const { comment } = req.body;
     if (req.file) {
         req.file.originalname = req.body.file_name
             ?? Buffer.from(req.file.originalname, 'latin1').toString('utf8');
     }
 
-    const result = await responseService.createItemResponse(
-        item.task_id,
-        taskItemId,
-        req.user.id,
-        {
-            comment,
-            file: req.file ?? null,
-        }
-    );
-
-    broadcastGtppEvent(item.task_id, req.user.id, EV_RESPONSE_NEW, {
-        action:  'created',
-        id:      result.responseId,
-        item_id: taskItemId,
+    const result = await useCases.createItemResponse(taskItemId, req.user.id, {
         comment,
-    }).catch(() => {});
+        file: req.file ?? null,
+    });
 
     return respond.created(res, result);
 }
@@ -78,19 +60,7 @@ async function updateItemResponse(req, res) {
     const taskItemId = parseInt(req.params.itemId, 10);
     const { comment } = req.body;
 
-    await responseService.updateItemResponse(responseId, comment);
-
-    const [[item]] = await poolGlobal.execute(
-        'SELECT task_id FROM gt_task_item WHERE id = ?', [taskItemId]
-    );
-    if (item?.task_id) {
-        broadcastGtppEvent(item.task_id, req.user.id, EV_RESPONSE_UPDATED, {
-            action:  'updated',
-            id:      responseId,
-            item_id: taskItemId,
-            comment,
-        }).catch(() => {});
-    }
+    await useCases.updateItemResponse(responseId, comment, taskItemId, req.user.id);
 
     return respond.message(res, 'Resposta atualizada com sucesso.');
 }
@@ -104,20 +74,7 @@ async function deleteItemResponse(req, res) {
     const responseId = parseInt(req.params.id, 10);
     const taskItemId = parseInt(req.params.itemId, 10);
 
-    // Busca task_id antes de deletar para poder emitir o evento
-    const [[item]] = await poolGlobal.execute(
-        'SELECT task_id FROM gt_task_item WHERE id = ?', [taskItemId]
-    );
-
-    await responseService.deleteItemResponse(responseId);
-
-    if (item?.task_id) {
-        broadcastGtppEvent(item.task_id, req.user.id, EV_RESPONSE_DELETED, {
-            action:  'deleted',
-            id:      responseId,
-            item_id: taskItemId,
-        }).catch(() => {});
-    }
+    await useCases.deleteItemResponse(responseId, taskItemId, req.user.id);
 
     return respond.message(res, 'Resposta excluída com sucesso.');
 }

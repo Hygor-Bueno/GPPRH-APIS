@@ -1,5 +1,8 @@
-const { PayeeService } = require('../services/payee.service');
 const { respond } = require('../../../utils/respond');
+const { PayeeUseCases } = require('../application/payee/payee.use-cases');
+const { SqlServerPayeeRepository } = require('../infrastructure/payee/sqlserver-payee.repository');
+
+const useCases = new PayeeUseCases({ repository: new SqlServerPayeeRepository() });
 
 async function getPayees(req, res) {
     const q = req.query;
@@ -11,14 +14,12 @@ async function getPayees(req, res) {
     if (q.document  !== undefined) filters.document  = q.document;
     if (q.is_active !== undefined) filters.is_active = q.is_active === 'true' ? 1 : 0;
 
-    const service = new PayeeService();
-    const data    = await service.getPayees(filters);
+    const data = await useCases.getPayees(filters);
     return respond.ok(res, data);
 }
 
 async function postPayee(req, res) {
     const { user, body } = req;
-    const service = new PayeeService();
 
     const payload = {
         type:                   body.type,
@@ -31,13 +32,12 @@ async function postPayee(req, res) {
         created_by_branch_code: user.branch_code
     };
 
-    const payee = await service.postPayee(payload);
+    const payee = await useCases.createPayee(payload);
     return respond.created(res, payee);
 }
 
 async function putPayee(req, res) {
     const { user, body } = req;
-    const service = new PayeeService();
 
     const payload = {
         id:                     body.id,
@@ -51,7 +51,7 @@ async function putPayee(req, res) {
         updated_by_branch_code: user.branch_code
     };
 
-    const payee = await service.putPayee(payload);
+    const payee = await useCases.replacePayee(payload);
     return respond.ok(res, payee);
 }
 
@@ -59,15 +59,13 @@ async function patchPayee(req, res) {
     const { user, body } = req;
     const { id, ...fields } = body;
 
-    const service = new PayeeService();
-    const payee   = await service.patchPayee(id, fields, user.registration, user.branch_code);
+    const payee = await useCases.patchPayee(id, fields, user.registration, user.branch_code);
     return respond.ok(res, payee);
 }
 
 async function deletePayee(req, res) {
-    const id      = Number(req.params.id);
-    const service = new PayeeService();
-    const result  = await service.deletePayee(id);
+    const id = Number(req.params.id);
+    const result = await useCases.deletePayee(id);
     return respond.ok(res, result);
 }
 

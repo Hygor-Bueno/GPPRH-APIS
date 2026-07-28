@@ -3,11 +3,16 @@
  * @module modules/global/controllers/epp-product.controller
  */
 
-const { EppProductService } = require('../services/epp-product.service');
+const { EppProductUseCases } = require('../application/epp/product/product.use-cases');
+const { MysqlProductRepository } = require('../infrastructure/epp/mysql-product.repository');
+const { OracleEppRepository } = require('../infrastructure/epp/oracle-epp.repository');
 const { respond }           = require('../../../utils/respond');
 const { AppError }          = require('../../../errors/app.error');
 
-const service = new EppProductService();
+const useCases = new EppProductUseCases({
+    repository: new MysqlProductRepository(),
+    oracleRepository: new OracleEppRepository(),
+});
 
 /**
  * GET /epp/products
@@ -18,21 +23,21 @@ async function getProducts(req, res) {
     const { complete, category, id_product, id_category_fk, status_prod } = req.query;
 
     if (category) {
-        const data = await service.getCategories();
+        const data = await useCases.getCategories();
         return respond.ok(res, data);
     }
 
     if (id_product || id_category_fk || status_prod) {
-        const data = await service.searchProducts({ id_product, id_category_fk, status_prod });
+        const data = await useCases.searchProducts({ id_product, id_category_fk, status_prod });
         return respond.ok(res, data);
     }
 
     if (complete) {
-        const data = await service.getProductsComplete();
+        const data = await useCases.getProductsComplete();
         return respond.ok(res, data);
     }
 
-    const data = await service.getProducts();
+    const data = await useCases.getProducts();
     respond.ok(res, data);
 }
 
@@ -46,7 +51,7 @@ async function getProductConsinco(req, res) {
         throw new AppError('Parâmetros obrigatórios: codigo_acesso, lojas', 400);
     }
     const lojasParam = full_store ? '1,2,3,7,8,9' : lojas;
-    const data = await service.getProductConsinco(codigo_acesso, lojasParam);
+    const data = await useCases.getProductConsinco(codigo_acesso, lojasParam);
     respond.ok(res, data);
 }
 
@@ -54,7 +59,7 @@ async function getProductConsinco(req, res) {
  * GET /epp/products/:id
  */
 async function getProductById(req, res) {
-    const data = await service.getProductById(req.params.id);
+    const data = await useCases.getProductById(req.params.id);
     respond.ok(res, data);
 }
 
@@ -63,7 +68,7 @@ async function getProductById(req, res) {
  * Body: { id_product, description, price, status_prod, id_category_fk, measure }
  */
 async function createProduct(req, res) {
-    const data = await service.createProduct(req.body);
+    const data = await useCases.createProduct(req.body);
     respond.created(res, data);
 }
 
@@ -72,7 +77,7 @@ async function createProduct(req, res) {
  * Body: { description, price, status_prod, id_category_fk, measure }
  */
 async function updateProduct(req, res) {
-    const data = await service.updateProduct(req.params.id, req.body);
+    const data = await useCases.updateProduct(req.params.id, req.body);
     respond.ok(res, data);
 }
 
@@ -83,7 +88,7 @@ async function updateProduct(req, res) {
 async function changeProductStatus(req, res) {
     const { status_prod } = req.body;
     if (status_prod === undefined) throw new AppError('Campo obrigatório: status_prod', 400);
-    const data = await service.changeProductStatus(req.params.id, status_prod);
+    const data = await useCases.changeProductStatus(req.params.id, status_prod);
     respond.ok(res, data);
 }
 
@@ -91,7 +96,7 @@ async function changeProductStatus(req, res) {
  * DELETE /epp/products/:id
  */
 async function deleteProduct(req, res) {
-    const data = await service.deleteProduct(req.params.id);
+    const data = await useCases.deleteProduct(req.params.id);
     respond.message(res, 'Produto excluído com sucesso');
 }
 

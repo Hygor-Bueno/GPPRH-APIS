@@ -2,7 +2,7 @@
  * @fileoverview Adapter MySQL — implementa `ChatRepositoryPort`.
  *
  * Reaproveita os builders de SQL puro existentes em
- * `repositories/mysql/chat.repository.js` (inalterados) e passa a possuir o
+ * `repositories/mysql/chat.queries.js` (inalterados) e passa a possuir o
  * ciclo de vida da conexão (`poolGlobal.getConnection()/execute()/release()`),
  * que antes morava em `services/chat.service.js`.
  *
@@ -20,7 +20,7 @@ const {
     sqlInsertMessage,
     sqlGetMessageById,
     sqlMarkAsRead
-} = require('../../repositories/mysql/chat.repository');
+} = require('../../repositories/mysql/chat.queries');
 
 class MysqlChatRepository extends ChatRepositoryPort {
     constructor() {

@@ -1,34 +1,37 @@
-const { GippService } = require('../services/gipp.service');
+const { GippUseCases } = require('../application/gipp.use-cases');
+const { SqlServerGippRepository } = require('../infrastructure/sqlserver-gipp.repository');
+const { MysqlGippReplicationRepository } = require('../infrastructure/mysql-gipp-replication.repository');
 const { respond } = require('../../../utils/respond');
 const { BadRequestError } = require('../../../errors/bad-request.error');
 
+const useCases = new GippUseCases({
+    repository: new SqlServerGippRepository(),
+    replicationRepository: new MysqlGippReplicationRepository(),
+});
+
 async function getStatus(req, res) {
-    const service = new GippService();
-    const data = await service.getStatus();
+    const data = await useCases.getStatus();
     return respond.ok(res, data);
 }
 
 async function getPaymentRegistered(req, res) {
-    const service = new GippService();
-    const data = await service.getPaymentRegistered();
+    const data = await useCases.getPaymentRegistered();
     return respond.ok(res, data);
 }
 
 async function getRecordTypes(req, res) {
-    const service = new GippService();
-    const data = await service.getRecordTypes();
+    const data = await useCases.getRecordTypes();
     return respond.ok(res, data);
 }
 
 async function getTimeRecords(req, res) {
     const { codWorkSchedule } = req.query;
-    const service = new GippService();
 
     // Se vier codWorkSchedule busca os detalhes daquela jornada específica
     // Caso contrário busca com filtros paginados
     const data = codWorkSchedule
-        ? await service.getTimeRecordsByCodWork(codWorkSchedule)
-        : await service.getTimeRecords(req.query);
+        ? await useCases.getTimeRecordsByCodWork(codWorkSchedule)
+        : await useCases.getTimeRecords(req.query);
 
     return respond.ok(res, data);
 }
@@ -40,32 +43,29 @@ async function postTimeRecord(req, res) {
         throw new BadRequestError('employee_id, id_record_type_fk and branch_time_record are required');
     }
 
-    const service = new GippService();
-    const data = await service.insertTimeRecord(body, user.id);
+    const data = await useCases.insertTimeRecord(body, user.id);
     return respond.created(res, data);
 }
 
 async function putTimeRecord(req, res) {
     const { user, body } = req;
-    const service = new GippService();
 
     if (!body.times || !body.id_time_records) {
         throw new BadRequestError("Provide 'times' and 'id_time_records' to update a time record");
     }
 
-    const data = await service.updateTimeRecord(body, user.id);
+    const data = await useCases.updateTimeRecord(body, user.id);
     return respond.ok(res, data);
 }
 
 async function discardTimeRecord(req, res) {
     const { body } = req;
-    const service = new GippService();
 
     if (!body.cod_work_schedule) {
         throw new BadRequestError("Provide 'cod_work_schedule' to discard a work schedule");
     }
 
-    await service.cancelWorkSchedule(body.cod_work_schedule);
+    await useCases.cancelWorkSchedule(body.cod_work_schedule);
     return respond.message(res, 'Work schedule discarded successfully');
 }
 
@@ -77,8 +77,7 @@ async function postPayments(req, res) {
         throw new BadRequestError('codWorkSchedules is required and must not be empty');
     }
 
-    const service = new GippService();
-    const data = await service.processWorkSchedules(
+    const data = await useCases.processWorkSchedules(
         codWorkSchedules,
         user.registration,
         user.branch_code
@@ -94,8 +93,7 @@ async function postPaymentsClose(req, res) {
         throw new BadRequestError('codWorkSchedules is required and must not be empty');
     }
 
-    const service = new GippService();
-    const results = await service.closeWorkSchedules(
+    const results = await useCases.closeWorkSchedules(
         codWorkSchedules,
         user.registration,
         user.branch_code

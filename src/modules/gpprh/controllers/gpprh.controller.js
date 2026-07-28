@@ -4,43 +4,43 @@ const { listJobStatuses } = require("../domain/jobs/job-status.helper");
 const { ALLOWED_TRANSITIONS } = require("../domain/jobs/job-status.transitions");
 const { JOB_INPUT_FIELDS } = require("../domain/jobs/job.contract");
 const { User } = require("../domain/user.entity");
-const { GpprhService } = require("../services/gpprh.service");
-const { JobServices } = require("../services/job.service");
 const { respond } = require("../../../utils/respond");
+const { GpprhUserUseCases } = require("../application/gpprh-user.use-cases");
+const { GpprhJobUseCases } = require("../application/gpprh-job.use-cases");
+const { MysqlGpprhRepository } = require("../infrastructure/mysql-gpprh.repository");
+const { MysqlJobRepository } = require("../infrastructure/mysql-job.repository");
+
+const userUseCases = new GpprhUserUseCases({ repository: new MysqlGpprhRepository() });
+const jobUseCases = new GpprhJobUseCases({ repository: new MysqlJobRepository() });
 
 // 🔹 LIST USERS
 async function listUsers(req, res) {
-  const service = new GpprhService('');
-  const data = await service.getUser();
+  const data = await userUseCases.listUsers();
   return respond.ok(res, data);
 }
 
 // 🔹 CREATE JOB
 async function createJob(req, res) {
-  const service = new JobServices();
   const userId = new User(req.user).user_id;
-  const result = await service.create(req.body, userId);
+  const result = await jobUseCases.create(req.body, userId);
   return respond.created(res, { insertId: result.insertId });
 }
 
 // 🔹 UPDATE JOB
 async function updateJob(req, res) {
-  const service = new JobServices();
-  await service.update(req.body);
+  await jobUseCases.update(req.body);
   return respond.message(res, 'Updated successfully');
 }
 
 // 🔹 FIND ALL JOBS (público)
 async function findAllJob(req, res) {
-  const service = new JobServices();
-  const data = await service.findAll();
+  const data = await jobUseCases.findAll();
   return respond.ok(res, data);
 }
 
 // 🔹 FIND ALL JOBS (candidato autenticado — inclui liked_by_me)
 async function viewJob(req, res) {
-  const service = new JobServices();
-  const data = await service.findAll(req.user.user_id);
+  const data = await jobUseCases.findAll(req.user.user_id);
   return respond.ok(res, data);
 }
 
@@ -59,37 +59,32 @@ async function rulesJobStatus(req, res) {
 }
 
 async function jobLikes(req, res) {
-  const service = new JobServices();
   const { job_id, candidate_id } = req.body;
-  const data = await service.postLike(job_id, candidate_id);
+  const data = await jobUseCases.postLike(job_id, candidate_id);
   return respond.ok(res, data);
 }
 
 async function jobApplication(req, res) {
-  const service = new JobServices();
   const { job_id, candidate_id } = req.body;
-  const data = await service.postJobApplication(job_id, candidate_id);
+  const data = await jobUseCases.postJobApplication(job_id, candidate_id);
   return respond.ok(res, data);
 }
 
 async function viewJobApplication(req, res) {
   if (!req.user) throw new UnauthorizedError('Not authenticated');
-  const service = new JobServices();
-  const data = await service.getJobApplication(req.user.user_id);
+  const data = await jobUseCases.getJobApplication(req.user.user_id);
   return respond.ok(res, data);
 }
 
 async function jobComments(req, res) {
-  const service = new JobServices();
   const { job_id, candidate_id, comment } = req.body;
-  const data = await service.postComments(job_id, candidate_id, comment);
+  const data = await jobUseCases.postComments(job_id, candidate_id, comment);
   return respond.ok(res, data);
 }
 
 async function jobCommentsView(req, res) {
-  const service = new JobServices();
   const { codeJob } = req.params;
-  const data = await service.getAllComments(codeJob);
+  const data = await jobUseCases.getAllComments(codeJob);
   return respond.ok(res, data);
 }
 

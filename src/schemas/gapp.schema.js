@@ -160,9 +160,9 @@ const listInsuranceQuerySchema = {
 //
 // `local` (JSON) não entra aqui de propósito, mesma filosofia dos outros
 // campos JSON deste arquivo — validado apenas pelo banco (NOT NULL).
-// `active_id_fk` fica opcional por decisão de negócio: nem toda despesa
-// precisa estar vinculada a um ativo. Quando vier, o service valida que o
-// ativo pertence ao work_group_fk do usuário antes de aceitar.
+// `active_id_fk` é obrigatório: toda despesa tem que estar vinculada a um
+// ativo. O service valida que o ativo pertence ao work_group_fk do usuário
+// antes de aceitar.
 
 const expenseFieldsSchema = {
     date:           { type: 'string', required: true },
@@ -173,7 +173,7 @@ const expenseFieldsSchema = {
     provider:       { type: 'string', maxLength: 255 },
     exp_type_id_fk: { type: 'number', required: true },
     driver_id_fk:   { type: 'number' },
-    active_id_fk:   { type: 'number' },
+    active_id_fk:   { type: 'number', required: true },
     coupon_number:  { type: 'number' },
     store_id_fk:    { type: 'number' },
 };
@@ -237,6 +237,35 @@ function validateExpenseTypePayload(req, res, next) {
     next();
 }
 
+// ─── Loja ───────────────────────────────────────────────────────────
+
+const storeFieldsSchema = {
+    cnpj:         { type: 'string', maxLength: 14 },
+    name:         { type: 'string', required: true, maxLength: 60 },
+    street:       { type: 'string', required: true, maxLength: 255 },
+    district:     { type: 'string', maxLength: 100 },
+    city:         { type: 'string', required: true, maxLength: 100 },
+    state:        { type: 'string', required: true, minLength: 2, maxLength: 2 },
+    number:       { type: 'number', required: true },
+    zip_code:     { type: 'string', required: true, maxLength: 10 },
+    complement:   { type: 'string', maxLength: 100 },
+    status_store: { type: 'number', enum: [0, 1] },
+};
+
+const createStoreSchema = { ...storeFieldsSchema };
+const updateStoreSchema = { ...storeFieldsSchema };
+
+const listStoreQuerySchema = {
+    store_id:     { type: 'number' },
+    cnpj:         { type: 'string', maxLength: 14 },
+    name:         { type: 'string', maxLength: 60 },
+    city:         { type: 'string', maxLength: 100 },
+    state:        { type: 'string', maxLength: 2 },
+    status_store: { type: 'number', enum: [0, 1] },
+    page:         { type: 'number' },
+    limit:        { type: 'number' },
+};
+
 module.exports = {
     createActiveSchema,
     updateActiveSchema,
@@ -250,5 +279,8 @@ module.exports = {
     updateExpenseSchema,
     listExpensesQuerySchema,
     listVehicleExpensesQuerySchema,
-    validateExpenseTypePayload
+    validateExpenseTypePayload,
+    createStoreSchema,
+    updateStoreSchema,
+    listStoreQuerySchema
 };

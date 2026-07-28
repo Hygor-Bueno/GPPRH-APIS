@@ -5,25 +5,18 @@
 
 'use strict';
 
-const { AppError }           = require('../../../errors/app.error');
-const { respond }            = require('../../../utils/respond');
-const { broadcastGtppEvent } = require('../../../websocket/events/gtpp.event');
-const taskUserService        = require('../services/gtpp-task-user.service');
-const taskService            = require('../services/gtpp-task.service');
+const { AppError } = require('../../../errors/app.error');
+const { respond } = require('../../../utils/respond');
+const { GtppTaskUserUseCases } = require('../application/gtpp/task-user/gtpp-task-user.use-cases');
+const { MysqlTaskUserRepository } = require('../infrastructure/gtpp/mysql-task-user.repository');
+const { MysqlGtppTaskGuardRepository } = require('../infrastructure/gtpp/mysql-gtpp-task-guard.repository');
+const { HttpGtppEventPublisher } = require('../infrastructure/gtpp/http-gtpp-event.publisher');
 
-// Tipo 5 = usuário vinculado/desvinculado
-const EV_USER = 5;
-
-/**
- * Verifica se o usuário autenticado é o criador ou tem permissão admin.
- */
-function assertCreatorOrAdmin(req, taskCreatorId) {
-    const perms   = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-    const isAdmin = perms.includes('MANAGE_GTPP') || perms.includes('SYSTEM_OWNER');
-    if (req.user.id !== taskCreatorId && !isAdmin) {
-        throw new AppError('Apenas o criador ou administrador pode gerenciar usuários da tarefa.', 403);
-    }
-}
+const useCases = new GtppTaskUserUseCases({
+    repository: new MysqlTaskUserRepository(),
+    taskGuardRepository: new MysqlGtppTaskGuardRepository(),
+    eventPublisher: new HttpGtppEventPublisher(),
+});
 
 /**
  * GET /gtpp/tasks/:taskId/users
@@ -31,7 +24,7 @@ function assertCreatorOrAdmin(req, taskCreatorId) {
  */
 async function getTaskUsers(req, res) {
     const taskId = parseInt(req.params.taskId, 10);
-    const users = await taskUserService.getTaskUsers(taskId);
+    const users = await useCases.getTaskUsers(taskId);
     return respond.ok(res, users);
 }
 
@@ -47,24 +40,7 @@ async function toggleTaskUser(req, res) {
 
     if (!user_id) throw new AppError('O campo user_id é obrigatório.', 400);
 
-    const creatorId = await taskService.getTaskCreatorId(taskId);
-    assertCreatorOrAdmin(req, creatorId);
-
-    await taskService.verifyTaskEditable(taskId);
-
-    const result = await taskUserService.toggleTaskUser(taskId, parseInt(user_id, 10));
-
-    // Quando o usuário é removido ele já não está em gt_task_user,
-    // por isso é passado explicitamente em includeUserIds para garantir
-    // que ele receba o evento e possa remover a tarefa da sua tela.
-    const affectedUserId = parseInt(user_id, 10);
-    broadcastGtppEvent(
-        taskId,
-        req.user.id,
-        EV_USER,
-        { action: result.action, id: affectedUserId },
-        result.action === 'removed' ? [affectedUserId] : []
-    ).catch(() => {});
+    const result = await useCases.toggleTaskUser(taskId, parseInt(user_id, 10), req.user);
 
     return respond.ok(res, result);
 }

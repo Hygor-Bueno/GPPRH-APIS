@@ -1,19 +1,29 @@
-const { AppError }                                      = require("../../../errors/app.error");
-const { Employee, getEmployeesFiltered, getUsersFiltered } = require("../services/employee.service");
-const { respond }                                         = require("../../../utils/respond");
+const { AppError } = require("../../../errors/app.error");
+const { respond } = require("../../../utils/respond");
+const { FileService } = require("../../../utils/file/file.service");
+const { EmployeeUseCases } = require("../application/employee/employee.use-cases");
+const { MysqlEmployeeRepository } = require("../infrastructure/employee/mysql-employee.repository");
+const { SqlServerProtheusOrganizationRepository } = require("../infrastructure/employee/sqlserver-protheus-organization.repository");
+
+const useCases = new EmployeeUseCases({
+    repository: new MysqlEmployeeRepository(),
+    protheusRepository: new SqlServerProtheusOrganizationRepository(),
+});
 
 async function getPhotoEmployee(req, res) {
     const { id } = req.params;
     if (!id || id == 0) {
         throw new AppError('Id is riquired', 400);
     }
-    const employee = new Employee(id);
-    const photo = await employee.getEmployeePhoto();
 
-    res.setHeader("Content-Type", "image/jpeg");
-    res.setHeader("Cache-Control", "public, max-age=86400");
-
-    res.send(photo);
+    const record = await useCases.getEmployeePhoto(id);
+    const absolutePath = FileService.absolutePath(record);
+    return res.sendFile(absolutePath, err => {
+        if (err) {
+            console.error(`[employee:photo] Arquivo não encontrado em disco: ${absolutePath}`, err.message);
+            res.status(404).json({ error: true, message: 'Foto não encontrada.' });
+        }
+    });
 };
 async function postPhotoEmployee(req, res) {
     const { id } = req.params;
@@ -29,8 +39,9 @@ async function postPhotoEmployee(req, res) {
         throw new AppError('The file must be an image', 400);
     }
 
-    const employee = new Employee(id);
-    await employee.updateEmployeePhoto(req.file.buffer);
+    // Rota sem authMiddleware (autenticação gerenciada pelo front via cookie) —
+    // usa o próprio id do colaborador como ator para o provenance do FileService.
+    await useCases.updateEmployeePhoto(id, req.file, Number(id));
 
     respond.message(res, 'Photo saved successfully');
 }
@@ -47,7 +58,7 @@ async function postPhotoEmployee(req, res) {
  * @param {import('express').Response} res
  */
 async function getEmployees(req, res) {
-    const result = await getEmployeesFiltered(req.query);
+    const result = await useCases.getEmployeesFiltered(req.query);
     return respond.ok(res, result);
 }
 
@@ -59,7 +70,7 @@ async function getEmployees(req, res) {
  * @param {import('express').Response} res
  */
 async function getUsers(req, res) {
-    const result = await getUsersFiltered(req.query);
+    const result = await useCases.getUsersFiltered(req.query);
     return respond.ok(res, result);
 }
 

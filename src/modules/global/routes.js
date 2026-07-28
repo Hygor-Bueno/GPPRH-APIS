@@ -46,6 +46,7 @@ const gappInsuranceController = require('./controllers/gapp-insurance.controller
 const gappVehicleController   = require('./controllers/gapp-vehicle.controller');
 const gappLookupController    = require('./controllers/gapp-lookup.controller');
 const gappExpensesController  = require('./controllers/gapp-expenses.controller');
+const gappStoreController     = require('./controllers/gapp-store.controller');
 const { upload: fileUpload }  = require('../../utils/file/file.service');
 const authMiddleware     = require('../../middlewares/auth.middleware');
 const upload             = require('../../middlewares/upload.middleware');
@@ -81,7 +82,8 @@ const {
     listActiveQuerySchema, listVehicleQuerySchema, listInsuranceQuerySchema,
     createExpenseSchema, updateExpenseSchema,
     listExpensesQuerySchema, listVehicleExpensesQuerySchema,
-    validateExpenseTypePayload
+    validateExpenseTypePayload,
+    createStoreSchema, updateStoreSchema, listStoreQuerySchema
 } = require('../../schemas/gapp.schema');
 const {
     postTaskSchema, putTaskStateSchema, putTaskTitleSchema, putTaskDescriptionSchema, putTaskThemeSchema,
@@ -1723,6 +1725,62 @@ router.get('/gapp/insurance/:id',
     authMiddleware,
     canAll(['GAPP_VIEW_INSURANCE']),
     asyncHandler(gappInsuranceController.getInsuranceById));
+
+// ─── GAPP — Lojas ────────────────────────────────────────────────────────────
+
+/**
+ * @route GET /gapp/store
+ * @description Lista/filtra lojas, com paginação.
+ * @access Requer `GAPP_VIEW_STORE`
+ */
+router.get('/gapp/store',
+    authMiddleware,
+    canAll(['GAPP_VIEW_STORE']),
+    validate(listStoreQuerySchema, 'query'),
+    asyncHandler(gappStoreController.listStores));
+
+/**
+ * @route GET /gapp/store/:id
+ * @description Retorna uma loja pelo store_id.
+ * @access Requer `GAPP_VIEW_STORE`
+ */
+router.get('/gapp/store/:id',
+    authMiddleware,
+    canAll(['GAPP_VIEW_STORE']),
+    asyncHandler(gappStoreController.getStoreById));
+
+/**
+ * @route POST /gapp/store
+ * @description Cria uma loja.
+ * @access Requer `GAPP_CREATE_STORE`
+ */
+router.post('/gapp/store',
+    authMiddleware,
+    canAll(['GAPP_CREATE_STORE']),
+    validate(createStoreSchema),
+    asyncHandler(gappStoreController.createStore));
+
+/**
+ * @route PUT /gapp/store/:id
+ * @description Atualiza uma loja.
+ * @access Requer `GAPP_UPDATE_STORE`
+ */
+router.put('/gapp/store/:id',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_STORE']),
+    validate(updateStoreSchema),
+    asyncHandler(gappStoreController.updateStore));
+
+/**
+ * @route DELETE /gapp/store/:id
+ * @description Exclusão lógica de loja (gapp_store) — nunca remove a linha,
+ * só desativa via status_store = 0.
+ * @access Requer `GAPP_DELETE_STORE`
+ */
+router.delete('/gapp/store/:id',
+    authMiddleware,
+    canAll(['GAPP_DELETE_STORE']),
+    asyncHandler(gappStoreController.deleteStore));
 
 // ─── GAPP — Despesas de Ativo ───────────────────────────────────────────────
 

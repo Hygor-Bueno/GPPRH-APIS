@@ -276,6 +276,16 @@ function sqlGetPermissions() {
 }
 
 /**
+ * Retorna uma permissão pelo ID.
+ * Parâmetros: `[id]`
+ *
+ * @returns {string}
+ */
+function sqlGetPermissionById() {
+    return `SELECT id, code, description FROM _permissions WHERE id = ?`;
+}
+
+/**
  * Insere uma nova permissão.
  * Parâmetros: `[code, description]`
  *
@@ -487,6 +497,7 @@ module.exports = {
     sqlCountUsersByRole,
     // Permissões
     sqlGetPermissions,
+    sqlGetPermissionById,
     sqlInsertPermission,
     sqlUpdatePermission,
     sqlDeletePermission,

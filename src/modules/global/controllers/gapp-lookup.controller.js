@@ -1,64 +1,55 @@
-const { GappLookupService } = require('../services/gapp-lookup.service');
+const { GappLookupUseCases } = require('../application/gapp/lookup/gapp-lookup.use-cases');
+const { MysqlLookupRepository } = require('../infrastructure/gapp/mysql-lookup.repository');
 const { respond } = require('../../../utils/respond');
 
+const useCases = new GappLookupUseCases({ repository: new MysqlLookupRepository() });
+
 async function listUnits(req, res) {
-  const service = new GappLookupService();
-  return respond.ok(res, await service.listUnits());
+  return respond.ok(res, await useCases.listUnits());
 }
 
 async function listActiveClass(req, res) {
-  const service = new GappLookupService();
-  return respond.ok(res, await service.listActiveClass());
+  return respond.ok(res, await useCases.listActiveClass());
 }
 
 async function listWorkGroup(req, res) {
-  const service = new GappLookupService();
-  return respond.ok(res, await service.listWorkGroup());
+  return respond.ok(res, await useCases.listWorkGroup());
 }
 
 async function listDriver(req, res) {
-  const service = new GappLookupService();
-  return respond.ok(res, await service.listDriver());
+  return respond.ok(res, await useCases.listDriver());
 }
 
 async function listFuelType(req, res) {
-  const service = new GappLookupService();
-  return respond.ok(res, await service.listFuelType());
+  return respond.ok(res, await useCases.listFuelType());
 }
 
 async function listUser(req, res) {
-  const service = new GappLookupService();
-  return respond.ok(res, await service.listUser());
+  return respond.ok(res, await useCases.listUser());
 }
 
 async function listInsuranceCompany(req, res) {
-  const service = new GappLookupService();
-  return respond.ok(res, await service.listInsuranceCompany());
+  return respond.ok(res, await useCases.listInsuranceCompany());
 }
 
 async function listTypeCoverage(req, res) {
-  const service = new GappLookupService();
-  return respond.ok(res, await service.listTypeCoverage());
+  return respond.ok(res, await useCases.listTypeCoverage());
 }
 
 async function listUtilization(req, res) {
-  const service = new GappLookupService();
-  return respond.ok(res, await service.listUtilization());
+  return respond.ok(res, await useCases.listUtilization());
 }
 
 async function listDepartments(req, res) {
-  const service = new GappLookupService();
-  return respond.ok(res, await service.listDepartments());
+  return respond.ok(res, await useCases.listDepartments());
 }
 
 async function listDamageType(req, res) {
-  const service = new GappLookupService();
-  return respond.ok(res, await service.listDamageType());
+  return respond.ok(res, await useCases.listDamageType());
 }
 
 async function listInfractions(req, res) {
-  const service = new GappLookupService();
-  return respond.ok(res, await service.listInfractions());
+  return respond.ok(res, await useCases.listInfractions());
 }
 
 module.exports = {

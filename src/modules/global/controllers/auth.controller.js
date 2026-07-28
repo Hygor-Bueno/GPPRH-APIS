@@ -1,9 +1,18 @@
 const authService = require('../../../infra/auth/jwt.service.js');
 const { BadRequestError } = require("../../../errors/bad-request.error.js");
-const { GlobalService } = require("../services/auth.service.js");
-const { parseTime } = require('../../../utils/time-parser.js');
 const { UnauthorizedError } = require('../../../errors/unauthorized.error.js');
+const { parseTime } = require('../../../utils/time-parser.js');
 const { respond } = require('../../../utils/respond');
+const { AuthUseCases } = require('../application/auth/auth.use-cases');
+const { MysqlAuthRepository } = require('../infrastructure/auth/mysql-auth.repository');
+const { SqlServerProtheusEmployeeRepository } = require('../infrastructure/auth/sqlserver-protheus-employee.repository');
+const { LdapAuthenticatorAdapter } = require('../infrastructure/auth/ldap-authenticator.adapter');
+
+const useCases = new AuthUseCases({
+  repository: new MysqlAuthRepository(),
+  protheusRepository: new SqlServerProtheusEmployeeRepository(),
+  ldapAuthenticator: new LdapAuthenticatorAdapter(),
+});
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -49,9 +58,7 @@ async function globalLogin(req, res) {
   // Remove espaços do início e fim — autocomplete mobile pode inserir espaços
   const cleanUsername = username.trim();
 
-  const service = new GlobalService();
-  const payload = await service.controlleLogin(cleanUsername, password);
-  const user = await service.getGlobalUserForGuid(payload.guid || payload.id);
+  const user = await useCases.login(cleanUsername, password);
 
   await createSession(res, user);
 

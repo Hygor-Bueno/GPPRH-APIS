@@ -174,13 +174,17 @@ function spInsertEmployeeCompensation({ employee_id, compensation_id, value, bra
 /**
  * Enriquece uma lista de usuários com dados do Protheus (empresa, filial, centro de custo).
  *
- * Parâmetros: um input @r0, @r1, ... @r{n-1} por matrícula.
+ * Parâmetros: um par de inputs (@r0/@f0, @r1/@f1, ... @r{n-1}/@f{n-1}) por
+ * usuário — matrícula (RA_MAT) + filial (RA_FILIAL). A mesma matrícula pode
+ * existir em mais de uma filial no Protheus (transferência entre filiais,
+ * registro histórico); parear com a filial evita cruzar com o registro
+ * errado (ex: um antigo, já demitido, de outra filial).
  *
- * @param {number} count - Quantidade de matrículas
+ * @param {number} count - Quantidade de pares matrícula/filial
  * @returns {string} SQL com placeholders dinâmicos
  */
 function sqlGetUserOrganizationBatch(count) {
-    const placeholders = Array.from({ length: count }, (_, i) => `@r${i}`).join(', ');
+    const conditions = Array.from({ length: count }, (_, i) => `(RH.RA_MAT = @r${i} AND RH.RA_FILIAL = @f${i})`).join(' OR ');
     return `
         SELECT
             LTRIM(RTRIM(RH.RA_MAT))       AS registration,
@@ -197,7 +201,7 @@ function sqlGetUserOrganizationBatch(count) {
                 ON CC.CTT_CUSTO = RH.RA_CC AND CC.D_E_L_E_T_ <> '*'
             INNER JOIN TMPPRD12.dbo.SYS_COMPANY COMP
                 ON COMP.M0_CODFIL = RH.RA_FILIAL AND COMP.D_E_L_E_T_ <> '*'
-        WHERE RH.RA_MAT IN (${placeholders})
+        WHERE (${conditions})
           AND RH.D_E_L_E_T_ <> '*'
     `;
 }

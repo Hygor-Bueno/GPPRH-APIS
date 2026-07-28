@@ -58,13 +58,19 @@ async function generateReceipt(recibos) {
       page = await browserInstance.newPage();
 
       const html = gerarHtmlRecibos(recibos);
-      await page.setContent(html, { waitUntil: "networkidle0" });
+      // O HTML é auto-contido (logo embutido como data URI, sem fontes/recursos
+      // externos), então "networkidle0" deveria resolver quase instantaneamente.
+      // Timeout explícito é só uma rede de segurança — sem ele, cai no default
+      // do Puppeteer (30s) e, com os 3 retries, uma única requisição de recibo
+      // pode ficar pendurada por até ~90s.
+      await page.setContent(html, { waitUntil: "networkidle0", timeout: 10000 });
 
       const pdfBuffer = await page.pdf({
         format: "A4",
         printBackground: true,
         preferCSSPageSize: true,
-        margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" }
+        margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
+        timeout: 10000
       });
 
       return pdfBuffer;

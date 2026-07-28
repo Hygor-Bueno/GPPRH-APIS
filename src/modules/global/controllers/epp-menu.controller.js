@@ -3,11 +3,12 @@
  * @module modules/global/controllers/epp-menu.controller
  */
 
-const { EppMenuService } = require('../services/epp-menu.service');
+const { EppMenuUseCases } = require('../application/epp/menu/menu.use-cases');
+const { MysqlMenuRepository } = require('../infrastructure/epp/mysql-menu.repository');
 const { respond }        = require('../../../utils/respond');
 const { AppError }       = require('../../../errors/app.error');
 
-const service = new EppMenuService();
+const useCases = new EppMenuUseCases({ repository: new MysqlMenuRepository() });
 
 // ─── Menus ────────────────────────────────────────────────────────────────────
 
@@ -19,11 +20,11 @@ async function getMenus(req, res) {
     const { registration, id_menu, status, description } = req.query;
 
     if (id_menu || status !== undefined || description) {
-        const data = await service.searchMenus({ id_menu, status, description });
+        const data = await useCases.searchMenus({ id_menu, status, description });
         return respond.ok(res, data);
     }
 
-    const data = registration ? await service.getMenusAll() : await service.getMenus();
+    const data = registration ? await useCases.getMenusAll() : await useCases.getMenus();
     respond.ok(res, data);
 }
 
@@ -34,7 +35,7 @@ async function getMenus(req, res) {
 async function createMenu(req, res) {
     const { description, status } = req.body;
     if (!description) throw new AppError('Campo obrigatório: description', 400);
-    const data = await service.createMenu({ description, status });
+    const data = await useCases.createMenu({ description, status });
     respond.created(res, data);
 }
 
@@ -45,7 +46,7 @@ async function createMenu(req, res) {
 async function updateMenu(req, res) {
     const { description, status } = req.body;
     if (!description) throw new AppError('Campo obrigatório: description', 400);
-    const data = await service.updateMenu(req.params.id, { description, status });
+    const data = await useCases.updateMenu(req.params.id, { description, status });
     respond.ok(res, data);
 }
 
@@ -53,7 +54,7 @@ async function updateMenu(req, res) {
  * DELETE /epp/menus/:id
  */
 async function deleteMenu(req, res) {
-    await service.deleteMenu(req.params.id);
+    await useCases.deleteMenu(req.params.id);
     respond.message(res, 'Menu excluído com sucesso');
 }
 
@@ -66,8 +67,8 @@ async function deleteMenu(req, res) {
 async function getLogMenus(req, res) {
     const { plu_menu } = req.query;
     const data = plu_menu
-        ? await service.getLogMenusByPlu(plu_menu)
-        : await service.getLogMenus();
+        ? await useCases.getLogMenusByPlu(plu_menu)
+        : await useCases.getLogMenus();
     respond.ok(res, data);
 }
 
@@ -80,7 +81,7 @@ async function createLogMenu(req, res) {
     if (!epp_id_menu || !epp_id_product || !plu_menu) {
         throw new AppError('Campos obrigatórios: epp_id_menu, epp_id_product, plu_menu', 400);
     }
-    const data = await service.createLogMenu(req.body);
+    const data = await useCases.createLogMenu(req.body);
     respond.created(res, data);
 }
 
@@ -93,7 +94,7 @@ async function updateLogMenu(req, res) {
     if (!epp_id_menu || !epp_id_product || !plu_menu) {
         throw new AppError('Campos obrigatórios: epp_id_menu, epp_id_product, plu_menu', 400);
     }
-    const data = await service.updateLogMenu(req.params.id, req.body);
+    const data = await useCases.updateLogMenu(req.params.id, req.body);
     respond.ok(res, data);
 }
 
@@ -101,7 +102,7 @@ async function updateLogMenu(req, res) {
  * DELETE /epp/log-menus/:id
  */
 async function deleteLogMenuById(req, res) {
-    await service.deleteLogMenuById(req.params.id);
+    await useCases.deleteLogMenuById(req.params.id);
     respond.message(res, 'Item de menu excluído com sucesso');
 }
 
@@ -114,7 +115,7 @@ async function deleteLogMenuByPlu(req, res) {
     if (!plu_menu || !epp_id_menu) {
         throw new AppError('Campos obrigatórios: plu_menu, epp_id_menu', 400);
     }
-    const data = await service.deleteLogMenuByPlu(plu_menu, epp_id_menu);
+    const data = await useCases.deleteLogMenuByPlu(plu_menu, epp_id_menu);
     respond.ok(res, data);
 }
 

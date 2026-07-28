@@ -3,6 +3,44 @@ const adConfig = require('../../config/ad');
 const { UnauthorizedError } = require('../../errors/unauthorized.error');
 const { AppError } = require('../../errors/app.error');
 
+const OPERATION_TIMEOUT_MS = 5000;
+
+/**
+ * O `timeout`/`connectTimeout` do client ldapjs cobre a maioria dos casos,
+ * mas não é uma garantia — uma conexão meio-aberta (ex.: firewall descartando
+ * pacotes em silêncio) pode nunca emitir 'error' nem 'end', deixando a
+ * promise de bind()/search() pendurada pra sempre e travando a requisição de
+ * login. Esse wrapper força um teto de tempo independente do client.
+ */
+function withTimeout(promise, ms, onTimeout) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      if (onTimeout) onTimeout();
+      const err = new Error(`LDAP: timeout de ${ms}ms aguardando resposta do Active Directory`);
+      err.code = 'LDAP_TIMEOUT';
+      reject(err);
+    }, ms);
+
+    promise.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
 class LDAPAuthenticator {
   constructor(username, password) {
     this.url = adConfig.url;
@@ -50,8 +88,15 @@ class LDAPAuthenticator {
 
     // 🔐 bind inicial (valida usuário/senha)
     try {
-      await this.bind(searchClient, this.bindDN, this.password);
+      await withTimeout(
+        this.bind(searchClient, this.bindDN, this.password),
+        OPERATION_TIMEOUT_MS,
+        () => searchClient.destroy()
+      );
     } catch (err) {
+      if (err.code === 'LDAP_TIMEOUT') {
+        throw new AppError('Active Directory indisponível ou muito lento para responder', 503, { code: 'AD_UNAVAILABLE' });
+      }
       throw new UnauthorizedError('Invalid username or password');
     }
     
@@ -69,7 +114,7 @@ class LDAPAuthenticator {
       ]
     };
 
-    const user = await new Promise((resolve, reject) => {
+    const searchPromise = new Promise((resolve, reject) => {
       let found = null;
 
       searchClient.search(this.searchBase, opts, (err, res) => {
@@ -110,6 +155,16 @@ class LDAPAuthenticator {
         });
       });
     });
+
+    let user;
+    try {
+      user = await withTimeout(searchPromise, OPERATION_TIMEOUT_MS, () => searchClient.destroy());
+    } catch (err) {
+      if (err.code === 'LDAP_TIMEOUT') {
+        throw new AppError('Active Directory indisponível ou muito lento para responder', 503, { code: 'AD_UNAVAILABLE' });
+      }
+      throw err;
+    }
 
     searchClient.unbind();
 

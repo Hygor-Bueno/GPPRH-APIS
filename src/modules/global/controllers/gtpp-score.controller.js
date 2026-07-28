@@ -5,9 +5,12 @@
 
 'use strict';
 
-const { AppError }  = require('../../../errors/app.error');
-const { respond }   = require('../../../utils/respond');
-const scoreService  = require('../services/gtpp-score.service');
+const { AppError } = require('../../../errors/app.error');
+const { respond } = require('../../../utils/respond');
+const { GtppScoreUseCases } = require('../application/gtpp/score/gtpp-score.use-cases');
+const { MysqlScoreRepository } = require('../infrastructure/gtpp/mysql-score.repository');
+
+const useCases = new GtppScoreUseCases({ repository: new MysqlScoreRepository() });
 
 /**
  * GET /gtpp/score
@@ -20,17 +23,17 @@ async function getScore(req, res) {
     const { all, task_id } = req.query;
 
     if (task_id) {
-        const disqualify = await scoreService.getTaskDisqualify(parseInt(task_id, 10));
+        const disqualify = await useCases.getTaskDisqualify(parseInt(task_id, 10));
         return respond.ok(res, { disqualify });
     }
 
     if (!all || all === 'no') {
-        const score = await scoreService.getUserScore(req.user.id);
+        const score = await useCases.getUserScore(req.user.id);
         return respond.ok(res, score);
     }
 
     if (all === 'yes') {
-        const scores = await scoreService.getAllUsersScore();
+        const scores = await useCases.getAllUsersScore();
         return respond.ok(res, scores);
     }
 
@@ -49,7 +52,7 @@ async function updateDisqualify(req, res) {
     if (!taskId)                             throw new AppError('O parâmetro task_id é obrigatório.', 400);
     if (disqualify !== 0 && disqualify !== 1) throw new AppError('O parâmetro disqualify deve ser 0 ou 1.', 400);
 
-    await scoreService.updateTaskDisqualify(taskId, disqualify);
+    await useCases.updateTaskDisqualify(taskId, disqualify);
     return respond.message(res, 'Desqualificação atualizada com sucesso.');
 }
 

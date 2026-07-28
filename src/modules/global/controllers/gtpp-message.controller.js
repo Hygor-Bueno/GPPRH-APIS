@@ -5,13 +5,16 @@
 
 'use strict';
 
-const { AppError }           = require('../../../errors/app.error');
-const { respond }            = require('../../../utils/respond');
-const { broadcastGtppEvent } = require('../../../websocket/events/gtpp.event');
-const msgService             = require('../services/gtpp-message.service');
+const { AppError } = require('../../../errors/app.error');
+const { respond } = require('../../../utils/respond');
+const { GtppMessageUseCases } = require('../application/gtpp/message/gtpp-message.use-cases');
+const { MysqlMessageRepository } = require('../infrastructure/gtpp/mysql-message.repository');
+const { HttpGtppEventPublisher } = require('../infrastructure/gtpp/http-gtpp-event.publisher');
 
-const EV_MESSAGE         = 1;
-const EV_MESSAGE_DELETED = 10;
+const useCases = new GtppMessageUseCases({
+    repository: new MysqlMessageRepository(),
+    eventPublisher: new HttpGtppEventPublisher(),
+});
 
 /**
  * GET /gtpp/tasks/:taskId/messages
@@ -20,10 +23,9 @@ const EV_MESSAGE_DELETED = 10;
  */
 async function getTaskMessages(req, res) {
     const taskId = parseInt(req.params.taskId, 10);
-    const messages = await msgService.getTaskMessages(taskId);
+    const messages = await useCases.getTaskMessages(taskId);
     return respond.ok(res, messages);
 }
-
 
 /**
  * POST /gtpp/tasks/:taskId/messages
@@ -39,12 +41,10 @@ async function sendMessage(req, res) {
             ?? Buffer.from(req.file.originalname, 'latin1').toString('utf8');
     }
 
-    const message = await msgService.sendMessage(taskId, req.user.id, {
+    const message = await useCases.sendMessage(taskId, req.user.id, {
         description,
         file: req.file ?? null,
     });
-
-    broadcastGtppEvent(taskId, req.user.id, EV_MESSAGE, { action: 'created', ...message }).catch(() => {});
 
     return respond.created(res, message);
 }
@@ -60,12 +60,7 @@ async function deleteMessage(req, res) {
 
     if (!taskId) throw new AppError('O parâmetro task_id é obrigatório.', 400);
 
-    await msgService.deleteMessage(messageId, taskId);
-
-    broadcastGtppEvent(taskId, req.user.id, EV_MESSAGE_DELETED, {
-        action: 'deleted',
-        id:     messageId,
-    }).catch(() => {});
+    await useCases.deleteMessage(messageId, taskId, req.user.id);
 
     return respond.message(res, 'Mensagem excluída com sucesso.');
 }

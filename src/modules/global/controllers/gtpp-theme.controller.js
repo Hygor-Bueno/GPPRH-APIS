@@ -5,9 +5,11 @@
 
 'use strict';
 
-const { AppError }  = require('../../../errors/app.error');
-const { respond }   = require('../../../utils/respond');
-const themeService  = require('../services/gtpp-theme.service');
+const { respond } = require('../../../utils/respond');
+const { GtppThemeUseCases } = require('../application/gtpp/theme/gtpp-theme.use-cases');
+const { MysqlThemeRepository } = require('../infrastructure/gtpp/mysql-theme.repository');
+
+const useCases = new GtppThemeUseCases({ repository: new MysqlThemeRepository() });
 
 /**
  * GET /gtpp/themes
@@ -20,14 +22,14 @@ async function getThemes(req, res) {
     const { all, id } = req.query;
 
     if (all === 'true' || all === '1') {
-        return respond.ok(res, await themeService.getAllThemes());
+        return respond.ok(res, await useCases.getAllThemes());
     }
 
     if (id) {
-        return respond.ok(res, await themeService.getThemeById(parseInt(id, 10)));
+        return respond.ok(res, await useCases.getThemeById(parseInt(id, 10)));
     }
 
-    return respond.ok(res, await themeService.getThemesByUser(req.user.id));
+    return respond.ok(res, await useCases.getThemesByUser(req.user.id));
 }
 
 /**
@@ -37,7 +39,7 @@ async function getThemes(req, res) {
  */
 async function createTheme(req, res) {
     const { description_theme } = req.body;
-    const result = await themeService.createTheme(req.user.id, description_theme);
+    const result = await useCases.createTheme(req.user.id, description_theme);
     return respond.created(res, result);
 }
 
@@ -49,7 +51,7 @@ async function createTheme(req, res) {
 async function updateTheme(req, res) {
     const themeId = parseInt(req.params.id, 10);
     const { description_theme } = req.body;
-    await themeService.updateTheme(themeId, description_theme);
+    await useCases.updateTheme(themeId, description_theme);
     return respond.message(res, 'Tema atualizado com sucesso.');
 }
 
@@ -59,7 +61,7 @@ async function updateTheme(req, res) {
  */
 async function deleteTheme(req, res) {
     const themeId = parseInt(req.params.id, 10);
-    await themeService.deleteTheme(themeId);
+    await useCases.deleteTheme(themeId);
     return respond.message(res, 'Tema excluído com sucesso.');
 }
 

@@ -5,11 +5,18 @@
 
 'use strict';
 
-const { AppError }        = require('../../../errors/app.error');
 const { respond }         = require('../../../utils/respond');
-const scopeService        = require('../services/gtpp-task-scope.service');
-const taskService         = require('../services/gtpp-task.service');
-const protheusService     = require('../../protheus/services/protheus.service');
+const { ProtheusUseCases } = require('../../protheus/application/protheus.use-cases');
+const { SqlServerProtheusRepository } = require('../../protheus/infrastructure/sqlserver-protheus.repository');
+const { GtppTaskScopeUseCases } = require('../application/gtpp/task-scope/gtpp-task-scope.use-cases');
+const { MysqlTaskScopeRepository } = require('../infrastructure/gtpp/mysql-task-scope.repository');
+const { MysqlGtppTaskGuardRepository } = require('../infrastructure/gtpp/mysql-gtpp-task-guard.repository');
+
+const useCases = new GtppTaskScopeUseCases({
+    repository: new MysqlTaskScopeRepository(),
+    taskGuardRepository: new MysqlGtppTaskGuardRepository(),
+});
+const protheusUseCases = new ProtheusUseCases({ repository: new SqlServerProtheusRepository() });
 
 /**
  * GET /gtpp/tasks/:taskId/scope
@@ -17,7 +24,7 @@ const protheusService     = require('../../protheus/services/protheus.service');
  */
 async function getTaskScope(req, res) {
     const taskId = parseInt(req.params.taskId, 10);
-    const scope  = await scopeService.getTaskScope(taskId);
+    const scope  = await useCases.getTaskScope(taskId);
 
     if (scope.length === 0) return respond.ok(res, []);
 
@@ -25,11 +32,11 @@ async function getTaskScope(req, res) {
     const companyCodes = [...new Set(scope.map(s => s.company_code).filter(Boolean))];
 
     const [companies, ...branchesAndCCs] = await Promise.all([
-        protheusService.getCompanies().catch(() => []),
+        protheusUseCases.getCompanies().catch(() => []),
         ...companyCodes.map(code =>
             Promise.all([
-                protheusService.getBranches(code).catch(() => []),
-                protheusService.getCostCenters(code).catch(() => []),
+                protheusUseCases.getBranches(code).catch(() => []),
+                protheusUseCases.getCostCenters(code).catch(() => []),
             ])
         ),
     ]);
@@ -62,16 +69,9 @@ async function getTaskScope(req, res) {
  */
 async function addTaskScope(req, res) {
     const taskId = parseInt(req.params.taskId, 10);
-
-    await taskService.verifyTaskEditable(taskId);
-
     const { company_code, branch_code, cost_center_code } = req.body;
 
-    const result = await scopeService.addTaskScope(taskId, {
-        company_code:      company_code      ?? null,
-        branch_code:       branch_code       ?? null,
-        cost_center_code:  cost_center_code  ?? null,
-    });
+    const result = await useCases.addTaskScope(taskId, { company_code, branch_code, cost_center_code });
 
     return respond.created(res, result);
 }
@@ -84,8 +84,7 @@ async function removeTaskScope(req, res) {
     const taskId  = parseInt(req.params.taskId, 10);
     const scopeId = parseInt(req.params.id, 10);
 
-    await taskService.verifyTaskEditable(taskId);
-    await scopeService.removeTaskScope(taskId, scopeId);
+    await useCases.removeTaskScope(taskId, scopeId);
 
     return respond.message(res, 'Escopo removido com sucesso.');
 }

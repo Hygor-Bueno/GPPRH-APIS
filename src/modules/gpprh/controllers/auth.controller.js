@@ -1,14 +1,19 @@
 const JwtService = require('../../../infra/auth/jwt.service.js');
-const bcrypt = require("bcrypt");
 const { parseTime } = require('../../../utils/time-parser.js');
-const { GoogleAuthService } = require('../providers/google-auth.service.js');
 const { User } = require('../domain/user.entity');
-const LDAPAuthenticator = require('../../../infra/auth/ldap-auth.service');
-const { GpprhService } = require('../services/gpprh.service.js');
 const { UnauthorizedError } = require('../../../errors/unauthorized.error.js');
 const { BadRequestError } = require('../../../errors/bad-request.error.js');
-const { AppError } = require('../../../errors/app.error.js');
 const { respond } = require('../../../utils/respond.js');
+const { GpprhLoginUseCases } = require('../application/gpprh-login.use-cases');
+const { MysqlGpprhRepository } = require('../infrastructure/mysql-gpprh.repository');
+const { GoogleTokenVerifierAdapter } = require('../infrastructure/google-token-verifier.adapter');
+const { LdapAuthenticatorAdapter } = require('../infrastructure/ldap-authenticator.adapter');
+
+const useCases = new GpprhLoginUseCases({
+  repository: new MysqlGpprhRepository(),
+  ldapAuthenticator: new LdapAuthenticatorAdapter(),
+  googleTokenVerifier: new GoogleTokenVerifierAdapter(),
+});
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -51,16 +56,7 @@ const login = async (req, res) => {
     throw new BadRequestError('Username and password are required');
   }
 
-  const auth = await new LDAPAuthenticator(
-    username,
-    password
-  ).authenticateUser(username, password);
-
-  const service = new GpprhService(auth.guid);
-
-  await service.spAdLogin(auth.name);
-
-  const payload = await service.getUser();
+  const payload = await useCases.loginViaAd(username, password);
 
   await createSession(res, payload);
 
@@ -91,25 +87,8 @@ const googleLogin = async (req, res) => {
     throw new BadRequestError('Google credential not found');
   }
 
-  const payload = await GoogleAuthService.login(credential);
+  const user = await useCases.loginViaGoogle(credential);
 
-  if (!payload?.email) {
-    throw new AppError(
-      'Invalid Google payload',
-      401,
-      { code: 'GOOGLE_AUTH_INVALID' }
-    );
-  }
-
-  const service = new GpprhService(payload.email);
-
-  const user = await service.spCandidateLogin(
-    payload.name,
-    payload.email
-  );
-
-  user.roles = 'CANDIDATE';
-  user.permissions = 'CANDIDATE';
   await createSession(res, user);
 
   return respond.message(res, 'Logged in successfully');

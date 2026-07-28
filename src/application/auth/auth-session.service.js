@@ -1,6 +1,9 @@
 // authHelper.js
 const authService = require("../../infra/auth/jwt.service.js");
-const { AccessService } = require("../../modules/global/services/access.service.js");
+const { AccessUseCases } = require("../../modules/global/application/access/access.use-cases");
+const { MysqlAccessRepository } = require("../../modules/global/infrastructure/access/mysql-access.repository");
+
+const accessUseCases = new AccessUseCases({ repository: new MysqlAccessRepository() });
 
 async function authenticateFromCookies(cookies) {
     const accessToken = cookies.accessToken;
@@ -41,7 +44,7 @@ async function authenticateFromCookies(cookies) {
         // bloqueio feito em access/users se reflete no próximo access token,
         // em vez de só quando o refresh token expirar por completo.
         if (payload.status !== undefined) {
-            const fresh = await new AccessService().getUserById(payload.id);
+            const fresh = await accessUseCases.getUserById(payload.id);
             payload.status      = fresh.ad_status;
             payload.roles       = fresh.roles       ? fresh.roles.split(',')       : [];
             payload.permissions = fresh.permissions  ? fresh.permissions.split(',') : [];

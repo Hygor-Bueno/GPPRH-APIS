@@ -3,11 +3,16 @@
  * @module modules/global/controllers/epp-stock.controller
  */
 
-const { EppStockService } = require('../services/epp-stock.service');
+const { EppStockUseCases } = require('../application/epp/stock/stock.use-cases');
+const { MysqlStockRepository } = require('../infrastructure/epp/mysql-stock.repository');
+const { OracleEppRepository } = require('../infrastructure/epp/oracle-epp.repository');
 const { respond }         = require('../../../utils/respond');
 const { AppError }        = require('../../../errors/app.error');
 
-const service = new EppStockService();
+const useCases = new EppStockUseCases({
+    repository: new MysqlStockRepository(),
+    oracleRepository: new OracleEppRepository(),
+});
 
 /**
  * GET /epp/stock
@@ -21,17 +26,17 @@ async function getStock(req, res) {
 
     if (history) {
         if (!id_product_fk) throw new AppError('Parâmetro obrigatório: id_product_fk', 400);
-        const data = await service.getStockHistory(id_product_fk);
+        const data = await useCases.getStockHistory(id_product_fk);
         return respond.ok(res, data);
     }
 
     if (pending_production) {
-        const data = await service.getPendingProduction(page ?? 1);
+        const data = await useCases.getPendingProduction(page ?? 1);
         return respond.ok(res, data);
     }
 
     if (stock) {
-        const data = await service.getStock(id_product_fk ?? null);
+        const data = await useCases.getStock(id_product_fk ?? null);
         return respond.ok(res, data);
     }
 
@@ -50,7 +55,7 @@ async function createStock(req, res) {
     if (missing.length) {
         throw new AppError(`Campos obrigatórios ausentes: ${missing.join(', ')}`, 400);
     }
-    const data = await service.createStock(req.body);
+    const data = await useCases.createStock(req.body);
     respond.created(res, data);
 }
 
@@ -66,7 +71,7 @@ async function updateStock(req, res) {
     if (!updated_by) throw new AppError('Campo obrigatório: updated_by', 400);
 
     const allFields = { ...fields, updated_by };
-    const data = await service.updateStock(req.params.id, allFields);
+    const data = await useCases.updateStock(req.params.id, allFields);
     respond.ok(res, data);
 }
 

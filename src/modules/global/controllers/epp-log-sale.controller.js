@@ -3,11 +3,16 @@
  * @module modules/global/controllers/epp-log-sale.controller
  */
 
-const { EppLogSaleService } = require('../services/epp-log-sale.service');
+const { EppLogSaleUseCases } = require('../application/epp/log-sale/log-sale.use-cases');
+const { MysqlLogSaleRepository } = require('../infrastructure/epp/mysql-log-sale.repository');
+const { OracleEppRepository } = require('../infrastructure/epp/oracle-epp.repository');
 const { respond }           = require('../../../utils/respond');
 const { AppError }          = require('../../../errors/app.error');
 
-const service = new EppLogSaleService();
+const useCases = new EppLogSaleUseCases({
+    repository: new MysqlLogSaleRepository(),
+    oracleRepository: new OracleEppRepository(),
+});
 
 /**
  * GET /epp/log-sales
@@ -23,29 +28,29 @@ async function getLogSales(req, res) {
 
     if (oracle_receipe) {
         if (!seq_produto) throw new AppError('Parâmetro obrigatório: seq_produto', 400);
-        const data = await service.getOracleReceipe(Number(seq_produto));
+        const data = await useCases.getOracleReceipe(Number(seq_produto));
         return respond.ok(res, data);
     }
 
     if (mobile) {
         const { mobile: _, ...filters } = req.query;
-        const data = await service.getMobileView(filters);
+        const data = await useCases.getMobileView(filters);
         return respond.ok(res, data);
     }
 
     if (controller) {
         // Passa todos os query params como filtros (exceto 'controller')
         const { controller: _, ...filters } = req.query;
-        const data = await service.getControllerView(filters);
+        const data = await useCases.getControllerView(filters);
         return respond.ok(res, data);
     }
 
     if (epp_id_order) {
-        const data = await service.getLogSalesByOrder(epp_id_order);
+        const data = await useCases.getLogSalesByOrder(epp_id_order);
         return respond.ok(res, data);
     }
 
-    const data = await service.getLogSales();
+    const data = await useCases.getLogSales();
     respond.ok(res, data);
 }
 
@@ -58,7 +63,7 @@ async function createLogSale(req, res) {
     if (!epp_id_order || !epp_id_product || quantity == null || price == null) {
         throw new AppError('Campos obrigatórios: epp_id_order, epp_id_product, quantity, price', 400);
     }
-    const data = await service.createLogSale(req.body);
+    const data = await useCases.createLogSale(req.body);
     respond.created(res, data);
 }
 
@@ -71,7 +76,7 @@ async function updateLogSale(req, res) {
     if (!epp_id_order || !epp_id_product || quantity == null || price == null) {
         throw new AppError('Campos obrigatórios: epp_id_order, epp_id_product, quantity, price', 400);
     }
-    const data = await service.updateLogSale(req.params.id, req.body);
+    const data = await useCases.updateLogSale(req.params.id, req.body);
     respond.ok(res, data);
 }
 
@@ -79,7 +84,7 @@ async function updateLogSale(req, res) {
  * DELETE /epp/log-sales/:id
  */
 async function deleteLogSaleById(req, res) {
-    await service.deleteLogSaleById(req.params.id);
+    await useCases.deleteLogSaleById(req.params.id);
     respond.message(res, 'Item de venda excluído com sucesso');
 }
 
@@ -87,7 +92,7 @@ async function deleteLogSaleById(req, res) {
  * DELETE /epp/log-sales/order/:orderId
  */
 async function deleteLogSaleByOrder(req, res) {
-    const data = await service.deleteLogSaleByOrder(req.params.orderId);
+    const data = await useCases.deleteLogSaleByOrder(req.params.orderId);
     respond.ok(res, data);
 }
 

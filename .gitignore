@@ -13,6 +13,10 @@
 # testing
 /coverage
 
+# uploaded/generated content
+/storage
+/uploads
+
 # next.js
 /.next/
 /out/

@@ -11,11 +11,21 @@ const config = {
     encrypt: (process.env.GIPP_SQLSERVER_DB_OPTIONS_ENCRYPT === 'true'),
     enableArithAbort: true
   },
-  requestTimeout: 60000,
+  // Reduzido de 60s pra 30s — alinhado com config/protheus.js, ainda generoso
+  // pro processamento de jornada/recibo, sem deixar uma query travada seguras
+  // a conexão por 1 minuto inteiro.
+  requestTimeout: 30000,
   pool: {
-    max: 10,
+    // 20 por instância x 2 instâncias do PM2 (cluster) = 40 conexões concorrentes,
+    // validado empiricamente em 2026-07 (40/40 aceitas em ~112ms, sem recusa).
+    // Cálculo de pico esperado (~1000 colaboradores, uso escalonado 06h-22h,
+    // rajada de troca de turno): ~10-15 conexões simultâneas — 40 dá margem confortável.
+    max: 20,
     min: 0,
-    idleTimeoutMillis: 30000
+    idleTimeoutMillis: 30000,
+    // Sem isso, o default implícito da lib tarn (30s) fica sujeito a mudar
+    // de versão para versão. Deixamos explícito e alinhado ao timeout do MySQL.
+    acquireTimeoutMillis: 10000
   }
 };
 
