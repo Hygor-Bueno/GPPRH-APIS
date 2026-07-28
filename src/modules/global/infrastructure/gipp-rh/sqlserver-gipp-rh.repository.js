@@ -22,7 +22,7 @@ const {
     sqlGetReceipt,
     sqlGetPaymentTypes,
     sqlGetReceiptsByGroupIds,
-} = require('../../repositories/sqlserver/gipp-rh.repository');
+} = require('../../repositories/sqlserver/gipp-rh.queries');
 
 class SqlServerGippRhRepository extends GippRhRepositoryPort {
     /** @private */

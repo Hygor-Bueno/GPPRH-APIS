@@ -13,7 +13,7 @@ const {
     sqlPatchPayee,
     sqlDeletePayee,
     PATCH_PAYEE_FIELDS,
-} = require('../../repositories/sqlserver/payee.repository');
+} = require('../../repositories/sqlserver/payee.queries');
 
 class SqlServerPayeeRepository extends PayeeRepositoryPort {
     /** @private */

@@ -9,7 +9,7 @@
  * IDs usados nas cláusulas IN vêm exclusivamente do banco MySQL interno —
  * não de input do usuário — por isso o buildIntList é seguro aqui.
  *
- * @module modules/global/repositories/oracle/epp.oracle.repository
+ * @module modules/global/repositories/oracle/epp.oracle.queries
  */
 
 const { oracleQuery, buildIntList } = require('../../../../config/oracle');

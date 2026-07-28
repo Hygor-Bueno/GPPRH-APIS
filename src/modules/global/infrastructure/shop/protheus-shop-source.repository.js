@@ -7,7 +7,7 @@ const { poolPromise } = require('../../../../config/sqlserver');
 const { AppError } = require('../../../../errors/app.error');
 const { ShopExternalSourceRepositoryPort } = require('../../application/shop/ports/shop-external-source-repository.port');
 const { normalizeCnpj } = require('../../domain/shop/shop-audit.shaper');
-const { sqlGetProtheusShops } = require('../../repositories/sqlserver/shop.repository');
+const { sqlGetProtheusShops } = require('../../repositories/sqlserver/shop.queries');
 
 class ProtheusShopSourceRepository extends ShopExternalSourceRepositoryPort {
     async findAll() {

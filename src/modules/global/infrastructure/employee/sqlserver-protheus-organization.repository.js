@@ -6,7 +6,7 @@
 const { poolPromise } = require('../../../../config/protheus');
 const { AppError } = require('../../../../errors/app.error');
 const { ProtheusOrganizationRepositoryPort } = require('../../application/employee/ports/protheus-organization-repository.port');
-const { sqlGetUserOrganizationBatch } = require('../../../protheus/repositories/cost-center.repository');
+const { sqlGetUserOrganizationBatch } = require('../../../protheus/repositories/cost-center.queries');
 
 class SqlServerProtheusOrganizationRepository extends ProtheusOrganizationRepositoryPort {
     async findOrganizationBatch(pairs) {

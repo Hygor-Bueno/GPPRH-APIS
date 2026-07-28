@@ -6,7 +6,7 @@
 const { poolPromise, sql } = require('../../../../config/protheus');
 const { AppError } = require('../../../../errors/app.error');
 const { ProtheusEmployeeRepositoryPort } = require('../../application/auth/ports/protheus-employee-repository.port');
-const { sqlEmployeeData, sqlMapUserWithOrganization } = require('../../../protheus/repositories/cost-center.repository');
+const { sqlEmployeeData, sqlMapUserWithOrganization } = require('../../../protheus/repositories/cost-center.queries');
 
 class SqlServerProtheusEmployeeRepository extends ProtheusEmployeeRepositoryPort {
     async findEmployeeDataByName(name) {

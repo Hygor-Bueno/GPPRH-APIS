@@ -40,7 +40,7 @@ const { detect }                  = require('./mime-detector');
 const { sanitizeFilename, validateExtension, validateMimeExtensionMatch, validateModule } = require('./validators');
 const { scanForBinaryThreats, scanPdfContent, scanForCode, checkTextComplexity, checkZipBomb, checkImageDimensions } = require('./scanners');
 const { MAX_FILE_BYTES, MIME_TO_EXT } = require('./constants');
-const { sqlFindByHash, sqlFindById, sqlInsertFile, sqlSoftDeleteFile } = require('../../modules/global/repositories/mysql/files.repository');
+const { sqlFindByHash, sqlFindById, sqlInsertFile, sqlSoftDeleteFile } = require('../../modules/global/repositories/mysql/files.queries');
 
 // ─── Constantes de armazenamento ──────────────────────────────────────────────
 

@@ -4,7 +4,7 @@
  * Centraliza todas as queries SQL para gerenciamento de arquivos físicos
  * registrados na tabela `global._files`.
  *
- * @module modules/global/repositories/mysql/files.repository
+ * @module modules/global/repositories/mysql/files.queries
  */
 
 /**

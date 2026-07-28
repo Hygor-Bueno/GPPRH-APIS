@@ -1,7 +1,7 @@
 /**
  * @fileoverview Adapter Oracle — implementa `OracleEppRepositoryPort`.
  *
- * Delega 1:1 para `repositories/oracle/epp.oracle.repository.js` (inalterado).
+ * Delega 1:1 para `repositories/oracle/epp.oracle.queries.js` (inalterado).
  * Compartilhado entre product/stock/log-sale/order.
  *
  * @module modules/global/infrastructure/epp/oracle-epp.repository
@@ -15,7 +15,7 @@ const {
     getReceipeByProducts,
     getRawMaterialQtyFromMenus,
     getEcommerceOrder,
-} = require('../../repositories/oracle/epp.oracle.repository');
+} = require('../../repositories/oracle/epp.oracle.queries');
 
 class OracleEppRepository extends OracleEppRepositoryPort {
     async getProductDescriptions(seqProdutos) {

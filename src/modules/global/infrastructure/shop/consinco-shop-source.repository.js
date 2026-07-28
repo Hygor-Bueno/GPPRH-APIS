@@ -7,7 +7,7 @@ const { oracleQuery } = require('../../../../config/oracle');
 const { AppError } = require('../../../../errors/app.error');
 const { ShopExternalSourceRepositoryPort } = require('../../application/shop/ports/shop-external-source-repository.port');
 const { normalizeCnpj } = require('../../domain/shop/shop-audit.shaper');
-const { sqlGetConsincoShops } = require('../../repositories/oracle/shop.repository');
+const { sqlGetConsincoShops } = require('../../repositories/oracle/shop.queries');
 
 class ConsincoShopSourceRepository extends ShopExternalSourceRepositoryPort {
     async findAll() {

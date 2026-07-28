@@ -5,7 +5,7 @@
 
 const { poolPromise } = require('../../../config/protheus');
 const { ProtheusRepositoryPort } = require('../application/ports/protheus-repository.port');
-const { sqlCostCenter, sqlBranch, sqlAllBranches, sqlCompany } = require('../repositories/cost-center.repository');
+const { sqlCostCenter, sqlBranch, sqlAllBranches, sqlCompany } = require('../repositories/cost-center.queries');
 
 class SqlServerProtheusRepository extends ProtheusRepositoryPort {
     async findCostCenters(companyCode) {

@@ -23,7 +23,7 @@ const {
     sqlGetWorkDurations,
     sqlCheckExistingReceipt,
     sqlGetTimeRecordsForValidation,
-} = require('../repositories/sqlserver/gipp.repository');
+} = require('../repositories/sqlserver/gipp.queries');
 
 class SqlServerGippRepository extends GippRepositoryPort {
     /** @private */
