@@ -67,6 +67,69 @@ function buildGetTasksQuery({ stateId = null, limit = 50, offset = 0 } = {}) {
     return { sql, extraParams: stateId != null ? [stateId] : [] };
 }
 
+/**
+ * Monta a query de listagem de tarefas pra MÚLTIPLOS estados de uma vez
+ * (usada pelo board/kanban) — uma única ida ao banco em vez de uma conexão
+ * por state_id. Pagina de forma independente POR estado com ROW_NUMBER()
+ * (requer MySQL 8.0+), então cada coluna do board recebe até `limit` tarefas
+ * a partir de `offset`, exatamente como se cada uma tivesse sido paginada
+ * separadamente.
+ *
+ * Parâmetros posicionais gerados: [userId, userId, userId, ...stateIds]
+ * (offset/limit inlinados na mesma lógica de segurança do buildGetTasksQuery.)
+ */
+function buildGetTasksBoardQuery({ stateIds, limit = 20, offset = 0 }) {
+    const safeLimit  = parseInt(limit,  10) || 20;
+    const safeOffset = parseInt(offset, 10) || 0;
+    const statePlaceholders = stateIds.map(() => '?').join(', ');
+
+    const sql = `
+  SELECT * FROM (
+    SELECT
+      t.id,
+      t.description,
+      t.user_id,
+      ts.description AS state_description,
+      MAX(th.description_theme) AS description_theme,
+      COALESCE(MAX(th.id_theme), 0) AS theme_id_fk,
+      ts.id AS state_id,
+      t.priority,
+      t.initial_date,
+      t.final_date,
+      COALESCE(task_users.total_users, 0) AS users,
+      DATEDIFF(t.final_date, CURDATE()) AS expire,
+      ROUND(COALESCE(
+        (SELECT COUNT(i.id) FROM gt_task_item i WHERE i.task_id = t.id AND i.\`check\` = 1 AND i.status = 1)
+        / NULLIF((SELECT COUNT(i.id) FROM gt_task_item i WHERE i.task_id = t.id AND i.status = 1), 0)
+        * 100, 0
+      )) AS percent,
+      (
+        SELECT GROUP_CONCAT(tu2.user_id ORDER BY tu2.user_id)
+        FROM gt_task_user tu2
+        WHERE tu2.task_id = t.id
+      ) AS colabs_raw,
+      ROW_NUMBER() OVER (PARTITION BY t.state_id ORDER BY t.id DESC) AS rn
+    FROM gt_task t
+    INNER JOIN gt_task_state ts ON t.state_id = ts.id
+    INNER JOIN _user u ON t.user_id = u.id
+    LEFT JOIN gt_task_user tu ON tu.task_id = t.id AND tu.user_id = ?
+    LEFT JOIN gt_theme th ON th.id_theme = tu.theme_id_fk
+    LEFT JOIN (
+      SELECT task_id, COUNT(*) AS total_users
+      FROM gt_task_user GROUP BY task_id
+    ) task_users ON task_users.task_id = t.id
+    WHERE (t.user_id = ? OR tu.user_id = ?)
+      AND t.state_id IN (${statePlaceholders})
+    GROUP BY t.id, t.description, t.user_id, ts.description, ts.id,
+             t.priority, t.initial_date, t.final_date, task_users.total_users
+  ) ranked
+  WHERE rn > ${safeOffset} AND rn <= ${safeOffset + safeLimit}
+  ORDER BY state_id, id DESC
+    `;
+
+    return { sql, extraParams: stateIds };
+}
+
 /** Descrição completa + estado de uma tarefa, para montagem do detalhe (getTaskById). */
 const SQL_GET_TASK_DETAIL = `SELECT full_description, state_id FROM gt_task WHERE id = ?`;
 
@@ -194,6 +257,7 @@ const SQL_GET_TASK_CSDS = `
 
 module.exports = {
     buildGetTasksQuery,
+    buildGetTasksBoardQuery,
     SQL_GET_TASK_DETAIL,
     SQL_INSERT_TASK,
     SQL_INSERT_TASK_USER_SELF,

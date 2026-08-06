@@ -18,11 +18,30 @@ function sqlGetStatus() {
 /**
  * Retorna o resumo de jornadas de trabalho com horas e pagamentos calculados,
  * a partir da view vw_employee_work_summary.
- * A view filtra apenas jornadas com status 1 (Pendente) e 2 (Calculando).
- * @returns {string} Query SQL
+ *
+ * Filtra por filial e/ou centro de custo — ambos opcionais e combináveis (AND).
+ * O padrão `@x IS NULL OR ...` deixa cada filtro inerte quando não informado.
+ *
+ * Como são marcações em aberto, não há filtro de período: a view não expõe
+ * coluna de data (a data só existe embutida no prefixo de cod_work_schedule_fk).
+ *
+ * branch_cod é zero-padded em 4 posições na view ('0208'), então normalizamos
+ * os dois lados da comparação — assim tanto '208' quanto '0208' encontram a
+ * filial, seguindo o mesmo padrão de sqlGetTimeRecordsByCodWork.
+ *
+ * @returns {string} Query SQL — requer parâmetros @branch e @cost_center
  */
 function sqlGetPaymentRegistered() {
-    return `SELECT * FROM GIPP.dbo.vw_employee_work_summary;`;
+    return `
+        SELECT *
+        FROM GIPP.dbo.vw_employee_work_summary
+        WHERE (@branch IS NULL
+               OR RIGHT('0000' + LTRIM(RTRIM(branch_cod)), 4)
+                = RIGHT('0000' + LTRIM(RTRIM(@branch)), 4))
+          AND (@cost_center IS NULL
+               OR LTRIM(RTRIM(cost_center)) = LTRIM(RTRIM(@cost_center)))
+        ORDER BY collaborator;
+    `;
 }
 // Versão anterior com campos formatados (mantida como referência):
 // function sqlGetPaymentRegistered() {

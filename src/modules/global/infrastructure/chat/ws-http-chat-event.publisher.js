@@ -11,8 +11,13 @@
 const axios = require('axios');
 const { ChatEventPublisherPort } = require('../../application/chat/ports/chat-event-publisher.port');
 
-/** URL interna do servidor WebSocket para emissão de eventos. @constant {string} */
-const WS_EMIT_URL = 'http://localhost:4001/ws/emit-event';
+/**
+ * URL interna do servidor WebSocket para emissão de eventos. Default assume
+ * mesmo host (PM2). Em containers separados, sobrescrever via `WS_EMIT_URL`
+ * apontando pro nome do container na rede Docker (ex.: `http://ws-interno:4001/ws/emit-event`).
+ * @constant {string}
+ */
+const WS_EMIT_URL = process.env.WS_EMIT_URL || 'http://localhost:4001/ws/emit-event';
 
 class WsHttpChatEventPublisher extends ChatEventPublisherPort {
     async publishMessageSent(message) {

@@ -14,8 +14,16 @@ async function getStatus(req, res) {
     return respond.ok(res, data);
 }
 
+// Aceita os nomes das colunas da view (branch_cod / cost_center) como alias dos
+// params camelCase usados nas outras rotas, pra não obrigar o front a traduzir.
 async function getPaymentRegistered(req, res) {
-    const data = await useCases.getPaymentRegistered();
+    const { branch, branch_cod, costCenter, cost_center } = req.query;
+
+    const data = await useCases.getPaymentRegistered({
+        branch: branch ?? branch_cod,
+        costCenter: costCenter ?? cost_center,
+    });
+
     return respond.ok(res, data);
 }
 

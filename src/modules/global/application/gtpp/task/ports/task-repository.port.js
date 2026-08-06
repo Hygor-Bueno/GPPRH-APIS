@@ -17,6 +17,16 @@ class TaskRepositoryPort {
      */
     findTasksForUser(userId, opts) { throw new Error('Not implemented'); }
 
+    /**
+     * Igual a `findTasksForUser`, mas pra vários estados numa única chamada
+     * (usado pelo board/kanban) — implementações devem resolver isso numa
+     * única ida ao banco, não em N chamadas a `findTasksForUser`.
+     * @param {number} userId
+     * @param {{stateIds: number[], limit: number, offset: number}} opts
+     * @returns {Promise<object[]>} linhas de todos os estados, cada uma com `state_id`
+     */
+    findTasksForUserByStates(userId, opts) { throw new Error('Not implemented'); }
+
     /** @param {number} taskId @returns {Promise<object|null>} */
     findTaskDetail(taskId) { throw new Error('Not implemented'); }
 

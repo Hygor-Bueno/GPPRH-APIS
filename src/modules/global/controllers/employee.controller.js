@@ -39,9 +39,11 @@ async function postPhotoEmployee(req, res) {
         throw new AppError('The file must be an image', 400);
     }
 
-    // Rota sem authMiddleware (autenticação gerenciada pelo front via cookie) —
-    // usa o próprio id do colaborador como ator para o provenance do FileService.
-    await useCases.updateEmployeePhoto(id, req.file, Number(id));
+    // Basta estar autenticado — não há permissão específica para foto. O ator do
+    // provenance é quem enviou (req.user.id), não o dono da foto: sem isso uma
+    // troca feita por outra pessoa ficava registrada como se o próprio
+    // colaborador tivesse enviado.
+    await useCases.updateEmployeePhoto(id, req.file, req.user.id);
 
     respond.message(res, 'Photo saved successfully');
 }

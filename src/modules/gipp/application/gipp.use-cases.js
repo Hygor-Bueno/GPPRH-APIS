@@ -13,6 +13,18 @@ const { AppError } = require('../../../errors/app.error');
 const { validateTimeRecords } = require('../domain/time-record-validation.rules');
 const { buildReceiptItems } = require('../domain/receipt-items.builder');
 
+/**
+ * Normaliza filtro vindo da query string: string vazia ou só espaços vira null,
+ * pra não ser confundida com filtro informado.
+ * @param {*} value
+ * @returns {?string}
+ */
+function trimOrNull(value) {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    return trimmed === '' ? null : trimmed;
+}
+
 class GippUseCases {
     /**
      * @param {{
@@ -31,8 +43,24 @@ class GippUseCases {
         return this.repository.findStatus();
     }
 
-    async getPaymentRegistered() {
-        return this.repository.findPaymentRegistered();
+    /**
+     * Resumo de jornadas em aberto, filtrado por filial e/ou centro de custo.
+     *
+     * Sem nenhum filtro retorna lista vazia sem tocar o banco: a view não é
+     * paginada e roda sobre cinco níveis de subquery com funções escalares,
+     * então uma consulta sem critério paga o cálculo inteiro. Exigir ao menos
+     * um filtro mantém a requisição barata.
+     *
+     * @param {{branch?: string, costCenter?: string}} [filters]
+     * @returns {Promise<object[]>}
+     */
+    async getPaymentRegistered(filters = {}) {
+        const branch = trimOrNull(filters.branch);
+        const costCenter = trimOrNull(filters.costCenter);
+
+        if (!branch && !costCenter) return [];
+
+        return this.repository.findPaymentRegistered({ branch, costCenter });
     }
 
     async getRecordTypes() {

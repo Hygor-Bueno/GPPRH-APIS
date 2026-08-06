@@ -39,6 +39,7 @@ O código tinha `.input('branch_code', ...)`. A correção foi feita sem ver a S
 - **EPP** (Encomendas por Pedido) — produtos, menus, pedidos, log_sales, estoque
 - **GTPP** (Gestão de Tarefas) — tarefas, itens, usuários, histórico, score
 - **GIPP-RH** — compensações, beneficiários, recibos de pagamento
+- **BPPP** (Busca de Preço) — consulta de preço/estoque no Consinco (somente leitura)
 - **Auth** — login/logout/me via cookie
 
 ## Permissões EPP
@@ -49,3 +50,11 @@ O código tinha `.input('branch_code', ...)`. A correção foi feita sem ver a S
 | `EPP_PRODUCTS` | Cadastrar e editar produtos, menus e log_menus |
 | `EPP_RECEIPE` | Acessar receitas Oracle (mobile, oracle_receipe) |
 | `MANAGE_EPP` | Administração total |
+
+## Permissões BPPP
+| Código | Escopo |
+|---|---|
+| `USE_BPPP` | `GET /bppp/products` — consulta de preço/estoque/EAN no Consinco |
+| `BPPP_MANAGE` | Administração do módulo (hoje equivale a `USE_BPPP`) |
+
+Seed: `src/modules/global/repositories/mysql/bppp-permissions.sql`

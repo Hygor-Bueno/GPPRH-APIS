@@ -1,0 +1,76 @@
+# Imagem do backend INTERNO (GTPP, EPP, GIPP-RH, Protheus, chat, WebSocket).
+#
+# É a imagem difícil do projeto: carrega Oracle (thick mode), SQL Server,
+# Chromium para o Puppeteer e módulos nativos. A mesma imagem serve o app HTTP
+# e o servidor WebSocket — as dependências são idênticas, só o comando muda.
+#
+# Node 22 de propósito: mesma major do PM2 em produção (v22.22.1), então os
+# módulos nativos têm o mesmo ABI e o comportamento é o que você já validou.
+
+# =============================================================================
+# Estágio de build — toolchain e download do Chrome ficam fora da imagem final
+# =============================================================================
+FROM node:22-bookworm-slim AS deps
+
+WORKDIR /app
+
+# O Puppeteer baixa o Chrome for Testing no `npm ci`. Fixamos o destino para
+# poder copiá-lo para o estágio de runtime. Deixamos ele baixar a própria build
+# em vez de usar o chromium do apt: garante que a versão do browser casa com a
+# do puppeteer 22, sem risco de incompatibilidade de protocolo.
+ENV PUPPETEER_CACHE_DIR=/opt/puppeteer
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 make g++ \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY package.json package-lock.json ./
+
+RUN npm ci --omit=dev
+
+
+# =============================================================================
+# Runtime
+# =============================================================================
+FROM node:22-bookworm-slim AS runtime
+
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    PUPPETEER_CACHE_DIR=/opt/puppeteer
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # --- Oracle Instant Client 19.x ---
+    # O client em si NÃO vai na imagem: é bind-mount de /opt/oracle do host
+    # (ver docker-compose.yml). Só a dependência de sistema entra aqui.
+    libaio1 \
+    # --- Chromium / Puppeteer ---
+    ca-certificates \
+    libasound2 libatk-bridge2.0-0 libatk1.0-0 libcairo2 libcups2 libdbus-1-3 \
+    libexpat1 libfontconfig1 libgbm1 libglib2.0-0 libgtk-3-0 libnspr4 libnss3 \
+    libpango-1.0-0 libpangocairo-1.0-0 libx11-6 libx11-xcb1 libxcb1 \
+    libxcomposite1 libxcursor1 libxdamage1 libxext6 libxfixes3 libxi6 \
+    libxrandr2 libxrender1 libxss1 libxtst6 \
+    # Fontes — sem elas o PDF do recibo sai com caixas no lugar dos acentos
+    fonts-liberation fonts-dejavu-core \
+ && rm -rf /var/lib/apt/lists/*
+
+# pm2-runtime para preservar o cluster mode e os limites já validados
+RUN npm install -g pm2@6 && npm cache clean --force
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /opt/puppeteer /opt/puppeteer
+
+COPY package.json ecosystem.docker.config.js ./
+COPY src ./src
+
+# `uploads/` e `storage/` são bind mounts (estado em disco). Criados aqui com o
+# dono correto para o caso de o mount ainda não existir no host.
+RUN mkdir -p uploads storage && chown -R node:node uploads storage /opt/puppeteer
+
+USER node
+
+# 4002 = HTTP interno, 4001 = WebSocket
+EXPOSE 4002 4001
+
+CMD ["pm2-runtime", "start", "ecosystem.docker.config.js"]

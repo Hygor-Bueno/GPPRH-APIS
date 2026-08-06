@@ -46,10 +46,13 @@ class SqlServerGippRepository extends GippRepositoryPort {
         }, 'Error fetching status');
     }
 
-    async findPaymentRegistered() {
+    async findPaymentRegistered(filters = {}) {
         return this._run(async () => {
             const pool = await poolPromise;
-            const result = await pool.request().query(sqlGetPaymentRegistered());
+            const result = await pool.request()
+                .input('branch', sql.VarChar(10), filters.branch || null)
+                .input('cost_center', sql.VarChar(20), filters.costCenter || null)
+                .query(sqlGetPaymentRegistered());
             return result.recordset;
         }, 'Error fetching payment registered');
     }

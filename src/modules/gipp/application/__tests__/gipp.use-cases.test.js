@@ -42,6 +42,44 @@ function makeUseCases({ repository, replicationRepository } = {}) {
 }
 
 describe('GippUseCases', () => {
+    describe('getPaymentRegistered', () => {
+        it('should return an empty list without touching the database when no filter is given', async () => {
+            const repository = makeFakeRepository();
+            const useCases = makeUseCases({ repository });
+            await expect(useCases.getPaymentRegistered()).resolves.toEqual([]);
+            expect(repository.findPaymentRegistered).not.toHaveBeenCalled();
+        });
+
+        it('should treat blank filters as absent', async () => {
+            const repository = makeFakeRepository();
+            const useCases = makeUseCases({ repository });
+            const results = await useCases.getPaymentRegistered({ branch: '   ', costCenter: '' });
+            expect(results).toEqual([]);
+            expect(repository.findPaymentRegistered).not.toHaveBeenCalled();
+        });
+
+        it('should query with only the branch filter', async () => {
+            const repository = makeFakeRepository();
+            const useCases = makeUseCases({ repository });
+            await useCases.getPaymentRegistered({ branch: '0208' });
+            expect(repository.findPaymentRegistered).toHaveBeenCalledWith({ branch: '0208', costCenter: null });
+        });
+
+        it('should query with only the cost center filter', async () => {
+            const repository = makeFakeRepository();
+            const useCases = makeUseCases({ repository });
+            await useCases.getPaymentRegistered({ costCenter: '1006' });
+            expect(repository.findPaymentRegistered).toHaveBeenCalledWith({ branch: null, costCenter: '1006' });
+        });
+
+        it('should trim both filters and combine them', async () => {
+            const repository = makeFakeRepository();
+            const useCases = makeUseCases({ repository });
+            await useCases.getPaymentRegistered({ branch: ' 208 ', costCenter: ' 1006 ' });
+            expect(repository.findPaymentRegistered).toHaveBeenCalledWith({ branch: '208', costCenter: '1006' });
+        });
+    });
+
     describe('closeWorkSchedules', () => {
         it('should skip a schedule that already has a receipt', async () => {
             const repository = makeFakeRepository({ hasExistingReceipt: jest.fn().mockResolvedValue(true) });

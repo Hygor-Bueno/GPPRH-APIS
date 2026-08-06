@@ -52,14 +52,27 @@ class GtppTaskUseCases {
         return { data, page, limit, hasMore };
     }
 
-    /** @param {number[]} stateIds - máx. 10, checado no controller */
+    /**
+     * @param {number[]} stateIds - máx. 10, checado no controller
+     *
+     * Uma única ida ao banco pra todos os estados (não é mais 1 conexão do
+     * pool por state_id) — sob rajada de vários usuários abrindo o board ao
+     * mesmo tempo, isso saturava o poolGlobal só com esse endpoint.
+     */
     async getTasksBoard(userId, { stateIds, page = 1, limit = 20 }) {
-        const results = await Promise.all(
-            stateIds.map(stateId => this.getTasksMobile(userId, { stateId, page, limit }))
-        );
+        const offset = (page - 1) * limit;
+        const rows = await this.repository.findTasksForUserByStates(userId, { stateIds, limit, offset });
 
         const board = {};
-        stateIds.forEach((stateId, i) => { board[stateId] = results[i]; });
+        for (const stateId of stateIds) {
+            board[stateId] = { data: [], page, limit, hasMore: false };
+        }
+        for (const row of rows) {
+            board[row.state_id]?.data.push(row);
+        }
+        for (const stateId of stateIds) {
+            board[stateId].hasMore = board[stateId].data.length === limit;
+        }
         return board;
     }
 

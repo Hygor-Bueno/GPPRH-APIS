@@ -1,0 +1,49 @@
+# Imagem do backend PÚBLICO (site de vagas / candidatos).
+#
+# Só o módulo `gpprh` roda aqui. Ele não usa Oracle, SQL Server nem Puppeteer —
+# por isso esta imagem não carrega Instant Client nem Chromium.
+#
+# Node 22 LTS de propósito: é a mesma major que já roda em produção no PM2
+# (v22.22.1), então os módulos nativos têm o mesmo ABI e o comportamento é o
+# mesmo que você já validou.
+
+FROM node:22-bookworm-slim AS deps
+
+WORKDIR /app
+
+# O Puppeteer baixa ~170MB de Chromium no install e não é usado por este
+# backend. Sem isso, a imagem fica desnecessariamente grande.
+ENV PUPPETEER_SKIP_DOWNLOAD=1
+
+# Toolchain só na camada de build — módulos nativos (bcrypt) compilam aqui e
+# não sobram no runtime.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 make g++ \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY package.json package-lock.json ./
+
+# Instala a partir do package.json existente em vez de um manifesto reduzido.
+# É uma escolha consciente para o piloto: garante que nenhuma dependência
+# transitiva falte em runtime, ao custo de alguns pacotes ociosos na imagem.
+# Depois de validado, dá para enxugar com um package.json próprio.
+RUN npm ci --omit=dev
+
+
+FROM node:22-bookworm-slim AS runtime
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json ./
+COPY src ./src
+
+# Processo exposto à internet não roda como root. O usuário `node` já existe
+# na imagem oficial.
+USER node
+
+EXPOSE 4010
+
+CMD ["node", "src/server.public.js"]

@@ -13,6 +13,7 @@ function makeFakeRepository(overrides = {}) {
     repo.findTaskStates = jest.fn().mockResolvedValue([{ id: 1, description: 'Fazer', color: '#fff' }]);
     repo.findHistoric = jest.fn().mockResolvedValue([]);
     repo.findTasksForUser = jest.fn().mockResolvedValue({ data: [], hasMore: false });
+    repo.findTasksForUserByStates = jest.fn().mockResolvedValue([]);
     repo.findTaskDetail = jest.fn().mockResolvedValue({ full_description: 'x', state_id: 1, task_item: [], task_user: [], csds: [] });
     repo.createTask = jest.fn().mockResolvedValue({ taskId: 123 });
     repo.updateStateDirect = jest.fn().mockResolvedValue();
@@ -172,13 +173,44 @@ describe('GtppTaskUseCases', () => {
     });
 
     describe('getTasksBoard', () => {
-        it('should key the result by state id', async () => {
+        it('should fetch all states in a single repository call', async () => {
             const repository = makeFakeRepository({
-                findTasksForUser: jest.fn().mockResolvedValue({ data: [{ id: 1 }], hasMore: false }),
+                findTasksForUserByStates: jest.fn().mockResolvedValue([
+                    { id: 1, state_id: 1 },
+                    { id: 2, state_id: 2 },
+                ]),
             });
             const useCases = makeUseCases({ repository });
             const board = await useCases.getTasksBoard(OWNER.id, { stateIds: [1, 2] });
+
+            expect(repository.findTasksForUserByStates).toHaveBeenCalledTimes(1);
             expect(Object.keys(board)).toEqual(['1', '2']);
+            expect(board[1].data).toEqual([{ id: 1, state_id: 1 }]);
+            expect(board[2].data).toEqual([{ id: 2, state_id: 2 }]);
+        });
+
+        it('should key every requested state, even ones with no rows returned', async () => {
+            const repository = makeFakeRepository({
+                findTasksForUserByStates: jest.fn().mockResolvedValue([{ id: 1, state_id: 1 }]),
+            });
+            const useCases = makeUseCases({ repository });
+            const board = await useCases.getTasksBoard(OWNER.id, { stateIds: [1, 2, 3] });
+
+            expect(Object.keys(board)).toEqual(['1', '2', '3']);
+            expect(board[2].data).toEqual([]);
+            expect(board[3].data).toEqual([]);
+        });
+
+        it('should mark hasMore when a state\'s row count equals the limit', async () => {
+            const repository = makeFakeRepository({
+                findTasksForUserByStates: jest.fn().mockResolvedValue([
+                    { id: 1, state_id: 1 }, { id: 2, state_id: 1 },
+                ]),
+            });
+            const useCases = makeUseCases({ repository });
+            const board = await useCases.getTasksBoard(OWNER.id, { stateIds: [1], limit: 2 });
+
+            expect(board[1].hasMore).toBe(true);
         });
     });
 });

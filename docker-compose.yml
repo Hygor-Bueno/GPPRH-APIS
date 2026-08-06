@@ -1,0 +1,168 @@
+# Backends em container no servidor 192.168.0.99.
+#
+# Sobe TUDO em paralelo ao PM2 atual, em portas que não colidem. Nada em
+# produção muda até você repontar o Apache. O monolito na 4000 e o ws-gpprh na
+# 4001 continuam intactos.
+#
+#   docker compose build
+#   docker compose up -d
+#   docker compose logs -f
+#
+# Portas durante a validação → depois da virada:
+#   api-gipp-enterprises   127.0.0.1:4002   (mantém 4002)
+#   ws-gipp-enterprises    127.0.0.1:4011   (mantém 4011; o Apache passa a apontar aqui)
+#   api-gpprh              127.0.0.1:4010   (mantém 4010)
+#
+# ⚠️ Durante o período em paralelo existe um `api-gpprh` no PM2 (o monolito, que
+# atende todo o tráfego) e este `api-gpprh` em container (ocioso). Ao diagnosticar,
+# confira sempre se está olhando `pm2 list` ou `docker compose ps`.
+#
+# Todas publicadas SÓ no loopback: os containers ficam inalcançáveis pela rede,
+# só o Apache do próprio host chega neles.
+
+x-internal-env: &internal-env
+  NODE_ENV: production
+
+  # `localhost:4001` (default do código) só funciona quando API e WS
+  # compartilham o mesmo host/network namespace (caso do PM2). Em containers
+  # separados, a API precisa alcançar o WS pelo nome do container na rede
+  # Docker (resolução automática dentro de `api_default`), na porta INTERNA
+  # do container (4001), não na porta publicada no host (4011).
+  WS_EMIT_URL: http://ws-gipp-enterprises:4001/ws/emit-event
+
+  # Oracle thick mode: o initOracleClient({libDir}) do config/oracle.js acha o
+  # libclntsh.so, mas as dependências dele (libnnz19.so, libociei.so...) são
+  # resolvidas pelo linker dinâmico, que só olha LD_LIBRARY_PATH e o cache do
+  # ldconfig. No host há config de ldconfig para o Instant Client; a imagem não
+  # herda isso, e rodar `ldconfig` no build não resolve porque o diretório só
+  # aparece em runtime (é bind mount). Sem esta variável: DPI-1047.
+  LD_LIBRARY_PATH: /opt/oracle/instantclient_19_27
+
+  # `localhost` dentro do container é o container. O MySQL do banco `gpprh`
+  # está no host. (Os pools `global` e `gipp` apontam para 10.10.10.99, que é
+  # roteável normalmente pela bridge.)
+  MYSQL_HOST: host.docker.internal
+
+  # Par de segredos do lado INTERNO. Os valores ficam no .env (que está no
+  # .gitignore) — este arquivo é versionado e não pode conter segredo.
+  # Precisam ser DIFERENTES do par do api-gpprh: é isso que faz um token de
+  # candidato deixar de ser verificável aqui.
+  #
+  # O `environment` tem precedência sobre o `env_file`, então o que vem daqui
+  # vence o JWT_ACCESS_SECRET original do .env — sem mudança de código.
+  JWT_ACCESS_SECRET: ${INTERNAL_JWT_ACCESS_SECRET:?defina INTERNAL_JWT_ACCESS_SECRET no .env}
+  JWT_REFRESH_SECRET: ${INTERNAL_JWT_REFRESH_SECRET:?defina INTERNAL_JWT_REFRESH_SECRET no .env}
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# `host.docker.internal` não existe por padrão no Docker em Linux. O
+# host-gateway resolve para o IP da bridge, permitindo alcançar o MySQL do host.
+x-extra-hosts: &extra-hosts
+  - "host.docker.internal:host-gateway"
+
+services:
+
+  # ===========================================================================
+  # Backend interno — HTTP (GTPP, EPP, GIPP-RH, Protheus, chat)
+  # ===========================================================================
+  api-gipp-enterprises:
+    build:
+      context: .
+      dockerfile: Dockerfile.internal
+    image: api-gipp-enterprises:local
+    container_name: api-gipp-enterprises
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:4002:4002"
+
+    env_file: [.env]
+    environment:
+      <<: *internal-env
+      PORT_INTERNAL: 4002
+
+    volumes:
+      # Oracle Instant Client do host, somente leitura. Deliberadamente NÃO
+      # embutido na imagem: garante que é exatamente o client 19.27 que já
+      # funciona hoje, sem risco de a versão baixada se comportar diferente.
+      # Se um dia o app mudar de servidor, aí sim vale embutir.
+      - /opt/oracle/instantclient_19_27:/opt/oracle/instantclient_19_27:ro
+      # Estado em disco — anexos de chat e arquivos de módulos
+      - ./uploads:/app/uploads
+      - ./storage:/app/storage
+
+    # Contém o vazamento do Chromium (~800MB de processos órfãos hoje). O
+    # max_memory_restart do PM2 não pega isso porque o Chromium é processo-filho.
+    # Espaço para 2 workers (1G cada) + picos do Chromium, com folga.
+    mem_limit: 4g
+
+    # O Puppeteer já usa --disable-dev-shm-usage, então isto é só seguro extra.
+    shm_size: 256m
+
+    extra_hosts: *extra-hosts
+    logging: *logging
+
+  # ===========================================================================
+  # Backend interno — WebSocket (mesma imagem, só o comando muda)
+  # ===========================================================================
+  ws-gipp-enterprises:
+    # Reusa a imagem construída pelo api-gipp-enterprises — NÃO declare `build`
+    # aqui. Com `build` nos dois serviços e a mesma tag, o Compose constrói em
+    # paralelo e ambos tentam gravar a tag ao mesmo tempo:
+    #   failed to solve: image "api-gipp-enterprises:local": already exists
+    image: api-gipp-enterprises:local
+    pull_policy: never   # a imagem é local; nunca tentar buscar no Docker Hub
+    depends_on: [api-gipp-enterprises]
+    container_name: ws-gipp-enterprises
+    restart: unless-stopped
+
+    # A porta é fixa 4001 no código (websocketServer.js:204). Publicamos em
+    # 4011 no host para não colidir com o ws-gpprh do PM2.
+    ports:
+      - "127.0.0.1:4011:4001"
+
+    env_file: [.env]
+    environment: *internal-env
+
+    volumes:
+      - /opt/oracle/instantclient_19_27:/opt/oracle/instantclient_19_27:ro
+      - ./uploads:/app/uploads
+      - ./storage:/app/storage
+
+    mem_limit: 1g
+    extra_hosts: *extra-hosts
+    logging: *logging
+
+    command: ["node", "src/websocket/websocketServer.js"]
+
+  # ===========================================================================
+  # Backend público — site de vagas (candidatos)
+  # ===========================================================================
+  api-gpprh:
+    build:
+      context: .
+      dockerfile: Dockerfile.public
+    image: api-gpprh:local
+    container_name: api-gpprh
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:4010:4010"
+
+    env_file: [.env]
+    environment:
+      NODE_ENV: production
+      PORT_PUBLIC: 4010
+      MYSQL_HOST: host.docker.internal
+
+      # Par de segredos do lado PÚBLICO — DIFERENTE do interno. Valores no .env.
+      JWT_ACCESS_SECRET: ${PUBLIC_JWT_ACCESS_SECRET:?defina PUBLIC_JWT_ACCESS_SECRET no .env}
+      JWT_REFRESH_SECRET: ${PUBLIC_JWT_REFRESH_SECRET:?defina PUBLIC_JWT_REFRESH_SECRET no .env}
+
+    mem_limit: 512m
+    extra_hosts: *extra-hosts
+    logging: *logging

@@ -40,6 +40,7 @@ const eppMenuController       = require('./controllers/epp-menu.controller');
 const eppOrderController      = require('./controllers/epp-order.controller');
 const eppLogSaleController    = require('./controllers/epp-log-sale.controller');
 const eppStockController      = require('./controllers/epp-stock.controller');
+const bpppProductController   = require('./controllers/bppp-product.controller');
 const shopController          = require('./controllers/shop.controller');
 const gappActiveController    = require('./controllers/gapp-active.controller');
 const gappInsuranceController = require('./controllers/gapp-insurance.controller');
@@ -66,6 +67,7 @@ const {
     patchPaymentReceiptSchema
 } = require('../../schemas/gipp-rh.schema');
 const { postPayeeSchema, putPayeeSchema, patchPayeeSchema } = require('../../schemas/payee.schema');
+const { searchProductQuerySchema }                          = require('../../schemas/bppp.schema');
 const { sendMessageSchema, markAsReadSchema }               = require('../../schemas/chat.schema');
 const {
     postProductSchema, putProductSchema, patchProductStatusSchema,
@@ -163,9 +165,12 @@ router.get('/users',
 /**
  * @route POST /employee/:id/photo
  * @description Faz upload da foto de um colaborador.
- * @access Público (autenticação gerenciada pelo front-end via cookie)
+ * @access Autenticado (sem permissão específica)
  */
-router.post('/employee/:id/photo', upload.single("photo"), asyncHandler(employeeController.postPhotoEmployee));
+router.post('/employee/:id/photo',
+    authMiddleware,
+    upload.single("photo"),
+    asyncHandler(employeeController.postPhotoEmployee));
 
 /**
  * @route GET /employee/:id/photo
@@ -1589,6 +1594,30 @@ router.put('/epp/stock/:id',
     canAny(['EPP_MANAGE']),
     validate(putStockSchema),
     asyncHandler(eppStockController.updateStock));
+
+// ─── BPPP — Busca de Preço ────────────────────────────────────────────────────
+//
+// Migrado de Controller/BPPP/Product.php (+ DAO/BPPP/Product.php). Consulta
+// somente leitura no ERP Consinco (Oracle) — nada é gravado.
+//
+//  USE_BPPP    → Consultar preço/estoque de produto
+//  BPPP_MANAGE → Administração do módulo (inclui a consulta)
+//
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @route GET /bppp/products
+ * @description Consulta produto no Consinco por loja. Exige `shop_id` e
+ * exatamente UM critério: `plu` (alias legado: `id`), `ean` ou `description`.
+ * PLU/EAN retornam 1 item; descrição retorna até 25 itens ordenados.
+ * Resposta: [{ plu, description, barcode, store, price, price_promotion, promotion, status }]
+ * @access USE_BPPP | BPPP_MANAGE
+ */
+router.get('/bppp/products',
+    authMiddleware,
+    canAny(['USE_BPPP', 'BPPP_MANAGE']),
+    validate(searchProductQuerySchema, 'query'),
+    asyncHandler(bpppProductController.searchProducts));
 
 // ─── GAPP — Ativos ────────────────────────────────────────────────────────────
 //

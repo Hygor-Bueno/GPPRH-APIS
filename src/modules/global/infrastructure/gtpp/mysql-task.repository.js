@@ -8,6 +8,7 @@ const { AppError } = require('../../../../errors/app.error');
 const { TaskRepositoryPort } = require('../../application/gtpp/task/ports/task-repository.port');
 const {
     buildGetTasksQuery,
+    buildGetTasksBoardQuery,
     SQL_GET_TASK_DETAIL,
     SQL_INSERT_TASK,
     SQL_INSERT_TASK_USER_SELF,
@@ -74,6 +75,17 @@ class MysqlTaskRepository extends TaskRepositoryPort {
         const { sql, extraParams } = buildGetTasksQuery({ stateId, limit, offset });
         const [rows] = await this._query(sql, [userId, userId, userId, ...extraParams]);
         return { data: rows.map(formatTaskRow), hasMore: rows.length === limit };
+    }
+
+    /**
+     * Mesma listagem que `findTasksForUser`, mas pra múltiplos estados numa
+     * única query (board/kanban) — evita 1 conexão do pool por state_id.
+     * @returns {Promise<object[]>} linhas já formatadas, cada uma com `state_id`.
+     */
+    async findTasksForUserByStates(userId, { stateIds, limit = 20, offset = 0 } = {}) {
+        const { sql, extraParams } = buildGetTasksBoardQuery({ stateIds, limit, offset });
+        const [rows] = await this._query(sql, [userId, userId, userId, ...extraParams]);
+        return rows.map(formatTaskRow);
     }
 
     async findTaskDetail(taskId) {

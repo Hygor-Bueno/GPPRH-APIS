@@ -16,8 +16,15 @@ const { GtppEventPublisherPort } = require('../../application/gtpp/ports/gtpp-ev
 const { MysqlTaskUserRepository } = require('./mysql-task-user.repository');
 const { MysqlNotifyRepository } = require('./mysql-notify.repository');
 
-/** Endereço interno do servidor WS (mesma máquina, porta 4001). */
-const WS_EMIT_URL = 'http://localhost:4001/ws/emit-event';
+/**
+ * Endereço interno do servidor WS. Default assume mesmo host (PM2, onde API e
+ * WS são processos separados mas compartilham "localhost"). Em deploy com
+ * containers separados (API e WS em containers distintos), `localhost` do
+ * container da API não alcança o container do WS — precisa apontar pro nome
+ * do container na rede Docker (ex.: `http://ws-interno:4001/ws/emit-event`),
+ * via variável de ambiente `WS_EMIT_URL`.
+ */
+const WS_EMIT_URL = process.env.WS_EMIT_URL || 'http://localhost:4001/ws/emit-event';
 
 class HttpGtppEventPublisher extends GtppEventPublisherPort {
     constructor({ taskUserRepository = new MysqlTaskUserRepository(), notifyRepository = new MysqlNotifyRepository() } = {}) {

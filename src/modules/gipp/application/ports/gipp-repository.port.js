@@ -6,7 +6,10 @@
 class GippRepositoryPort {
     // ─── Status e Tipos ─────────────────────────────────────────────────────
     findStatus() { throw new Error('Not implemented'); }
-    findPaymentRegistered() { throw new Error('Not implemented'); }
+
+    /** @param {{branch?: ?string, costCenter?: ?string}} filters @returns {Promise<object[]>} */
+    findPaymentRegistered(filters) { throw new Error('Not implemented'); }
+
     findRecordTypes() { throw new Error('Not implemented'); }
 
     // ─── Registros de Ponto ─────────────────────────────────────────────────

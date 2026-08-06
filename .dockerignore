@@ -1,0 +1,21 @@
+node_modules
+npm-debug.log
+coverage
+.git
+.gitignore
+.env
+*.log
+pm2-health.log
+
+# Não entra na imagem do backend público
+meal-control
+uploads
+storage
+build
+docs
+scripts
+*.pdf
+*.md
+EPP_Postman_Collection.json
+backend-structure.filtered.json
+ecosystem.config.js

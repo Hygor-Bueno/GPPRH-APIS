@@ -17,7 +17,7 @@ app.use(cookieParser());
 // CORS deve vir ANTES do rate limiter para que respostas 429
 // também incluam os headers de CORS (evita falso erro de CORS no browser)
 const corsOptions = {
-  origin: ["http://localhost:3000", "http://localhost:5173","https://localhost:5173", "https://vagas.gpprh.com.br", "http://10.10.10.99", "http://gigpp.com.br:72", "http://gigpp.com.br:73", "http://10.10.10.99:73"],
+  origin: ["http://localhost:3000", "http://localhost:5173","https://localhost:5173", "https://vagas.gpprh.com.br", "http://10.10.10.99", "http://gigpp.com.br:72", "http://gigpp.com.br:73", "http://10.10.10.99:73","https://gigpp.com.br:73"],
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
