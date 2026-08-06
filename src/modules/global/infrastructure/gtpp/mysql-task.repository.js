@@ -111,6 +111,9 @@ class MysqlTaskRepository extends TaskRepositoryPort {
             status:      Boolean(u.status),
             theme_id_fk: u.theme_id_fk,
             name:        u.name,
+            // Foto atual (via _files). Preferir este no front — o `photo` abaixo
+            // é o BLOB legado, mantido só enquanto houver consumidor.
+            file_id:     u.file_id ?? null,
             photo: u.photo
                 ? (Buffer.isBuffer(u.photo) ? u.photo.toString('base64') : u.photo)
                 : null,

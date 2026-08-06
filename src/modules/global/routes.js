@@ -1062,6 +1062,8 @@ router.delete('/gtpp/tasks/:taskId/scope/:id',
 /**
  * @route GET /gtpp/tasks/:taskId/users
  * @description Lista usuários com acesso GTPP, indicando vinculação à tarefa.
+ * Retorna `{ user_id, name, file_id, check }` — `file_id` é a foto do
+ * colaborador (null se não houver), no mesmo formato de `GET /users`.
  * @access Requer `USE_GTPP`
  */
 router.get('/gtpp/tasks/:taskId/users',

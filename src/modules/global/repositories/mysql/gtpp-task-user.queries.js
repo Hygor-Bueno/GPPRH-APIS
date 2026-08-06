@@ -20,17 +20,23 @@ const SQL_GET_TASK_PARTICIPANT_IDS = `
 /**
  * Todos os usuários com acesso GTPP, indicando (`check`) se já estão
  * vinculados à tarefa. O criador da tarefa nunca aparece na lista.
+ *
+ * `file_id` é a foto do colaborador (FK para `_files`), no mesmo formato que
+ * `GET /users` devolve — permite ao front exibir o avatar na lista de
+ * vinculação sem uma segunda requisição. Vem de `_user` nos dois ramos do
+ * UNION; é NULL para quem nunca subiu foto.
+ *
  * Parâmetros: [taskId, taskId, taskId]
  */
 const SQL_GET_TASK_USERS = `
-  SELECT u.user_id, e.name, true AS \`check\`
+  SELECT u.user_id, e.name, _u.file_id, true AS \`check\`
   FROM gt_task t
   INNER JOIN gt_task_user u ON u.task_id = t.id
   INNER JOIN _user _u ON u.user_id = _u.id
   INNER JOIN _employee e ON e.id = u.user_id
   WHERE t.id = ? AND u.user_id != t.user_id AND _u.status = 1
   UNION
-  SELECT _u.id AS user_id, _u.name, false AS \`check\`
+  SELECT _u.id AS user_id, _u.name, _u.file_id, false AS \`check\`
   FROM _user _u
   INNER JOIN _application_access _aa ON _u.id = _aa.user_id
   WHERE

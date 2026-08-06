@@ -225,7 +225,17 @@ const SQL_GET_TASK_ITEMS = `
   ORDER BY t.\`order\` ASC
 `;
 
-/** Usuários vinculados a uma tarefa (com foto), para o detalhe getTaskById. */
+/**
+ * Usuários vinculados a uma tarefa (com foto), para o detalhe getTaskById.
+ *
+ * Devolve as DUAS formas de foto durante a transição:
+ *  - `file_id` (`_user`) → foto atual, via `_files`; mesmo formato de `GET /users`
+ *  - `photo`   (`_employee`) → BLOB legado, anterior ao migrate-employee-photos
+ *
+ * Preferir `file_id` no front. O `photo` só continua aqui para não quebrar quem
+ * ainda o consome — quando ninguém mais usar, remover a coluna daqui: ela
+ * trafega o binário de cada usuário da tarefa em toda chamada do detalhe.
+ */
 const SQL_GET_TASK_DETAIL_USERS = `
   SELECT
     gtu.task_id,
@@ -233,6 +243,7 @@ const SQL_GET_TASK_DETAIL_USERS = `
     IF(_u.status = 1, true, false) AS status,
     gtu.theme_id_fk,
     e.name,
+    _u.file_id,
     e.photo
   FROM gt_task_user gtu
   INNER JOIN _user _u ON _u.id = gtu.user_id
