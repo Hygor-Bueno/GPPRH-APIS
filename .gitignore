@@ -1,48 +1,32 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Dependências — sem âncora `/`, para cobrir também meal-control/*/node_modules
+node_modules/
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
-
-# testing
-/coverage
-
-# uploaded/generated content
-/storage
-/uploads
-
-# next.js
-/.next/
-/out/
-/.claude/*
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-/server.js
-/proxy.off.ts
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-grpp/*
-# env files (can opt-in for committing if needed)
+# Variáveis de ambiente e segredos
 .env
 .env.*
 !.env.example
+*.pem
 
-# vercel
-.vercel
+# Estado em disco (anexos de usuário, arquivos dos módulos)
+/storage
+/uploads
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# Saída de testes
+/coverage
+
+# Logs — inclui o pm2-health.log gerado pelo monitor via cron
+*.log
+npm-debug.log*
+yarn-debug.log*
+.pnpm-debug.log*
+
+# Artefatos gerados em depuração (PDF de recibo, dumps de estrutura)
+/recibo-*.pdf
+/backend-structure*.json
+
+# Configuração local do Claude Code
+/.claude/*
+
+# Sistema
+.DS_Store
+Thumbs.db

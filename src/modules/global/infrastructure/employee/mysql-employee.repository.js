@@ -18,7 +18,11 @@ const {
     SQL_UPDATE_USER_FILE_ID,
 } = require('../../repositories/mysql/employee.queries');
 
-const EMPLOYEE_MODULE = 'EMPLOYEE';
+// `CCPP` é o módulo de colaboradores herdado do PHP (GLOBAL/Controller/CCPP/) e
+// é onde o scripts/migrate-employee-photos.js gravou as 129 fotos migradas.
+// Já esteve como 'EMPLOYEE', que criou um storage/uploads/EMPLOYEE/ paralelo —
+// o validateModule só checa o regex /^[A-Z]{2,8}$/, então nada acusou o erro.
+const EMPLOYEE_MODULE = 'CCPP';
 
 /** Stored procedures retornam array de result sets — o primeiro é os dados. */
 function extractRows(results) {
