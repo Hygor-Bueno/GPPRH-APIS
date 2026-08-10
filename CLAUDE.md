@@ -45,16 +45,16 @@ O código tinha `.input('branch_code', ...)`. A correção foi feita sem ver a S
 ## Permissões EPP
 | Código | Escopo |
 |---|---|
-| `USE_EPP` | Leitura geral |
+| `EPP_USE` | Leitura geral |
 | `EPP_ORDERS` | Ver, criar e atualizar pedidos |
 | `EPP_PRODUCTS` | Cadastrar e editar produtos, menus e log_menus |
-| `EPP_RECEIPE` | Acessar receitas Oracle (mobile, oracle_receipe) |
+| `EPP_VIEW_RECIPE` | Acessar receitas Oracle (mobile, oracle_receipe) |
 | `MANAGE_EPP` | Administração total |
 
 ## Permissões BPPP
 | Código | Escopo |
 |---|---|
-| `USE_BPPP` | `GET /bppp/products` — consulta de preço/estoque/EAN no Consinco |
-| `BPPP_MANAGE` | Administração do módulo (hoje equivale a `USE_BPPP`) |
+| `BPPP_USE` | `GET /bppp/products` — consulta de preço/estoque/EAN no Consinco |
+| `BPPP_MANAGE` | Administração do módulo (hoje equivale a `BPPP_USE`) |
 
 Seed: `src/modules/global/repositories/mysql/bppp-permissions.sql`

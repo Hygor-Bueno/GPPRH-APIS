@@ -67,7 +67,7 @@ const {
     patchPaymentReceiptSchema
 } = require('../../schemas/gipp-rh.schema');
 const { postPayeeSchema, putPayeeSchema, patchPayeeSchema } = require('../../schemas/payee.schema');
-const { searchProductQuerySchema }                          = require('../../schemas/bppp.schema');
+const { searchProductQuerySchema, listByDepartmentQuerySchema } = require('../../schemas/bppp.schema');
 const { sendMessageSchema, markAsReadSchema }               = require('../../schemas/chat.schema');
 const {
     postProductSchema, putProductSchema, patchProductStatusSchema,
@@ -142,22 +142,22 @@ router.post('/login', loginLimiter, validate(loginSchema), asyncHandler(authCont
  * @description Lista colaboradores paginados com filtros opcionais.
  * Query params: pPage, pPageSize, pEmployeeName, pCompanyId, pShopId,
  *   pDepartmentId, pSubDepartmentId, pApplicationAccess.
- * @access Requer `VIEW_EMPLOYEES`
+ * @access Requer `CORE_VIEW_EMPLOYEE`
  */
 router.get('/employees',
     authMiddleware,
-    canAll(['VIEW_EMPLOYEES']),
+    canAll(['CORE_VIEW_EMPLOYEE']),
     asyncHandler(employeeController.getEmployees));
 
 /**
  * @route GET /users
  * @description Lista usuários paginados com enriquecimento do Protheus (empresa, filial, CC).
  * Query params: pPage, pPageSize, pName, pApplicationId, pStatus.
- * @access Requer `VIEW_EMPLOYEES`
+ * @access Requer `CORE_VIEW_EMPLOYEE`
  */
 router.get('/users',
     authMiddleware,
-    canAll(['VIEW_EMPLOYEES']),
+    canAll(['CORE_VIEW_EMPLOYEE']),
     asyncHandler(employeeController.getUsers));
 
 // ─── Foto do Colaborador ──────────────────────────────────────────────────────
@@ -184,32 +184,32 @@ router.get('/employee/:id/photo', asyncHandler(employeeController.getPhotoEmploy
 /**
  * @route GET /gipp-rh/active-compensations
  * @description Lista todas as compensações ativas.
- * @access Requer `VIEW_GIPP_RH_BENEFITS` ou `MANAGE_GIPP_RH_BENEFITS`
+ * @access Requer `GIPPRH_VIEW_BENEFIT` ou `GIPPRH_MANAGE_BENEFIT`
  */
 router.get('/gipp-rh/active-compensations',
     authMiddleware,
-    canAny(['VIEW_GIPP_RH_BENEFITS', 'MANAGE_GIPP_RH_BENEFITS']),
+    canAny(['GIPPRH_VIEW_BENEFIT', 'GIPPRH_MANAGE_BENEFIT']),
     asyncHandler(gippRhController.getActiveCompensations));
 
 /**
  * @route POST /gipp-rh/active-compensations
  * @description Cria uma nova compensação.
- * @access Requer `CREATE_GIPP_RH_BENEFITS` ou `MANAGE_GIPP_RH_BENEFITS`
+ * @access Requer `GIPPRH_CREATE_BENEFIT` ou `GIPPRH_MANAGE_BENEFIT`
  */
 router.post('/gipp-rh/active-compensations',
     authMiddleware,
-    canAny(['CREATE_GIPP_RH_BENEFITS', 'MANAGE_GIPP_RH_BENEFITS']),
+    canAny(['GIPPRH_CREATE_BENEFIT', 'GIPPRH_MANAGE_BENEFIT']),
     validate(postCompensationSchema),
     asyncHandler(gippRhController.postCompensations));
 
 /**
  * @route PUT /gipp-rh/active-compensations
  * @description Atualiza uma compensação existente.
- * @access Requer `EDIT_GIPP_RH_BENEFITS` ou `MANAGE_GIPP_RH_BENEFITS`
+ * @access Requer `GIPPRH_UPDATE_BENEFIT` ou `GIPPRH_MANAGE_BENEFIT`
  */
 router.put('/gipp-rh/active-compensations',
     authMiddleware,
-    canAny(['EDIT_GIPP_RH_BENEFITS', 'MANAGE_GIPP_RH_BENEFITS']),
+    canAny(['GIPPRH_UPDATE_BENEFIT', 'GIPPRH_MANAGE_BENEFIT']),
     validate(putCompensationSchema),
     asyncHandler(gippRhController.putCompensations));
 
@@ -218,32 +218,32 @@ router.put('/gipp-rh/active-compensations',
 /**
  * @route GET /gipp-rh/active-beneficiaries
  * @description Lista todos os beneficiários ativos com suas compensações.
- * @access Requer `VIEW_GIPP_RH_BENEFITS` ou `MANAGE_GIPP_RH_BENEFITS`
+ * @access Requer `GIPPRH_VIEW_BENEFIT` ou `GIPPRH_MANAGE_BENEFIT`
  */
 router.get('/gipp-rh/active-beneficiaries',
     authMiddleware,
-    canAny(['VIEW_GIPP_RH_BENEFITS', 'MANAGE_GIPP_RH_BENEFITS']),
+    canAny(['GIPPRH_VIEW_BENEFIT', 'GIPPRH_MANAGE_BENEFIT']),
     asyncHandler(gippRhController.getActiveBeneficiaries));
 
 /**
  * @route POST /gipp-rh/active-beneficiaries
  * @description Associa um colaborador a uma compensação (novo beneficiário).
- * @access Requer `CREATE_GIPP_RH_BENEFITS` ou `MANAGE_GIPP_RH_BENEFITS`
+ * @access Requer `GIPPRH_CREATE_BENEFIT` ou `GIPPRH_MANAGE_BENEFIT`
  */
 router.post('/gipp-rh/active-beneficiaries',
     authMiddleware,
-    canAny(['CREATE_GIPP_RH_BENEFITS', 'MANAGE_GIPP_RH_BENEFITS']),
+    canAny(['GIPPRH_CREATE_BENEFIT', 'GIPPRH_MANAGE_BENEFIT']),
     validate(postBeneficiarySchema),
     asyncHandler(gippRhController.postBeneficiary));
 
 /**
  * @route PUT /gipp-rh/active-beneficiaries
  * @description Atualiza os dados de um beneficiário existente.
- * @access Requer `EDIT_GIPP_RH_BENEFITS` ou `MANAGE_GIPP_RH_BENEFITS`
+ * @access Requer `GIPPRH_UPDATE_BENEFIT` ou `GIPPRH_MANAGE_BENEFIT`
  */
 router.put('/gipp-rh/active-beneficiaries',
     authMiddleware,
-    canAny(['EDIT_GIPP_RH_BENEFITS', 'MANAGE_GIPP_RH_BENEFITS']),
+    canAny(['GIPPRH_UPDATE_BENEFIT', 'GIPPRH_MANAGE_BENEFIT']),
     validate(putBeneficiarySchema),
     asyncHandler(gippRhController.putBeneficiary));
 
@@ -252,21 +252,21 @@ router.put('/gipp-rh/active-beneficiaries',
 /**
  * @route GET /gipp-rh/employees-paginated
  * @description Retorna colaboradores com paginação e filtros (nome, filial, CC, CNPJ, status).
- * @access Requer `VIEW_EMPLOYEES`
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE`
  */
 router.get('/gipp-rh/employees-paginated',
     authMiddleware,
-    canAll(['VIEW_EMPLOYEES']),
+    canAll(['GIPPRH_VIEW_EMPLOYEE']),
     asyncHandler(gippRhController.getEmployeesPaginated));
 
 /**
  * @route GET /gipp-rh/event-codes
  * @description Lista todos os códigos de evento disponíveis para lançamento de recibos.
- * @access Requer `VIEW_EMPLOYEES`
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE`
  */
 router.get('/gipp-rh/event-codes',
     authMiddleware,
-    canAll(['VIEW_EMPLOYEES']),
+    canAll(['GIPPRH_VIEW_EMPLOYEE']),
     asyncHandler(gippRhController.getEventCodes));
 
 // ─── Recibos de Pagamento (CRUD) ──────────────────────────────────────────────
@@ -274,32 +274,32 @@ router.get('/gipp-rh/event-codes',
 /**
  * @route GET /gipp-rh/payment-receipt
  * @description Consulta recibos de pagamento com filtros opcionais via query string.
- * @access Requer `VIEW_PAYMENT_RECEIPT` ou `MANAGE_PAYMENT_RECEIPT`
+ * @access Requer `GIPPRH_VIEW_RECEIPT` ou `GIPPRH_MANAGE_RECEIPT`
  */
 router.get('/gipp-rh/payment-receipt',
     authMiddleware,
-    canAny(['VIEW_PAYMENT_RECEIPT', 'MANAGE_PAYMENT_RECEIPT']),
+    canAny(['GIPPRH_VIEW_RECEIPT', 'GIPPRH_MANAGE_RECEIPT']),
     asyncHandler(gippRhController.getPaymentReceipts));
 
 /**
  * @route POST /gipp-rh/payment-receipt
  * @description Insere um novo recibo de pagamento (CLT ou prestador).
- * @access Requer `CREATE_PAYMENT_RECEIPT` ou `MANAGE_PAYMENT_RECEIPT`
+ * @access Requer `GIPPRH_CREATE_RECEIPT` ou `GIPPRH_MANAGE_RECEIPT`
  */
 router.post('/gipp-rh/payment-receipt',
     authMiddleware,
-    canAny(['CREATE_PAYMENT_RECEIPT', 'MANAGE_PAYMENT_RECEIPT']),
+    canAny(['GIPPRH_CREATE_RECEIPT', 'GIPPRH_MANAGE_RECEIPT']),
     validate(postPaymentReceiptSchema),
     asyncHandler(gippRhController.postPaymentReceipt));
 
 /**
  * @route PUT /gipp-rh/payment-receipt
  * @description Atualiza completamente um recibo de pagamento.
- * @access Requer `EDIT_PAYMENT_RECEIPT` ou `MANAGE_PAYMENT_RECEIPT`
+ * @access Requer `GIPPRH_UPDATE_RECEIPT` ou `GIPPRH_MANAGE_RECEIPT`
  */
 router.put('/gipp-rh/payment-receipt',
     authMiddleware,
-    canAny(['EDIT_PAYMENT_RECEIPT', 'MANAGE_PAYMENT_RECEIPT']),
+    canAny(['GIPPRH_UPDATE_RECEIPT', 'GIPPRH_MANAGE_RECEIPT']),
     validate(putPaymentReceiptSchema),
     asyncHandler(gippRhController.putPaymentReceipt));
 
@@ -307,11 +307,11 @@ router.put('/gipp-rh/payment-receipt',
  * @route PATCH /gipp-rh/payment-receipt
  * @description Atualiza parcialmente um recibo de pagamento.
  * Apenas os campos presentes no body (exceto `id`) são modificados.
- * @access Requer `EDIT_PAYMENT_RECEIPT` ou `MANAGE_PAYMENT_RECEIPT`
+ * @access Requer `GIPPRH_UPDATE_RECEIPT` ou `GIPPRH_MANAGE_RECEIPT`
  */
 router.patch('/gipp-rh/payment-receipt',
     authMiddleware,
-    canAny(['EDIT_PAYMENT_RECEIPT', 'MANAGE_PAYMENT_RECEIPT']),
+    canAny(['GIPPRH_UPDATE_RECEIPT', 'GIPPRH_MANAGE_RECEIPT']),
     validate(patchPaymentReceiptSchema),
     asyncHandler(gippRhController.patchPaymentReceipt));
 
@@ -322,11 +322,11 @@ router.patch('/gipp-rh/payment-receipt',
  * @description Gera e retorna o PDF do recibo de um colaborador (CLT) ou prestador
  * para uma referência específica.
  * Query params: `reference` (YYYYMM), `employee_code` ou `payee_id`.
- * @access Requer `DOWNLOAD_RECEIPT`
+ * @access Requer `GIPPRH_DOWNLOAD_RECEIPT`
  */
 router.get('/gipp-rh/receipt/:branchCode',
     authMiddleware,
-    canAll(['DOWNLOAD_RECEIPT']),
+    canAll(['GIPPRH_DOWNLOAD_RECEIPT']),
     validate(getReceiptQuerySchema, 'query'),
     asyncHandler(gippRhController.downloadReceipt));
 
@@ -338,32 +338,32 @@ router.get('/gipp-rh/receipt/:branchCode',
  * Esta é a rota unificada para impressão de recibos independente do tipo de
  * pagamento (fechamento de jornada, compra de folga, etc.). O frontend deve
  * passar o `receipt_group_id` já conhecido na listagem de pagamentos.
- * @access Requer `DOWNLOAD_RECEIPT`
+ * @access Requer `GIPPRH_DOWNLOAD_RECEIPT`
  */
 router.post('/gipp-rh/receipt-by-group',
     authMiddleware,
-    canAll(['DOWNLOAD_RECEIPT']),
+    canAll(['GIPPRH_DOWNLOAD_RECEIPT']),
     asyncHandler(gippRhController.downloadReceiptByGroup));
 
 /**
  * @route GET /gipp-rh/receipt
  * @description Retorna recibos para exibição em tela (não PDF), filtrados por
  * colaborador, filial, intervalo de referência e tipo de pagamento.
- * @access Requer `VIEW_PAYMENT_RECEIPT` ou `MANAGE_PAYMENT_RECEIPT`
+ * @access Requer `GIPPRH_VIEW_RECEIPT` ou `GIPPRH_MANAGE_RECEIPT`
  */
 router.get('/gipp-rh/receipt',
     authMiddleware,
-    canAny(['VIEW_PAYMENT_RECEIPT', 'MANAGE_PAYMENT_RECEIPT']),
+    canAny(['GIPPRH_VIEW_RECEIPT', 'GIPPRH_MANAGE_RECEIPT']),
     asyncHandler(gippRhController.getReceipt));
 
 /**
  * @route GET /gipp-rh/payment-types
  * @description Lista todos os tipos de pagamento disponíveis.
- * @access Requer `VIEW_PAYMENT_RECEIPT` ou `MANAGE_PAYMENT_RECEIPT`
+ * @access Requer `GIPPRH_VIEW_RECEIPT` ou `GIPPRH_MANAGE_RECEIPT`
  */
 router.get('/gipp-rh/payment-types',
     authMiddleware,
-    canAny(['VIEW_PAYMENT_RECEIPT', 'MANAGE_PAYMENT_RECEIPT']),
+    canAny(['GIPPRH_VIEW_RECEIPT', 'GIPPRH_MANAGE_RECEIPT']),
     asyncHandler(gippRhController.getPaymentTypes));
 
 // ─── Payee (Freelancers e Prestadores) ────────────────────────────────────────
@@ -371,54 +371,54 @@ router.get('/gipp-rh/payment-types',
 /**
  * @route GET /payee
  * @description Retorna a lista de prestadores/freelancers com filtros opcionais.
- * @access Requer `VIEW_PAYEE` ou `MANAGE_PAYEE`
+ * @access Requer `GIPPRH_VIEW_PAYEE` ou `GIPPRH_MANAGE_PAYEE`
  */
 router.get('/payee',
     authMiddleware,
-    canAny(['VIEW_PAYEE', 'MANAGE_PAYEE']),
+    canAny(['GIPPRH_VIEW_PAYEE', 'GIPPRH_MANAGE_PAYEE']),
     asyncHandler(payeeController.getPayees));
 
 /**
  * @route POST /payee
  * @description Cadastra um novo prestador/freelancer.
- * @access Requer `CREATE_PAYEE` ou `MANAGE_PAYEE`
+ * @access Requer `GIPPRH_CREATE_PAYEE` ou `GIPPRH_MANAGE_PAYEE`
  */
 router.post('/payee',
     authMiddleware,
-    canAny(['CREATE_PAYEE', 'MANAGE_PAYEE']),
+    canAny(['GIPPRH_CREATE_PAYEE', 'GIPPRH_MANAGE_PAYEE']),
     validate(postPayeeSchema),
     asyncHandler(payeeController.postPayee));
 
 /**
  * @route PUT /payee
  * @description Atualiza completamente um prestador existente.
- * @access Requer `EDIT_PAYEE` ou `MANAGE_PAYEE`
+ * @access Requer `GIPPRH_UPDATE_PAYEE` ou `GIPPRH_MANAGE_PAYEE`
  */
 router.put('/payee',
     authMiddleware,
-    canAny(['EDIT_PAYEE', 'MANAGE_PAYEE']),
+    canAny(['GIPPRH_UPDATE_PAYEE', 'GIPPRH_MANAGE_PAYEE']),
     validate(putPayeeSchema),
     asyncHandler(payeeController.putPayee));
 
 /**
  * @route PATCH /payee
  * @description Atualiza parcialmente um prestador existente.
- * @access Requer `EDIT_PAYEE` ou `MANAGE_PAYEE`
+ * @access Requer `GIPPRH_UPDATE_PAYEE` ou `GIPPRH_MANAGE_PAYEE`
  */
 router.patch('/payee',
     authMiddleware,
-    canAny(['EDIT_PAYEE', 'MANAGE_PAYEE']),
+    canAny(['GIPPRH_UPDATE_PAYEE', 'GIPPRH_MANAGE_PAYEE']),
     validate(patchPayeeSchema),
     asyncHandler(payeeController.patchPayee));
 
 /**
  * @route DELETE /payee/:id
  * @description Remove um prestador, desde que não possua recibos de pagamento vinculados.
- * @access Requer `DELETE_PAYEE` ou `MANAGE_PAYEE`
+ * @access Requer `GIPPRH_DELETE_PAYEE` ou `GIPPRH_MANAGE_PAYEE`
  */
 router.delete('/payee/:id',
     authMiddleware,
-    canAny(['DELETE_PAYEE', 'MANAGE_PAYEE']),
+    canAny(['GIPPRH_DELETE_PAYEE', 'GIPPRH_MANAGE_PAYEE']),
     asyncHandler(payeeController.deletePayee));
 
 // ─── Gestão de Acessos — Usuários ─────────────────────────────────────────────
@@ -426,64 +426,64 @@ router.delete('/payee/:id',
 /**
  * @route GET /access/users
  * @description Lista usuários com filtros opcionais (ad_status, nome, matrícula, filial).
- * @access Requer `VIEW_ACCESS` ou `MANAGE_ACCESS`
+ * @access Requer `ACCESS_VIEW` ou `ACCESS_MANAGE`
  */
 router.get('/access/users',
     authMiddleware,
-    canAny(['VIEW_ACCESS', 'MANAGE_ACCESS']),
+    canAny(['ACCESS_VIEW', 'ACCESS_MANAGE']),
     asyncHandler(accessController.getUsers));
 
 /**
  * @route GET /access/users/:id
  * @description Retorna um usuário pelo ID com seus papéis e permissões expandidos.
- * @access Requer `VIEW_ACCESS` ou `MANAGE_ACCESS`
+ * @access Requer `ACCESS_VIEW` ou `ACCESS_MANAGE`
  */
 router.get('/access/users/:id',
     authMiddleware,
-    canAny(['VIEW_ACCESS', 'MANAGE_ACCESS']),
+    canAny(['ACCESS_VIEW', 'ACCESS_MANAGE']),
     asyncHandler(accessController.getUserById));
 
 /**
  * @route POST /access/users
  * @description Cria um novo usuário com senha hasheada.
- * @access Requer `MANAGE_ACCESS`
+ * @access Requer `ACCESS_MANAGE`
  */
 router.post('/access/users',
     authMiddleware,
-    canAny(['MANAGE_ACCESS']),
+    canAny(['ACCESS_MANAGE']),
     validate(postUserSchema),
     asyncHandler(accessController.postUser));
 
 /**
  * @route PUT /access/users/:id
  * @description Atualiza completamente um usuário (sem alterar senha ou campos de AD).
- * @access Requer `MANAGE_ACCESS`
+ * @access Requer `ACCESS_MANAGE`
  */
 router.put('/access/users/:id',
     authMiddleware,
-    canAny(['MANAGE_ACCESS']),
+    canAny(['ACCESS_MANAGE']),
     validate(putUserSchema),
     asyncHandler(accessController.putUser));
 
 /**
  * @route PATCH /access/users/:id
  * @description Atualiza parcialmente um usuário. Campos inválidos são ignorados.
- * @access Requer `MANAGE_ACCESS`
+ * @access Requer `ACCESS_MANAGE`
  */
 router.patch('/access/users/:id',
     authMiddleware,
-    canAny(['MANAGE_ACCESS']),
+    canAny(['ACCESS_MANAGE']),
     validate(patchUserSchema),
     asyncHandler(accessController.patchUser));
 
 /**
  * @route DELETE /access/users/:id
  * @description Desativa um usuário (soft-delete: ad_status = 'delete'). O registro permanece no banco.
- * @access Requer `MANAGE_ACCESS`
+ * @access Requer `ACCESS_MANAGE`
  */
 router.delete('/access/users/:id',
     authMiddleware,
-    canAny(['MANAGE_ACCESS']),
+    canAny(['ACCESS_MANAGE']),
     asyncHandler(accessController.deleteUser));
 
 // ─── Gestão de Acessos — Vínculos Usuário ↔ Papel ─────────────────────────────
@@ -491,33 +491,33 @@ router.delete('/access/users/:id',
 /**
  * @route GET /access/users/:id/roles
  * @description Retorna os papéis de um usuário.
- * @access Requer `VIEW_ACCESS` ou `MANAGE_ACCESS`
+ * @access Requer `ACCESS_VIEW` ou `ACCESS_MANAGE`
  */
 router.get('/access/users/:id/roles',
     authMiddleware,
-    canAny(['VIEW_ACCESS', 'MANAGE_ACCESS']),
+    canAny(['ACCESS_VIEW', 'ACCESS_MANAGE']),
     asyncHandler(accessController.getUserRoles));
 
 /**
  * @route POST /access/users/:id/roles
  * @description Associa um ou mais papéis ao usuário. Body: `{ role_ids: number[] }`.
  * Papéis já vinculados são silenciosamente ignorados.
- * @access Requer `MANAGE_ACCESS`
+ * @access Requer `ACCESS_MANAGE`
  */
 router.post('/access/users/:id/roles',
     authMiddleware,
-    canAny(['MANAGE_ACCESS']),
+    canAny(['ACCESS_MANAGE']),
     validate(assignRolesSchema),
     asyncHandler(accessController.assignRolesToUser));
 
 /**
  * @route DELETE /access/users/:id/roles/:roleId
  * @description Desassocia um papel de um usuário.
- * @access Requer `MANAGE_ACCESS`
+ * @access Requer `ACCESS_MANAGE`
  */
 router.delete('/access/users/:id/roles/:roleId',
     authMiddleware,
-    canAny(['MANAGE_ACCESS']),
+    canAny(['ACCESS_MANAGE']),
     asyncHandler(accessController.removeRoleFromUser));
 
 // ─── Gestão de Acessos — Aplicações do Usuário ────────────────────────────────
@@ -525,32 +525,32 @@ router.delete('/access/users/:id/roles/:roleId',
 /**
  * @route GET /access/users/:id/applications
  * @description Retorna as aplicações às quais o usuário tem acesso.
- * @access Requer `VIEW_ACCESS` ou `MANAGE_ACCESS`
+ * @access Requer `ACCESS_VIEW` ou `ACCESS_MANAGE`
  */
 router.get('/access/users/:id/applications',
     authMiddleware,
-    canAny(['VIEW_ACCESS', 'MANAGE_ACCESS']),
+    canAny(['ACCESS_VIEW', 'ACCESS_MANAGE']),
     asyncHandler(accessController.getUserApplications));
 
 /**
  * @route POST /access/users/:id/applications
  * @description Concede acesso de um usuário a uma aplicação. Body: `{ application_id: number }`.
- * @access Requer `MANAGE_ACCESS`
+ * @access Requer `ACCESS_MANAGE`
  */
 router.post('/access/users/:id/applications',
     authMiddleware,
-    canAny(['MANAGE_ACCESS']),
+    canAny(['ACCESS_MANAGE']),
     validate(grantApplicationSchema),
     asyncHandler(accessController.grantApplicationAccess));
 
 /**
  * @route DELETE /access/users/:id/applications/:appId
  * @description Revoga o acesso de um usuário a uma aplicação.
- * @access Requer `MANAGE_ACCESS`
+ * @access Requer `ACCESS_MANAGE`
  */
 router.delete('/access/users/:id/applications/:appId',
     authMiddleware,
-    canAny(['MANAGE_ACCESS']),
+    canAny(['ACCESS_MANAGE']),
     asyncHandler(accessController.revokeApplicationAccess));
 
 // ─── Gestão de Acessos — Papéis (Roles) ───────────────────────────────────────
@@ -558,53 +558,53 @@ router.delete('/access/users/:id/applications/:appId',
 /**
  * @route GET /access/roles
  * @description Lista todos os papéis com suas permissões agregadas.
- * @access Requer `VIEW_ACCESS` ou `MANAGE_ACCESS`
+ * @access Requer `ACCESS_VIEW` ou `ACCESS_MANAGE`
  */
 router.get('/access/roles',
     authMiddleware,
-    canAny(['VIEW_ACCESS', 'MANAGE_ACCESS']),
+    canAny(['ACCESS_VIEW', 'ACCESS_MANAGE']),
     asyncHandler(accessController.getRoles));
 
 /**
  * @route GET /access/roles/:id
  * @description Retorna um papel pelo ID com suas permissões.
- * @access Requer `VIEW_ACCESS` ou `MANAGE_ACCESS`
+ * @access Requer `ACCESS_VIEW` ou `ACCESS_MANAGE`
  */
 router.get('/access/roles/:id',
     authMiddleware,
-    canAny(['VIEW_ACCESS', 'MANAGE_ACCESS']),
+    canAny(['ACCESS_VIEW', 'ACCESS_MANAGE']),
     asyncHandler(accessController.getRoleById));
 
 /**
  * @route POST /access/roles
  * @description Cria um novo papel. O nome é automaticamente convertido para maiúsculas.
- * @access Requer `MANAGE_ACCESS`
+ * @access Requer `ACCESS_MANAGE`
  */
 router.post('/access/roles',
     authMiddleware,
-    canAny(['MANAGE_ACCESS']),
+    canAny(['ACCESS_MANAGE']),
     validate(postRoleSchema),
     asyncHandler(accessController.postRole));
 
 /**
  * @route PUT /access/roles/:id
  * @description Atualiza nome e descrição de um papel.
- * @access Requer `MANAGE_ACCESS`
+ * @access Requer `ACCESS_MANAGE`
  */
 router.put('/access/roles/:id',
     authMiddleware,
-    canAny(['MANAGE_ACCESS']),
+    canAny(['ACCESS_MANAGE']),
     validate(putRoleSchema),
     asyncHandler(accessController.putRole));
 
 /**
  * @route DELETE /access/roles/:id
  * @description Remove um papel. Bloqueado se houver usuários vinculados (409).
- * @access Requer `MANAGE_ACCESS`
+ * @access Requer `ACCESS_MANAGE`
  */
 router.delete('/access/roles/:id',
     authMiddleware,
-    canAny(['MANAGE_ACCESS']),
+    canAny(['ACCESS_MANAGE']),
     asyncHandler(accessController.deleteRole));
 
 // ─── Gestão de Acessos — Vínculos Papel ↔ Permissão ──────────────────────────
@@ -612,22 +612,22 @@ router.delete('/access/roles/:id',
 /**
  * @route GET /access/roles/:id/permissions
  * @description Retorna as permissões de um papel.
- * @access Requer `VIEW_ACCESS` ou `MANAGE_ACCESS`
+ * @access Requer `ACCESS_VIEW` ou `ACCESS_MANAGE`
  */
 router.get('/access/roles/:id/permissions',
     authMiddleware,
-    canAny(['VIEW_ACCESS', 'MANAGE_ACCESS']),
+    canAny(['ACCESS_VIEW', 'ACCESS_MANAGE']),
     asyncHandler(accessController.getRolePermissions));
 
 /**
  * @route POST /access/roles/:id/permissions
  * @description Associa uma ou mais permissões a um papel. Body: `{ permission_ids: number[] }`.
  * Permissões já vinculadas são silenciosamente ignoradas.
- * @access Requer `MANAGE_ACCESS`
+ * @access Requer `ACCESS_MANAGE`
  */
 router.post('/access/roles/:id/permissions',
     authMiddleware,
-    canAny(['MANAGE_ACCESS']),
+    canAny(['ACCESS_MANAGE']),
     validate(assignPermissionsSchema),
     asyncHandler(accessController.assignPermissionsToRole));
 
@@ -635,22 +635,22 @@ router.post('/access/roles/:id/permissions',
  * @route PUT /access/roles/:id/permissions
  * @description Substitui completamente as permissões de um papel (operação atômica).
  * Body: `{ permission_ids: number[] }`.
- * @access Requer `MANAGE_ACCESS`
+ * @access Requer `ACCESS_MANAGE`
  */
 router.put('/access/roles/:id/permissions',
     authMiddleware,
-    canAny(['MANAGE_ACCESS']),
+    canAny(['ACCESS_MANAGE']),
     validate(setPermissionsSchema),
     asyncHandler(accessController.setRolePermissions));
 
 /**
  * @route DELETE /access/roles/:id/permissions/:permissionId
  * @description Desassocia uma permissão de um papel.
- * @access Requer `MANAGE_ACCESS`
+ * @access Requer `ACCESS_MANAGE`
  */
 router.delete('/access/roles/:id/permissions/:permissionId',
     authMiddleware,
-    canAny(['MANAGE_ACCESS']),
+    canAny(['ACCESS_MANAGE']),
     asyncHandler(accessController.removePermissionFromRole));
 
 // ─── Gestão de Acessos — Permissões ───────────────────────────────────────────
@@ -658,43 +658,43 @@ router.delete('/access/roles/:id/permissions/:permissionId',
 /**
  * @route GET /access/permissions
  * @description Lista todas as permissões cadastradas.
- * @access Requer `VIEW_ACCESS` ou `MANAGE_ACCESS`
+ * @access Requer `ACCESS_VIEW` ou `ACCESS_MANAGE`
  */
 router.get('/access/permissions',
     authMiddleware,
-    canAny(['VIEW_ACCESS', 'MANAGE_ACCESS']),
+    canAny(['ACCESS_VIEW', 'ACCESS_MANAGE']),
     asyncHandler(accessController.getPermissions));
 
 /**
  * @route POST /access/permissions
  * @description Cria uma nova permissão. O código é automaticamente convertido para maiúsculas.
- * @access Requer `MANAGE_ACCESS`
+ * @access Requer `ACCESS_MANAGE`
  */
 router.post('/access/permissions',
     authMiddleware,
-    canAny(['MANAGE_ACCESS']),
+    canAny(['ACCESS_MANAGE']),
     validate(postPermissionSchema),
     asyncHandler(accessController.postPermission));
 
 /**
  * @route PUT /access/permissions/:id
  * @description Atualiza código e descrição de uma permissão.
- * @access Requer `MANAGE_ACCESS`
+ * @access Requer `ACCESS_MANAGE`
  */
 router.put('/access/permissions/:id',
     authMiddleware,
-    canAny(['MANAGE_ACCESS']),
+    canAny(['ACCESS_MANAGE']),
     validate(putPermissionSchema),
     asyncHandler(accessController.putPermission));
 
 /**
  * @route DELETE /access/permissions/:id
  * @description Remove uma permissão. Bloqueado se estiver em uso por algum papel (409).
- * @access Requer `MANAGE_ACCESS`
+ * @access Requer `ACCESS_MANAGE`
  */
 router.delete('/access/permissions/:id',
     authMiddleware,
-    canAny(['MANAGE_ACCESS']),
+    canAny(['ACCESS_MANAGE']),
     asyncHandler(accessController.deletePermission));
 
 // ─── Gestão de Acessos — Aplicações ───────────────────────────────────────────
@@ -702,11 +702,11 @@ router.delete('/access/permissions/:id',
 /**
  * @route GET /access/applications
  * @description Lista todas as aplicações cadastradas no sistema.
- * @access Requer `VIEW_ACCESS` ou `MANAGE_ACCESS`
+ * @access Requer `ACCESS_VIEW` ou `ACCESS_MANAGE`
  */
 router.get('/access/applications',
     authMiddleware,
-    canAny(['VIEW_ACCESS', 'MANAGE_ACCESS']),
+    canAny(['ACCESS_VIEW', 'ACCESS_MANAGE']),
     asyncHandler(accessController.getApplications));
 
 // ─── Arquivos (_files) ────────────────────────────────────────────────────────
@@ -750,7 +750,7 @@ router.get('/chat/uploads/:filename',
  */
 router.get('/chat/conversations',
     authMiddleware,
-    canAny(['USE_CLPP_CHAT']),
+    canAny(['CLPP_USE_CHAT']),
     asyncHandler(chatController.getConversations));
 
 /**
@@ -761,7 +761,7 @@ router.get('/chat/conversations',
  */
 router.get('/chat/messages',
     authMiddleware,
-    canAny(['USE_CLPP_CHAT']),
+    canAny(['CLPP_USE_CHAT']),
     asyncHandler(chatController.getMessages));
 
 /**
@@ -772,7 +772,7 @@ router.get('/chat/messages',
  */
 router.post('/chat/messages',
     authMiddleware,
-    canAny(['USE_CLPP_CHAT']),
+    canAny(['CLPP_USE_CHAT']),
     validate(sendMessageSchema),
     asyncHandler(chatController.sendMessage));
 
@@ -785,7 +785,7 @@ router.post('/chat/messages',
  */
 router.post('/chat/messages/file',
     authMiddleware,
-    canAny(['USE_CLPP_CHAT']),
+    canAny(['CLPP_USE_CHAT']),
     fileUpload.single('file'),          // multer memoryStorage via FileService
     asyncHandler(chatController.uploadFile));
 
@@ -797,7 +797,7 @@ router.post('/chat/messages/file',
  */
 router.put('/chat/messages/read',
     authMiddleware,
-    canAny(['USE_CLPP_CHAT']),
+    canAny(['CLPP_USE_CHAT']),
     validate(markAsReadSchema),
     asyncHandler(chatController.markAsRead));
 
@@ -807,117 +807,117 @@ router.put('/chat/messages/read',
  * @route GET /gtpp/states
  * @description Lista todos os estados de tarefa disponíveis (id, description, color).
  * Equivalente ao TaskState.php do PHP.
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.get('/gtpp/states',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppTaskController.getTaskStates));
 
 /**
  * @route GET /gtpp/tasks
  * @description Lista tarefas onde o usuário é criador ou está vinculado.
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.get('/gtpp/tasks',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppTaskController.getTasks));
 
 /**
  * @route GET /gtpp/tasks/board
  * @description Retorna tarefas de múltiplos estados em uma única requisição.
  * Query params: state_ids (csv), page, limit.
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.get('/gtpp/tasks/board',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppTaskController.getTasksBoard));
 
 /**
  * @route GET /gtpp/tasks/:taskId/historic
  * @description Lista o histórico de mudanças de estado de uma tarefa.
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.get('/gtpp/tasks/:taskId/historic',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppTaskController.getTaskHistoric));
 
 /**
  * @route GET /gtpp/tasks/:id
  * @description Retorna uma tarefa completa com itens e usuários vinculados.
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.get('/gtpp/tasks/:id',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppTaskController.getTaskById));
 
 /**
  * @route POST /gtpp/tasks
  * @description Cria uma nova tarefa. Body: { title, description?, theme_id?, expire_day? }
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.post('/gtpp/tasks',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     validate(postTaskSchema),
     asyncHandler(gtppTaskController.createTask));
 
 /**
  * @route PUT /gtpp/tasks/:id/state
  * @description Atualiza o estado de uma tarefa. Body: { state_id, description? }
- * @access Requer `USE_GTPP` (apenas criador ou MANAGE_GTPP)
+ * @access Requer `GTPP_USE` (apenas criador ou GTPP_MANAGE)
  */
 router.put('/gtpp/tasks/:id/state',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     validate(putTaskStateSchema),
     asyncHandler(gtppTaskController.updateTaskState));
 
 /**
  * @route PUT /gtpp/tasks/:id/title
  * @description Atualiza o título de uma tarefa. Body: { description }
- * @access Requer `USE_GTPP` (apenas criador ou MANAGE_GTPP)
+ * @access Requer `GTPP_USE` (apenas criador ou GTPP_MANAGE)
  */
 router.put('/gtpp/tasks/:id/title',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     validate(putTaskTitleSchema),
     asyncHandler(gtppTaskController.updateTaskTitle));
 
 /**
  * @route PUT /gtpp/tasks/:id/description
  * @description Atualiza a descrição longa de uma tarefa. Body: { full_description }
- * @access Requer `USE_GTPP` (apenas criador ou MANAGE_GTPP)
+ * @access Requer `GTPP_USE` (apenas criador ou GTPP_MANAGE)
  */
 router.put('/gtpp/tasks/:id/description',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     validate(putTaskDescriptionSchema),
     asyncHandler(gtppTaskController.updateTaskDescription));
 
 /**
  * @route PUT /gtpp/tasks/:id/theme
  * @description Atualiza o tema de uma tarefa. Body: { theme_id }
- * @access Requer `USE_GTPP` (apenas criador ou MANAGE_GTPP)
+ * @access Requer `GTPP_USE` (apenas criador ou GTPP_MANAGE)
  */
 router.put('/gtpp/tasks/:id/theme',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     validate(putTaskThemeSchema),
     asyncHandler(gtppTaskController.updateTaskTheme));
 
 /**
  * @route DELETE /gtpp/tasks/:id
  * @description Remove uma tarefa permanentemente.
- * @access Requer `USE_GTPP` (apenas criador ou MANAGE_GTPP)
+ * @access Requer `GTPP_USE` (apenas criador ou GTPP_MANAGE)
  */
 router.delete('/gtpp/tasks/:id',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppTaskController.deleteTask));
 
 // ─── GTPP — Itens de Tarefa ───────────────────────────────────────────────────
@@ -925,21 +925,21 @@ router.delete('/gtpp/tasks/:id',
 /**
  * @route GET /gtpp/tasks/:taskId/items
  * @description Lista itens ativos de uma tarefa.
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.get('/gtpp/tasks/:taskId/items',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppItemController.getTaskItems));
 
 /**
  * @route POST /gtpp/tasks/:taskId/items
  * @description Cria um item na tarefa. Campo `file` opcional (multipart/form-data).
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.post('/gtpp/tasks/:taskId/items',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     fileUpload.single('file'),
     validate(postTaskItemSchema),
     asyncHandler(gtppItemController.createTaskItem));
@@ -948,11 +948,11 @@ router.post('/gtpp/tasks/:taskId/items',
  * @route PUT /gtpp/tasks/:taskId/items/:id
  * @description Atualiza um campo do item. Body: { action, ...campos }.
  * Actions: check | yes_no | description | file | note | assigned_to | status | position
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.put('/gtpp/tasks/:taskId/items/:id',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     fileUpload.single('file'),
     validate(putTaskItemSchema),
     asyncHandler(gtppItemController.updateTaskItem));
@@ -961,21 +961,21 @@ router.put('/gtpp/tasks/:taskId/items/:id',
  * @route GET /gtpp/tasks/:taskId/items/:id/file
  * @description Serve o arquivo anexado ao item.
  *              Transparente: abstrai arquivo novo (_files) e legado (BLOB).
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.get('/gtpp/tasks/:taskId/items/:id/file',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppItemController.downloadItemFile));
 
 /**
  * @route DELETE /gtpp/tasks/:taskId/items/:id
  * @description Soft-delete de um item (status = 0).
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.delete('/gtpp/tasks/:taskId/items/:id',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppItemController.deleteTaskItem));
 
 // ─── GTPP — Respostas / Evidências ───────────────────────────────────────────
@@ -983,22 +983,22 @@ router.delete('/gtpp/tasks/:taskId/items/:id',
 /**
  * @route GET /gtpp/items/:itemId/responses
  * @description Lista respostas ativas de um item de tarefa.
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.get('/gtpp/items/:itemId/responses',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppResponseController.getItemResponses));
 
 /**
  * @route POST /gtpp/items/:itemId/responses
  * @description Adiciona uma resposta/evidência a um item. Campo `file` opcional.
  * Body: { comment, last_state_id?, new_state_id? }
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.post('/gtpp/items/:itemId/responses',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     fileUpload.single('file'),
     asyncHandler(gtppResponseController.createItemResponse));
 
@@ -1006,22 +1006,22 @@ router.post('/gtpp/items/:itemId/responses',
  * @route PUT /gtpp/items/:itemId/responses/:id
  * @description Atualiza o comentário de uma resposta.
  * Body: { comment }
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.put('/gtpp/items/:itemId/responses/:id',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     validate(putTaskItemResponseSchema),
     asyncHandler(gtppResponseController.updateItemResponse));
 
 /**
  * @route DELETE /gtpp/items/:itemId/responses/:id
  * @description Soft-delete de uma resposta (status = 0).
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.delete('/gtpp/items/:itemId/responses/:id',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppResponseController.deleteItemResponse));
 
 // ─── GTPP — Escopo da Tarefa ──────────────────────────────────────────────────
@@ -1029,32 +1029,32 @@ router.delete('/gtpp/items/:itemId/responses/:id',
 /**
  * @route GET /gtpp/tasks/:taskId/scope
  * @description Lista os escopos (companhia/loja/CC) vinculados à tarefa.
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.get('/gtpp/tasks/:taskId/scope',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppScopeController.getTaskScope));
 
 /**
  * @route POST /gtpp/tasks/:taskId/scope
  * @description Adiciona um escopo à tarefa. Body: { company_code?, branch_code?, cost_center_code? }
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.post('/gtpp/tasks/:taskId/scope',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     validate(postTaskScopeSchema),
     asyncHandler(gtppScopeController.addTaskScope));
 
 /**
  * @route DELETE /gtpp/tasks/:taskId/scope/:id
  * @description Remove um escopo da tarefa.
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.delete('/gtpp/tasks/:taskId/scope/:id',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppScopeController.removeTaskScope));
 
 // ─── GTPP — Usuários da Tarefa ────────────────────────────────────────────────
@@ -1064,21 +1064,21 @@ router.delete('/gtpp/tasks/:taskId/scope/:id',
  * @description Lista usuários com acesso GTPP, indicando vinculação à tarefa.
  * Retorna `{ user_id, name, file_id, check }` — `file_id` é a foto do
  * colaborador (null se não houver), no mesmo formato de `GET /users`.
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.get('/gtpp/tasks/:taskId/users',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppTaskUserController.getTaskUsers));
 
 /**
  * @route PUT /gtpp/tasks/:taskId/users
  * @description Alterna vínculo de usuário à tarefa. Body: { user_id }
- * @access Requer `USE_GTPP` (apenas criador ou MANAGE_GTPP)
+ * @access Requer `GTPP_USE` (apenas criador ou GTPP_MANAGE)
  */
 router.put('/gtpp/tasks/:taskId/users',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     validate(putTaskUserSchema),
     asyncHandler(gtppTaskUserController.toggleTaskUser));
 
@@ -1087,22 +1087,22 @@ router.put('/gtpp/tasks/:taskId/users',
 /**
  * @route GET /gtpp/tasks/:taskId/messages
  * @description Lista mensagens de uma tarefa.
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.get('/gtpp/tasks/:taskId/messages',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppMessageController.getTaskMessages));
 
 /**
  * @route POST /gtpp/tasks/:taskId/messages
  * @description Envia uma mensagem. Campo `file` opcional (multipart/form-data).
  * Body: { description? } + campo file opcional.
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.post('/gtpp/tasks/:taskId/messages',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     fileUpload.single('file'),
     validate(postTaskMessageSchema),
     asyncHandler(gtppMessageController.sendMessage));
@@ -1110,11 +1110,11 @@ router.post('/gtpp/tasks/:taskId/messages',
 /**
  * @route DELETE /gtpp/messages/:id
  * @description Remove uma mensagem. Query param: task_id (obrigatório).
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.delete('/gtpp/messages/:id',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppMessageController.deleteMessage));
 
 // ─── GTPP — Notificações ──────────────────────────────────────────────────────
@@ -1122,11 +1122,11 @@ router.delete('/gtpp/messages/:id',
 /**
  * @route GET /gtpp/notifications
  * @description Retorna e consome (deleta) notificações pendentes do usuário.
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.get('/gtpp/notifications',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppNotifyController.getNotifications));
 
 // ─── GTPP — Temas ─────────────────────────────────────────────────────────────
@@ -1134,43 +1134,43 @@ router.get('/gtpp/notifications',
 /**
  * @route GET /gtpp/themes
  * @description Lista temas. Params: ?all=true | ?id=X | (padrão) temas do usuário.
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.get('/gtpp/themes',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppThemeController.getThemes));
 
 /**
  * @route POST /gtpp/themes
  * @description Cria um novo tema. Body: { description_theme }
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.post('/gtpp/themes',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     validate(postThemeSchema),
     asyncHandler(gtppThemeController.createTheme));
 
 /**
  * @route PUT /gtpp/themes/:id
  * @description Atualiza a descrição de um tema. Body: { description_theme }
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.put('/gtpp/themes/:id',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     validate(putThemeSchema),
     asyncHandler(gtppThemeController.updateTheme));
 
 /**
  * @route DELETE /gtpp/themes/:id
  * @description Remove um tema permanentemente.
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.delete('/gtpp/themes/:id',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppThemeController.deleteTheme));
 
 // ─── GTPP — Pontuação ─────────────────────────────────────────────────────────
@@ -1178,21 +1178,21 @@ router.delete('/gtpp/themes/:id',
 /**
  * @route GET /gtpp/score
  * @description Pontuação: ?all=no (usuário atual), ?all=yes (todos), ?task_id=X (disqualify).
- * @access Requer `USE_GTPP`
+ * @access Requer `GTPP_USE`
  */
 router.get('/gtpp/score',
     authMiddleware,
-    canAny(['USE_GTPP']),
+    canAny(['GTPP_USE']),
     asyncHandler(gtppScoreController.getScore));
 
 /**
  * @route PUT /gtpp/score/disqualify
  * @description Atualiza desqualificação de tarefa. Query: task_id, disqualify (0|1).
- * @access Requer `MANAGE_GTPP`
+ * @access Requer `GTPP_MANAGE`
  */
 router.put('/gtpp/score/disqualify',
     authMiddleware,
-    canAny(['MANAGE_GTPP']),
+    canAny(['GTPP_MANAGE']),
     validate(disqualifyQuerySchema, 'query'),
     asyncHandler(gtppScoreController.updateDisqualify));
 
@@ -1219,10 +1219,10 @@ router.get('/shops/audit',
 
 // ─── EPP — Permissões ─────────────────────────────────────────────────────────
 //
-//  USE_EPP        → Leitura geral (produtos, menus, categorias, estoque)
+//  EPP_USE        → Leitura geral (produtos, menus, categorias, estoque)
 //  EPP_ORDERS     → Ver, criar e atualizar pedidos e seus itens de venda
 //  EPP_PRODUCTS   → Cadastrar e editar produtos, menus e log_menus
-//  EPP_RECEIPE    → Acessar receitas técnicas Oracle (mobile, oracle_receipe)
+//  EPP_VIEW_RECIPE    → Acessar receitas técnicas Oracle (mobile, oracle_receipe)
 //  EPP_MANAGE     → Administração total (exclusões, correções de estoque)
 //
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1234,32 +1234,32 @@ router.get('/shops/audit',
  * @description Lista produtos.
  * Query: ?complete=1 (todos) | ?category=1 (categorias) |
  *        ?id_product=X | ?id_category_fk=X | ?status_prod=X (filtros)
- * @access USE_EPP | EPP_ORDERS | EPP_PRODUCTS | EPP_RECEIPE
+ * @access EPP_USE | EPP_ORDERS | EPP_PRODUCTS | EPP_VIEW_RECIPE
  */
 router.get('/epp/products',
     authMiddleware,
-    canAny(['USE_EPP', 'EPP_ORDERS', 'EPP_PRODUCTS', 'EPP_RECEIPE']),
+    canAny(['EPP_USE', 'EPP_ORDERS', 'EPP_PRODUCTS', 'EPP_VIEW_RECIPE']),
     asyncHandler(eppProductController.getProducts));
 
 /**
  * @route GET /epp/products/consinco
  * @description Consulta produto no ERP Consinco (Oracle) por código de barras.
  * Query: codigo_acesso (obrigatório), lojas (obrigatório), full_store?
- * @access USE_EPP | EPP_ORDERS | EPP_PRODUCTS
+ * @access EPP_USE | EPP_ORDERS | EPP_PRODUCTS
  */
 router.get('/epp/products/consinco',
     authMiddleware,
-    canAny(['USE_EPP', 'EPP_ORDERS', 'EPP_PRODUCTS']),
+    canAny(['EPP_USE', 'EPP_ORDERS', 'EPP_PRODUCTS']),
     asyncHandler(eppProductController.getProductConsinco));
 
 /**
  * @route GET /epp/products/:id
  * @description Retorna um produto pelo ID com nome da categoria.
- * @access USE_EPP | EPP_ORDERS | EPP_PRODUCTS | EPP_RECEIPE
+ * @access EPP_USE | EPP_ORDERS | EPP_PRODUCTS | EPP_VIEW_RECIPE
  */
 router.get('/epp/products/:id',
     authMiddleware,
-    canAny(['USE_EPP', 'EPP_ORDERS', 'EPP_PRODUCTS', 'EPP_RECEIPE']),
+    canAny(['EPP_USE', 'EPP_ORDERS', 'EPP_PRODUCTS', 'EPP_VIEW_RECIPE']),
     asyncHandler(eppProductController.getProductById));
 
 /**
@@ -1312,11 +1312,11 @@ router.delete('/epp/products/:id',
  * @route GET /epp/menus
  * @description Lista menus.
  * Query: ?registration=1 (todos) | ?id_menu=X | ?status=X | ?description=X
- * @access USE_EPP | EPP_ORDERS | EPP_PRODUCTS | EPP_RECEIPE
+ * @access EPP_USE | EPP_ORDERS | EPP_PRODUCTS | EPP_VIEW_RECIPE
  */
 router.get('/epp/menus',
     authMiddleware,
-    canAny(['USE_EPP', 'EPP_ORDERS', 'EPP_PRODUCTS', 'EPP_RECEIPE']),
+    canAny(['EPP_USE', 'EPP_ORDERS', 'EPP_PRODUCTS', 'EPP_VIEW_RECIPE']),
     asyncHandler(eppMenuController.getMenus));
 
 /**
@@ -1357,11 +1357,11 @@ router.delete('/epp/menus/:id',
  * @route GET /epp/log-menus
  * @description Lista itens de menu com dados de produto e menu.
  * Query: ?plu_menu=X (filtra por PLU)
- * @access USE_EPP | EPP_ORDERS | EPP_PRODUCTS | EPP_RECEIPE
+ * @access EPP_USE | EPP_ORDERS | EPP_PRODUCTS | EPP_VIEW_RECIPE
  */
 router.get('/epp/log-menus',
     authMiddleware,
-    canAny(['USE_EPP', 'EPP_ORDERS', 'EPP_PRODUCTS', 'EPP_RECEIPE']),
+    canAny(['EPP_USE', 'EPP_ORDERS', 'EPP_PRODUCTS', 'EPP_VIEW_RECIPE']),
     asyncHandler(eppMenuController.getLogMenus));
 
 /**
@@ -1447,7 +1447,7 @@ router.post('/epp/orders/bulk',
  */
 router.get('/epp/orders/consinco/:nroPedido/ecommerce',
     authMiddleware,
-    canAny(['EPP_ECOMMERCE', 'EPP_MANAGE']),
+    canAny(['EPP_USE_ECOMMERCE', 'EPP_MANAGE']),
     asyncHandler(eppOrderController.getEcommerceOrder));
 
 /**
@@ -1458,7 +1458,7 @@ router.get('/epp/orders/consinco/:nroPedido/ecommerce',
  */
 router.post('/epp/orders/consinco/:nroPedido/ecommerce',
     authMiddleware,
-    canAny(['EPP_ECOMMERCE', 'EPP_MANAGE']),
+    canAny(['EPP_USE_ECOMMERCE', 'EPP_MANAGE']),
     validate(postEcommerceOrderSchema),
     asyncHandler(eppOrderController.confirmEcommerceOrder));
 
@@ -1511,11 +1511,11 @@ router.delete('/epp/orders/:id',
  * @route GET /epp/log-sales
  * @description Lista itens de venda.
  * Query: ?epp_id_order=X | ?controller=1 [+filtros] | ?mobile=1 | ?oracle_receipe=1&seq_produto=X
- * @access EPP_ORDERS (itens de pedido) | EPP_RECEIPE (mobile + receita Oracle) | EPP_MANAGE
+ * @access EPP_ORDERS (itens de pedido) | EPP_VIEW_RECIPE (mobile + receita Oracle) | EPP_MANAGE
  */
 router.get('/epp/log-sales',
     authMiddleware,
-    canAny(['EPP_ORDERS', 'EPP_RECEIPE', 'EPP_MANAGE']),
+    canAny(['EPP_ORDERS', 'EPP_VIEW_RECIPE', 'EPP_MANAGE']),
     asyncHandler(eppLogSaleController.getLogSales));
 
 /**
@@ -1566,22 +1566,22 @@ router.delete('/epp/log-sales/:id',
  * @route GET /epp/stock
  * @description Consulta estoque.
  * Query: ?stock=1[&id_product_fk=X] | ?history=1&id_product_fk=X | ?pending_production=1[&page=N]
- * @access USE_EPP | EPP_ORDERS | EPP_RECEIPE | EPP_MANAGE
+ * @access EPP_USE | EPP_ORDERS | EPP_VIEW_RECIPE | EPP_MANAGE
  */
 router.get('/epp/stock',
     authMiddleware,
-    canAny(['USE_EPP', 'EPP_ORDERS', 'EPP_RECEIPE', 'EPP_MANAGE']),
+    canAny(['EPP_USE', 'EPP_ORDERS', 'EPP_VIEW_RECIPE', 'EPP_MANAGE']),
     asyncHandler(eppStockController.getStock));
 
 /**
  * @route POST /epp/stock
  * @description Registra entrada (qty > 0) ou saída (qty < 0) de estoque.
  * Body: { id_product_fk, stock_quantity, created_by, updated_by, measure }
- * @access USE_EPP | EPP_ORDERS | EPP_MANAGE
+ * @access EPP_USE | EPP_ORDERS | EPP_MANAGE
  */
 router.post('/epp/stock',
     authMiddleware,
-    canAny(['USE_EPP', 'EPP_ORDERS', 'EPP_MANAGE']),
+    canAny(['EPP_USE', 'EPP_ORDERS', 'EPP_MANAGE']),
     validate(postStockSchema),
     asyncHandler(eppStockController.createStock));
 
@@ -1602,7 +1602,7 @@ router.put('/epp/stock/:id',
 // Migrado de Controller/BPPP/Product.php (+ DAO/BPPP/Product.php). Consulta
 // somente leitura no ERP Consinco (Oracle) — nada é gravado.
 //
-//  USE_BPPP    → Consultar preço/estoque de produto
+//  BPPP_USE    → Consultar preço/estoque de produto
 //  BPPP_MANAGE → Administração do módulo (inclui a consulta)
 //
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1613,13 +1613,30 @@ router.put('/epp/stock/:id',
  * exatamente UM critério: `plu` (alias legado: `id`), `ean` ou `description`.
  * PLU/EAN retornam 1 item; descrição retorna até 25 itens ordenados.
  * Resposta: [{ plu, description, barcode, store, price, price_promotion, promotion, status }]
- * @access USE_BPPP | BPPP_MANAGE
+ * @access BPPP_USE | BPPP_MANAGE
  */
 router.get('/bppp/products',
     authMiddleware,
-    canAny(['USE_BPPP', 'BPPP_MANAGE']),
+    canAny(['BPPP_USE', 'BPPP_MANAGE']),
     validate(searchProductQuerySchema, 'query'),
     asyncHandler(bpppProductController.searchProducts));
+
+/**
+ * @route GET /bppp/departments/:departmentId/products
+ * @description Lista os produtos de um departamento em uma loja — só itens com
+ * código de balança, ativos para venda no segmento 1. Exige `shop_id` na query.
+ * Resposta: mesmo formato de `GET /bppp/products`; `[]` quando o departamento
+ * não tem item (ausência não é erro).
+ *
+ * Migrado de `DAOProduct::SelectByShopAndDepartment`, que existia no DAO do PHP
+ * mas nunca teve controller — o contrato HTTP nasce aqui.
+ * @access BPPP_USE | BPPP_MANAGE
+ */
+router.get('/bppp/departments/:departmentId/products',
+    authMiddleware,
+    canAny(['BPPP_USE', 'BPPP_MANAGE']),
+    validate(listByDepartmentQuerySchema, 'query'),
+    asyncHandler(bpppProductController.listByDepartment));
 
 // ─── GAPP — Ativos ────────────────────────────────────────────────────────────
 //
@@ -1819,11 +1836,11 @@ router.delete('/gapp/store/:id',
  * @route GET /gapp/expenses
  * @description Lista/filtra despesas de qualquer ativo, com paginação.
  * Restrito ao work_group_fk do usuário autenticado.
- * @access Requer `GAPP_VIEW_EXPENSES`
+ * @access Requer `GAPP_VIEW_EXPENSE`
  */
 router.get('/gapp/expenses',
     authMiddleware,
-    canAll(['GAPP_VIEW_EXPENSES']),
+    canAll(['GAPP_VIEW_EXPENSE']),
     validate(listExpensesQuerySchema, 'query'),
     asyncHandler(gappExpensesController.listExpenses));
 
@@ -1832,11 +1849,11 @@ router.get('/gapp/expenses',
  * @description Lista/filtra despesas restritas a ativos que são veículo —
  * permite filtrar por placa (`license_plates`) e unidade. Baseada na
  * pcr_select_filtered_expenses (legado), com isolamento por work_group_fk.
- * @access Requer `GAPP_VIEW_EXPENSES`
+ * @access Requer `GAPP_VIEW_EXPENSE`
  */
 router.get('/gapp/expenses/vehicles',
     authMiddleware,
-    canAll(['GAPP_VIEW_EXPENSES']),
+    canAll(['GAPP_VIEW_EXPENSE']),
     validate(listVehicleExpensesQuerySchema, 'query'),
     asyncHandler(gappExpensesController.listVehicleExpenses));
 
@@ -1845,11 +1862,11 @@ router.get('/gapp/expenses/vehicles',
  * @description Retorna uma despesa com o detalhe do tipo aninhado
  * (`fuel`/`maintenance`/`sinister`/`fine`/`insurance` — o que não for do
  * tipo vem `null`). Restrito ao work_group_fk do usuário.
- * @access Requer `GAPP_VIEW_EXPENSES`
+ * @access Requer `GAPP_VIEW_EXPENSE`
  */
 router.get('/gapp/expenses/:id',
     authMiddleware,
-    canAll(['GAPP_VIEW_EXPENSES']),
+    canAll(['GAPP_VIEW_EXPENSE']),
     asyncHandler(gappExpensesController.getExpenseById));
 
 /**
@@ -1859,11 +1876,11 @@ router.get('/gapp/expenses/:id',
  * do usuário. O objeto de detalhe exigido depende de `exp_type_id_fk`
  * (1=fuel, 2=maintenance, 3=sinister, 4=fine, 5=insurance; 6=Outros não
  * exige nenhum) — tudo gravado numa única transação.
- * @access Requer `GAPP_CREATE_EXPENSES`
+ * @access Requer `GAPP_CREATE_EXPENSE`
  */
 router.post('/gapp/expenses',
     authMiddleware,
-    canAll(['GAPP_CREATE_EXPENSES']),
+    canAll(['GAPP_CREATE_EXPENSE']),
     validate(createExpenseSchema),
     validateExpenseTypePayload,
     asyncHandler(gappExpensesController.createExpense));
@@ -1873,11 +1890,11 @@ router.post('/gapp/expenses',
  * @description Atualiza uma despesa existente e seu detalhe (mesma regra
  * de objeto por tipo do create). fuel/maintenance/sinister/fine são
  * substituídos por completo; Seguro é atualizado in-place (nunca recriado).
- * @access Requer `GAPP_UPDATE_EXPENSES`
+ * @access Requer `GAPP_UPDATE_EXPENSE`
  */
 router.put('/gapp/expenses/:id',
     authMiddleware,
-    canAll(['GAPP_UPDATE_EXPENSES']),
+    canAll(['GAPP_UPDATE_EXPENSE']),
     validate(updateExpenseSchema),
     validateExpenseTypePayload,
     asyncHandler(gappExpensesController.updateExpense));

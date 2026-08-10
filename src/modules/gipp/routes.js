@@ -14,54 +14,54 @@ const gippController = require('./controllers/gipp.controller');
 // ─── Status ───────────────────────────────────────────────────────────────────
 router.get('/status',
     authMiddleware,
-    canAll(['VIEW_EMPLOYEES']),
+    canAll(['GIPP_VIEW_TIMERECORD']),
     asyncHandler(gippController.getStatus));
 
 // ─── Registros de Ponto ───────────────────────────────────────────────────────
 
 router.get('/time-records/payment',
     authMiddleware,
-    canAny(['VIEW_TIME_RECORDS', 'MANAGE_TIME_RECORDS']),
+    canAny(['GIPP_VIEW_TIMERECORD', 'GIPP_MANAGE_TIMERECORD']),
     asyncHandler(gippController.getPaymentRegistered));
 
 router.get('/time-records/record-types',
     authMiddleware,
-    canAll(['VIEW_EMPLOYEES']),
+    canAll(['GIPP_VIEW_TIMERECORD']),
     asyncHandler(gippController.getRecordTypes));
 
 router.get('/time-records',
     authMiddleware,
-    canAny(['VIEW_TIME_RECORDS', 'MANAGE_TIME_RECORDS']),
+    canAny(['GIPP_VIEW_TIMERECORD', 'GIPP_MANAGE_TIMERECORD']),
     asyncHandler(gippController.getTimeRecords));
 
 router.post('/time-records',
     authMiddleware,
-    canAny(['CREATE_TIME_RECORDS', 'MANAGE_TIME_RECORDS']),
+    canAny(['GIPP_CREATE_TIMERECORD', 'GIPP_MANAGE_TIMERECORD']),
     validate(postTimeRecordSchema),
     asyncHandler(gippController.postTimeRecord));
 
 router.put('/time-records',
     authMiddleware,
-    canAny(['EDIT_TIME_RECORDS', 'MANAGE_TIME_RECORDS']),
+    canAny(['GIPP_UPDATE_TIMERECORD', 'GIPP_MANAGE_TIMERECORD']),
     validate(putTimeRecordSchema),
     asyncHandler(gippController.putTimeRecord));
 
 // Desconsiderar jornada — ação separada com permissão própria
 router.patch('/time-records/discard',
     authMiddleware,
-    canAny(['DISCARD_TIME_RECORDS', 'MANAGE_TIME_RECORDS']),
+    canAny(['GIPP_DISCARD_TIMERECORD', 'GIPP_MANAGE_TIMERECORD']),
     validate(discardTimeRecordSchema),
     asyncHandler(gippController.discardTimeRecord));
 
 // ─── Pagamentos ───────────────────────────────────────────────────────────────
 router.post('/payments',
     authMiddleware,
-    canAny(['CREATE_PAYMENTS', 'MANAGE_PAYMENTS']),
+    canAny(['GIPP_CREATE_PAYMENT', 'GIPP_MANAGE_PAYMENT']),
     asyncHandler(gippController.postPayments));
 
 router.post('/payments/close',
     authMiddleware,
-    canAny(['CREATE_PAYMENTS', 'MANAGE_PAYMENTS']),
+    canAny(['GIPP_CREATE_PAYMENT', 'GIPP_MANAGE_PAYMENT']),
     asyncHandler(gippController.postPaymentsClose));
 
 module.exports = router;

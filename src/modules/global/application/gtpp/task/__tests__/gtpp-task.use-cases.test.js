@@ -5,7 +5,7 @@ const { GtppEventPublisherPort } = require('../../ports/gtpp-event-publisher.por
 const { AppError } = require('../../../../../../errors/app.error');
 
 const OWNER = { id: 10, permissions: [] };
-const ADMIN = { id: 99, permissions: ['MANAGE_GTPP'] };
+const ADMIN = { id: 99, permissions: ['GTPP_MANAGE'] };
 const STRANGER = { id: 42, permissions: [] };
 
 function makeFakeRepository(overrides = {}) {

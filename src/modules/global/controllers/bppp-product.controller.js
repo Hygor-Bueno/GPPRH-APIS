@@ -36,4 +36,20 @@ async function searchProducts(req, res) {
     return respond.ok(res, data);
 }
 
-module.exports = { searchProducts };
+/**
+ * GET /bppp/departments/:departmentId/products
+ * Query: shop_id (obrigatório)
+ *
+ * Lista os itens de balança ativos de um departamento na loja. Retorna array
+ * vazio quando não há item — ausência de produto não é erro aqui.
+ */
+async function listByDepartment(req, res) {
+    const data = await useCases.listByDepartment({
+        shopId:       Number(req.query.shop_id),
+        departmentId: Number(req.params.departmentId),
+    });
+
+    return respond.ok(res, data);
+}
+
+module.exports = { searchProducts, listByDepartment };

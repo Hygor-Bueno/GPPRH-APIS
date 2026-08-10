@@ -7,7 +7,12 @@
  */
 
 const { OracleProductRepositoryPort } = require('../../application/bppp/product/ports/oracle-product-repository.port');
-const { findByPlu, findByEan, findByDescription } = require('../../repositories/oracle/bppp.oracle.queries');
+const {
+    findByPlu,
+    findByEan,
+    findByDescription,
+    findByShopAndDepartment,
+} = require('../../repositories/oracle/bppp.oracle.queries');
 
 class OracleProductRepository extends OracleProductRepositoryPort {
     async findByPlu(shopId, plu) {
@@ -20,6 +25,10 @@ class OracleProductRepository extends OracleProductRepositoryPort {
 
     async findByDescription(shopId, pattern) {
         return findByDescription(shopId, pattern);
+    }
+
+    async findByShopAndDepartment(shopId, departmentId) {
+        return findByShopAndDepartment(shopId, departmentId);
     }
 }
 

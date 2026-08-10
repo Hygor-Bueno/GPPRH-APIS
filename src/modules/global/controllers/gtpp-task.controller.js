@@ -118,7 +118,7 @@ async function updateTaskState(req, res) {
     // rota específica, não invariante de domínio, por isso fica no controller.
     if (newStateId === 5) {
         const perms   = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-        const isAdmin = perms.includes('MANAGE_GTPP') || perms.includes('SYSTEM_OWNER');
+        const isAdmin = perms.includes('GTPP_MANAGE') || perms.includes('SYSTEM_OWNER');
         if (!isAdmin) throw new AppError('Apenas administradores podem marcar uma tarefa como "Expirado".', 403);
     }
 

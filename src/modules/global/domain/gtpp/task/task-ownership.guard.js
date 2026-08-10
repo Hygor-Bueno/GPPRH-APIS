@@ -8,7 +8,7 @@
 
 const { AppError } = require('../../../../../errors/app.error');
 
-const DEFAULT_ADMIN_PERMISSIONS = ['MANAGE_GTPP', 'SYSTEM_OWNER'];
+const DEFAULT_ADMIN_PERMISSIONS = ['GTPP_MANAGE', 'SYSTEM_OWNER'];
 
 /**
  * @param {object} params

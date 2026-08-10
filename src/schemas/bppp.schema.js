@@ -16,4 +16,12 @@ const searchProductQuerySchema = {
     description: { type: 'string', minLength: 3,  maxLength: 60 },
 };
 
-module.exports = { searchProductQuerySchema };
+/**
+ * Query da listagem por departamento: `shop_id` obrigatório.
+ * O `department_id` vem na URL, não na query string.
+ */
+const listByDepartmentQuerySchema = {
+    shop_id: { type: 'number', required: true, min: 1 },
+};
+
+module.exports = { searchProductQuerySchema, listByDepartmentQuerySchema };

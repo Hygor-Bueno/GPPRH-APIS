@@ -111,9 +111,56 @@ async function findByDescription(shopId, pattern, maxRows = DESCRIPTION_MAX_ROWS
     `, { shopId, pattern, maxRows });
 }
 
+/**
+ * Produtos de um departamento em uma loja.
+ *
+ * Migrado de `DAOProduct::SelectByShopAndDepartment`. Reproduz os filtros do
+ * legado: só itens com código de **balança** (`TIPCODIGO = 'B'`), ativos para
+ * venda (`STATUSVENDA = 'A'`) e no segmento 1.
+ *
+ * Diferenças em relação ao legado:
+ * - `BARCODE` é o código de balança (`COD_BALANCA`), não o `COALESCE` usado nas
+ *   outras buscas — é o código que identifica o item nesse contexto.
+ * - O filtro de balança virou `COD_BALANCA IS NOT NULL` sobre o agregado, em vez
+ *   de `JOIN MAP_PRODCODIGO ... TIPCODIGO='B'`, evitando multiplicar linhas.
+ * - Preço calculado na própria query (o legado fazia uma consulta por produto).
+ * - Ordenado por descrição; o legado devolvia sem ordem definida.
+ *
+ * ⚠️ Sem limite de linhas, como no legado — um departamento grande devolve tudo.
+ *
+ * @param {number} shopId       - NROEMPRESA da loja
+ * @param {number} departmentId - NRODEPARTAMENTO
+ * @returns {Promise<object[]>}
+ */
+async function findByShopAndDepartment(shopId, departmentId) {
+    return oracleQuery(`
+        SELECT PE.SEQPRODUTO                                                 AS PLU,
+               P.DESCCOMPLETA                                                AS DESCRIPTION,
+               COD.COD_BALANCA                                               AS BARCODE,
+               PE.ESTQLOJA                                                   AS STORE,
+               PE.STATUSCOMPRA                                               AS STATUS,
+               CONSINCO.FPRECOEMBPRODUTO(PE.SEQPRODUTO, 1, 1, PE.NROEMPRESA) AS PRICE,
+               CONSINCO.FPRECOEMBPROMOC (PE.SEQPRODUTO, 1, 1, PE.NROEMPRESA) AS PRICE_PROMOTION
+          FROM CONSINCO.MRL_PRODUTOEMPRESA PE
+          JOIN CONSINCO.MAP_PRODUTO        P   ON P.SEQPRODUTO   = PE.SEQPRODUTO
+          JOIN (${PRODUCT_CODES_SQL})      COD ON COD.SEQPRODUTO = PE.SEQPRODUTO
+         WHERE PE.NROEMPRESA      = :shopId
+           AND PE.NRODEPARTAMENTO = :departmentId
+           AND COD.COD_BALANCA   IS NOT NULL
+           AND EXISTS (SELECT 1
+                         FROM CONSINCO.MAXV_MGMBASEPRODSEGESTQ A
+                        WHERE A.SEQPRODUTO  = PE.SEQPRODUTO
+                          AND A.NROEMPRESA  = PE.NROEMPRESA
+                          AND A.STATUSVENDA = 'A'
+                          AND A.NROSEGMENTO = 1)
+         ORDER BY P.DESCCOMPLETA
+    `, { shopId, departmentId });
+}
+
 module.exports = {
     findByPlu,
     findByEan,
     findByDescription,
+    findByShopAndDepartment,
     DESCRIPTION_MAX_ROWS,
 };

@@ -13,6 +13,9 @@ class OracleProductRepositoryPort {
 
     /** @param {number} shopId @param {string} pattern @returns {Promise<object[]>} */
     findByDescription(shopId, pattern) { throw new Error('Not implemented'); }
+
+    /** @param {number} shopId @param {number} departmentId @returns {Promise<object[]>} */
+    findByShopAndDepartment(shopId, departmentId) { throw new Error('Not implemented'); }
 }
 
 module.exports = { OracleProductRepositoryPort };

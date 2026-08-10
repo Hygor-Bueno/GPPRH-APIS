@@ -58,6 +58,32 @@ class BpppProductUseCases {
     }
 
     /**
+     * Lista os produtos de um departamento em uma loja.
+     *
+     * Migrado de `DAOProduct::SelectByShopAndDepartment`, que existia no DAO mas
+     * nunca teve rota no PHP — o contrato HTTP é novo. Devolve o mesmo formato
+     * de produto das demais buscas do BPPP.
+     *
+     * Diferente de `searchProducts`, uma lista vazia NÃO é erro: um departamento
+     * pode legitimamente não ter item de balança ativo na loja.
+     *
+     * @param {{shopId:number, departmentId:number}} params
+     * @returns {Promise<object[]>}
+     * @throws {AppError} 400 se faltar loja ou departamento
+     */
+    async listByDepartment({ shopId, departmentId }) {
+        if (!shopId) {
+            throw new AppError('Parâmetro obrigatório: shop_id', 400);
+        }
+        if (!departmentId) {
+            throw new AppError('Parâmetro obrigatório: department_id', 400);
+        }
+
+        const rows = await this.oracleRepository.findByShopAndDepartment(shopId, departmentId);
+        return toProductList(rows);
+    }
+
+    /**
      * Direciona a busca para o repositório conforme o critério informado.
      * @private
      */
