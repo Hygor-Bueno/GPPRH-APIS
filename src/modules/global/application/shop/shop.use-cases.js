@@ -28,6 +28,19 @@ class ShopUseCases {
     }
 
     /**
+     * Lojas com código no Consinco — seletor de loja do BPPP.
+     *
+     * Separada de `getShops` porque o BPPP consulta preço e estoque no Consinco:
+     * oferecer uma loja sem código lá levaria o usuário a uma busca que nunca
+     * retorna resultado.
+     *
+     * @returns {Promise<object[]>}
+     */
+    async getShopsForBppp() {
+        return this.repository.findAllFromConsinco();
+    }
+
+    /**
      * Cruza o cadastro de lojas do MySQL com uma fonte externa (Protheus ou Consinco).
      * @param {'protheus'|'consinco'} source
      * @throws {AppError} 400 se a fonte for inválida

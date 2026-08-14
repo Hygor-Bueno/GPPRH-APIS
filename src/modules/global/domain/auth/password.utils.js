@@ -22,4 +22,20 @@ async function verifyPassword(plainPassword, hash) {
     return bcrypt.compare(plainPassword, compatibleHash);
 }
 
-module.exports = { verifyPassword };
+/** Custo do hash bcrypt — mesmo valor usado pelo módulo de gestão de acessos. */
+const BCRYPT_ROUNDS = 10;
+
+/**
+ * Gera o hash de uma senha nova.
+ *
+ * Usa a mesma lib do `verifyPassword` (bcrypt), então o hash sai no formato
+ * nativo `$2b$` — que a verificação acima já trata sem reescrita.
+ *
+ * @param {string} plainPassword
+ * @returns {Promise<string>}
+ */
+async function hashPassword(plainPassword) {
+    return bcrypt.hash(plainPassword, BCRYPT_ROUNDS);
+}
+
+module.exports = { verifyPassword, hashPassword, BCRYPT_ROUNDS };

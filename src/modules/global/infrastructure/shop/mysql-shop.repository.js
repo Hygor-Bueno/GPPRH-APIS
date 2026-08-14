@@ -9,6 +9,7 @@ const { ShopRepositoryPort } = require('../../application/shop/ports/shop-reposi
 const {
     SQL_GET_SHOPS,
     SQL_GET_SHOPS_BY_COMPANY,
+    SQL_GET_SHOPS_CONSINCO,
     SQL_GET_SHOPS_WITH_CODES,
 } = require('../../repositories/mysql/shop.queries');
 
@@ -30,6 +31,11 @@ class MysqlShopRepository extends ShopRepositoryPort {
         const [rows] = companyId
             ? await this._query(SQL_GET_SHOPS_BY_COMPANY, [companyId])
             : await this._query(SQL_GET_SHOPS);
+        return rows;
+    }
+
+    async findAllFromConsinco() {
+        const [rows] = await this._query(SQL_GET_SHOPS_CONSINCO);
         return rows;
     }
 

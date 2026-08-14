@@ -53,9 +53,9 @@ const authMiddleware     = require('../../middlewares/auth.middleware');
 const upload             = require('../../middlewares/upload.middleware');
 const { canAll, canAny } = require('../../middlewares/permission.middleware');
 const { asyncHandler }   = require('../../middlewares/async-handler.middleware');
-const { loginLimiter }   = require('../../middlewares/rate-limit.middleware');
+const { loginLimiter, changePasswordLimiter } = require('../../middlewares/rate-limit.middleware');
 const { validate }       = require('../../middlewares/validate.middleware');
-const { loginSchema }    = require('../../schemas/auth.schema');
+const { loginSchema, changePasswordSchema }   = require('../../schemas/auth.schema');
 const {
     postCompensationSchema,
     putCompensationSchema,
@@ -134,6 +134,24 @@ router.post('/logout', asyncHandler(authController.logout));
  * @access Público
  */
 router.post('/login', loginLimiter, validate(loginSchema), asyncHandler(authController.globalLogin));
+
+/**
+ * @route PUT /change-password
+ * @description Troca a senha do próprio usuário autenticado.
+ * Body: `{ current_password, new_password }` — o id vem do token, nunca do body.
+ *
+ * ⚠️ Só vale para usuário LOCAL. Usuário de AD recebe 400 com orientação para
+ * trocar pelo Windows: a senha no banco é espelho do AD e é sobrescrita a cada
+ * login, então gravar aqui não teria efeito nenhum.
+ *
+ * Em caso de sucesso os cookies são limpos e o usuário precisa entrar de novo.
+ * @access Autenticado (sem permissão específica)
+ */
+router.put('/change-password',
+    authMiddleware,
+    changePasswordLimiter,
+    validate(changePasswordSchema),
+    asyncHandler(authController.changePassword));
 
 // ─── Colaboradores ────────────────────────────────────────────────────────────
 
@@ -1620,6 +1638,19 @@ router.get('/bppp/products',
     canAny(['BPPP_USE', 'BPPP_MANAGE']),
     validate(searchProductQuerySchema, 'query'),
     asyncHandler(bpppProductController.searchProducts));
+
+/**
+ * @route GET /bppp/shops
+ * @description Lojas disponíveis para consulta no BPPP — só as que possuem
+ * código no Consinco (`_shop_codes.system_name = 'consinco'`). O `number` de
+ * cada loja é o valor a enviar como `shop_id` nas demais rotas do módulo.
+ * Resposta: `[{ id, number, description, cnpj }]`
+ * @access BPPP_USE | BPPP_MANAGE
+ */
+router.get('/bppp/shops',
+    authMiddleware,
+    canAny(['BPPP_USE', 'BPPP_MANAGE']),
+    asyncHandler(shopController.getShopsForBppp));
 
 /**
  * @route GET /bppp/departments/:departmentId/products

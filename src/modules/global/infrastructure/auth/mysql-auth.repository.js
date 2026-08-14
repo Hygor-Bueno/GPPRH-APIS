@@ -61,6 +61,31 @@ class MysqlAuthRepository extends AuthRepositoryPort {
             conn.release();
         }
     }
+
+    async findCredentialsById(userId) {
+        const conn = await poolGlobal.getConnection();
+        try {
+            const [rows] = await conn.execute(
+                'SELECT id, password, ad_guid FROM global._user WHERE id = ? LIMIT 1',
+                [userId]
+            );
+            return rows.length > 0 ? rows[0] : null;
+        } finally {
+            conn.release();
+        }
+    }
+
+    async updatePassword(userId, passwordHash) {
+        const conn = await poolGlobal.getConnection();
+        try {
+            await conn.execute(
+                'UPDATE global._user SET password = ? WHERE id = ?',
+                [passwordHash, userId]
+            );
+        } finally {
+            conn.release();
+        }
+    }
 }
 
 module.exports = { MysqlAuthRepository };

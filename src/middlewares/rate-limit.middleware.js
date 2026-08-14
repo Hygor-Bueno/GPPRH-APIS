@@ -38,4 +38,21 @@ const apiLimiter = rateLimit({
     handler: limitReachedHandler
 });
 
-module.exports = { loginLimiter, apiLimiter };
+/**
+ * Limiter para troca de senha própria.
+ * 5 tentativas por IP a cada 15 minutos, contando só as que falharam.
+ *
+ * A rota exige a senha atual, então sem limite ela viraria um oráculo para
+ * descobri-la por força bruta — mesmo o atacante já tendo o cookie de sessão.
+ * Mais restrito que o login porque troca de senha é operação rara.
+ */
+const changePasswordLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    handler: limitReachedHandler,
+    skipSuccessfulRequests: true
+});
+
+module.exports = { loginLimiter, changePasswordLimiter, apiLimiter };

@@ -6,15 +6,20 @@
 const { poolPromise, sql } = require('../../../config/sqlserver');
 const { AppError } = require('../../../errors/app.error');
 const { GippRepositoryPort } = require('../application/ports/gipp-repository.port');
+const { WORK_SCHEDULE_STATUS } = require('../domain/work-schedule-status');
 const {
     sqlGetStatus,
     sqlGetPaymentRegistered,
+    sqlGetPaymentByStatus,
+    sqlGetPaymentByLauncher,
     sqlGetRecordTypes,
     sqlGetTimeRecords,
     sqlGetTimeRecordsByCodWork,
     sqlInsertTimeRecord,
     sqlUpdateTimeRecord,
     sqlCancelWorkSchedule,
+    sqlGetWorkSchedulesStatus,
+    sqlApproveWorkSchedules,
     sqlProcessWorkSchedules,
     sqlGetPayments,
     sqlGetWorkScheduleData,
@@ -55,6 +60,30 @@ class SqlServerGippRepository extends GippRepositoryPort {
                 .query(sqlGetPaymentRegistered());
             return result.recordset;
         }, 'Error fetching payment registered');
+    }
+
+    async findPaymentByStatus(status, filters = {}, options = {}) {
+        return this._run(async () => {
+            const pool = await poolPromise;
+            const result = await pool.request()
+                .input('status', sql.Int, status)
+                .input('branch', sql.VarChar(10), filters.branch || null)
+                .input('cost_center', sql.VarChar(20), filters.costCenter || null)
+                .query(sqlGetPaymentByStatus(options.withValues === true));
+            return result.recordset;
+        }, 'Error fetching payment by status');
+    }
+
+    async findPaymentByLauncher(launchedBy, filters = {}) {
+        return this._run(async () => {
+            const pool = await poolPromise;
+            const result = await pool.request()
+                .input('launched_by', sql.Int, launchedBy)
+                .input('branch', sql.VarChar(10), filters.branch || null)
+                .input('cost_center', sql.VarChar(20), filters.costCenter || null)
+                .query(sqlGetPaymentByLauncher());
+            return result.recordset;
+        }, 'Error fetching payment by launcher');
     }
 
     async findRecordTypes() {
@@ -124,10 +153,42 @@ class SqlServerGippRepository extends GippRepositoryPort {
     async cancelWorkSchedule(codWorkSchedule) {
         return this._run(async () => {
             const pool = await poolPromise;
-            await pool.request()
+            const result = await pool.request()
                 .input('cod_work_schedule', sql.VarChar(50), codWorkSchedule)
+                .input('st_cancelled', sql.Int, WORK_SCHEDULE_STATUS.CANCELLED)
+                .input('st_open', sql.Int, WORK_SCHEDULE_STATUS.OPEN)
+                .input('st_awaiting_approval', sql.Int, WORK_SCHEDULE_STATUS.AWAITING_APPROVAL)
                 .query(sqlCancelWorkSchedule());
+            return result.rowsAffected[0] ?? 0;
         }, 'Error cancelling work schedule');
+    }
+
+    async findWorkSchedulesStatus(scheduleList) {
+        return this._run(async () => {
+            const pool = await poolPromise;
+            const { sql: query, params } = sqlGetWorkSchedulesStatus(scheduleList);
+            const request = pool.request();
+            for (const [key, value] of Object.entries(params)) {
+                request.input(key, sql.VarChar(50), value);
+            }
+            const result = await request.query(query);
+            return result.recordset || [];
+        }, 'Error fetching work schedules status');
+    }
+
+    async approveWorkSchedules(scheduleList, fromStatus, toStatus) {
+        return this._run(async () => {
+            const pool = await poolPromise;
+            const { sql: query, params } = sqlApproveWorkSchedules(scheduleList);
+            const request = pool.request()
+                .input('from_status', sql.Int, fromStatus)
+                .input('to_status', sql.Int, toStatus);
+            for (const [key, value] of Object.entries(params)) {
+                request.input(key, sql.VarChar(50), value);
+            }
+            const result = await request.query(query);
+            return result.rowsAffected[0] ?? 0;
+        }, 'Error approving work schedules');
     }
 
     async processWorkSchedules(scheduleCsv) {

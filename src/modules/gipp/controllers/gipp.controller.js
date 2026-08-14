@@ -27,6 +27,61 @@ async function getPaymentRegistered(req, res) {
     return respond.ok(res, data);
 }
 
+// Aceitam os mesmos alias de `getPaymentRegistered` (branch_cod / cost_center),
+// pra que o front possa trocar de fila sem reescrever a montagem da query.
+async function getPendingApproval(req, res) {
+    const { branch, branch_cod, costCenter, cost_center } = req.query;
+
+    const data = await useCases.getPendingApproval({
+        branch: branch ?? branch_cod,
+        costCenter: costCenter ?? cost_center,
+    });
+
+    return respond.ok(res, data);
+}
+
+async function getApprovedPayments(req, res) {
+    const { branch, branch_cod, costCenter, cost_center } = req.query;
+
+    const data = await useCases.getApprovedPayments({
+        branch: branch ?? branch_cod,
+        costCenter: costCenter ?? cost_center,
+    });
+
+    return respond.ok(res, data);
+}
+
+/** Permissões que autorizam consultar os lançamentos de outra pessoa. */
+const CAN_VIEW_OTHER_LAUNCHERS = ['GIPP_MANAGE_TIMERECORD', 'GIPP_MANAGE_PAYMENT', 'SYSTEM_OWNER'];
+
+/**
+ * Jornadas lançadas pelo próprio usuário (status 1 e 2).
+ *
+ * O identificador sai do token, não do cliente: `id_global` gravado em
+ * cf_time_records é o mesmo `req.user.id` que autenticou. Aceitar o id por
+ * parâmetro deixaria um encarregado consultar os lançamentos de outro apenas
+ * trocando o número — que é justamente o que esta rota existe para evitar.
+ *
+ * `?launched_by=` só é respeitado para quem tem permissão de gestão, para que
+ * RH e supervisão consigam auditar sem precisar de outra rota.
+ */
+async function getPaymentByLauncher(req, res) {
+    const { user, query } = req;
+    const permissions = user?.permissions || [];
+
+    const canOverride = CAN_VIEW_OTHER_LAUNCHERS.some(p => permissions.includes(p));
+    const requested = query.launched_by ?? query.launchedBy;
+
+    const launchedBy = (canOverride && requested) ? requested : user.id;
+
+    const data = await useCases.getPaymentByLauncher(launchedBy, {
+        branch: query.branch ?? query.branch_cod,
+        costCenter: query.costCenter ?? query.cost_center,
+    });
+
+    return respond.ok(res, data);
+}
+
 async function getRecordTypes(req, res) {
     const data = await useCases.getRecordTypes();
     return respond.ok(res, data);
@@ -77,12 +132,37 @@ async function discardTimeRecord(req, res) {
     return respond.message(res, 'Work schedule discarded successfully');
 }
 
+/**
+ * Aprovação do gerente — 2 → 3, em lote.
+ *
+ * Aceita `cod_work_schedules` e `codWorkSchedules`: o app manda snake_case e o
+ * web manda camelCase, e não vale quebrar um dos dois por causa da grafia.
+ */
+async function approveTimeRecords(req, res) {
+    const { body } = req;
+    const codes = body.cod_work_schedules ?? body.codWorkSchedules;
+
+    if (!Array.isArray(codes) || codes.length === 0) {
+        throw new BadRequestError('cod_work_schedules is required and must not be empty');
+    }
+
+    const result = await useCases.approveWorkSchedules(codes);
+
+    return respond.ok(res, {
+        message: `${result.approved.length} jornada(s) aprovada(s), ${result.skipped.length} ignorada(s).`,
+        ...result,
+    });
+}
+
 async function postPayments(req, res) {
     const { user, body } = req;
-    const { codWorkSchedules } = body;
+    // O app envia `cod_work_schedules` e o web envia `codWorkSchedules`. Até
+    // 08/2026 só a segunda era lida, então o processamento em lote pelo celular
+    // respondia 400 sempre.
+    const codWorkSchedules = body.cod_work_schedules ?? body.codWorkSchedules;
 
     if (!codWorkSchedules?.length) {
-        throw new BadRequestError('codWorkSchedules is required and must not be empty');
+        throw new BadRequestError('cod_work_schedules is required and must not be empty');
     }
 
     const data = await useCases.processWorkSchedules(
@@ -94,11 +174,11 @@ async function postPayments(req, res) {
 }
 
 async function postPaymentsClose(req, res) {
-    const { codWorkSchedules } = req.body;
-    const { user } = req;
+    const { body, user } = req;
+    const codWorkSchedules = body.cod_work_schedules ?? body.codWorkSchedules;
 
     if (!codWorkSchedules?.length) {
-        throw new BadRequestError('codWorkSchedules is required and must not be empty');
+        throw new BadRequestError('cod_work_schedules is required and must not be empty');
     }
 
     const results = await useCases.closeWorkSchedules(
@@ -119,11 +199,15 @@ async function postPaymentsClose(req, res) {
 module.exports = {
     getStatus,
     getPaymentRegistered,
+    getPendingApproval,
+    getApprovedPayments,
+    getPaymentByLauncher,
     getRecordTypes,
     getTimeRecords,
     postTimeRecord,
     putTimeRecord,
     discardTimeRecord,
+    approveTimeRecords,
     postPayments,
     postPaymentsClose
 };

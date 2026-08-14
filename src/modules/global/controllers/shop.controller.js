@@ -25,6 +25,15 @@ async function getShops(req, res) {
 }
 
 /**
+ * GET /bppp/shops
+ * Só lojas com código no Consinco — seletor do BPPP. Sem parâmetros.
+ */
+async function getShopsForBppp(req, res) {
+    const data = await useCases.getShopsForBppp();
+    return respond.ok(res, data);
+}
+
+/**
  * GET /shops/audit?source=protheus|consinco
  */
 async function getShopsAudit(req, res) {
@@ -34,4 +43,4 @@ async function getShopsAudit(req, res) {
     return respond.ok(res, data);
 }
 
-module.exports = { getShops, getShopsAudit };
+module.exports = { getShops, getShopsForBppp, getShopsAudit };

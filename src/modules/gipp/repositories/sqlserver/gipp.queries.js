@@ -4,11 +4,81 @@
 // processamento de pagamentos e fechamento de jornadas.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─── Projeção de vw_employee_work_summary ─────────────────────────────────────
+
+/**
+ * Colunas da view, na ordem em que ela as declara.
+ *
+ * A lista é explícita de propósito: com `SELECT *`, toda coluna acrescentada à
+ * view passa a vazar por todas as rotas automaticamente — foi o que aconteceu
+ * quando `id_status_fk` e `launched_by` foram adicionados.
+ */
+const SUMMARY_ALL_COLUMNS = [
+    'company_cod',
+    'cost_center',
+    'registration',
+    'collaborator',
+    'month_salary',
+    'branch_cod',
+    'branch_desc',
+    'hours_day',
+    'total_hours',
+    'normal_hour',
+    'extra_hour',
+    'night_hour',
+    'normal_payment',
+    'extra_hour_payment',
+    'night_bonus_payment',
+    'total_payment',
+    'cod_work_schedule_fk',
+    'id_status_fk',
+    'launched_by',
+];
+
+/**
+ * Colunas com informação financeira.
+ *
+ * Só a fila do RH (`/payment/approved`) as devolve: quem lança e quem aprova
+ * decide olhando as HORAS, não o valor. `month_salary` entra na lista porque é
+ * o salário mensal do colaborador — dado de RH, não de operação de loja.
+ */
+const PAYMENT_VALUE_COLUMNS = new Set([
+    'month_salary',
+    'normal_payment',
+    'extra_hour_payment',
+    'night_bonus_payment',
+    'total_payment',
+]);
+
+/**
+ * Monta a lista de colunas do SELECT.
+ * @param {boolean} withValues - `true` apenas para a fila do RH.
+ * @returns {string}
+ */
+function summarySelectList(withValues) {
+    const columns = withValues
+        ? SUMMARY_ALL_COLUMNS
+        : SUMMARY_ALL_COLUMNS.filter(c => !PAYMENT_VALUE_COLUMNS.has(c));
+
+    return columns.join(',\n               ');
+}
+
 // ─── Status e Tipos ───────────────────────────────────────────────────────────
 
 /**
  * Retorna todos os status disponíveis para jornadas de trabalho.
- * Ex: 1=Pendente, 2=Calculando, 3=Processado, 4=Pago, 5=Cancelado.
+ *
+ * Valores reais de `cf_status` — os rótulos gravados no banco não descrevem
+ * bem o papel de cada um no fluxo, então vale a semântica ao lado:
+ *
+ *   1 "Pendente"    entrada registrada, falta a saída (transitório)
+ *   2 "Aprovado"    jornada fechada pelo encarregado, na fila do gerente
+ *   3 "Calculando"  aprovada pelo gerente, na fila do RH
+ *   4 "Finalizado"  recibo gerado pelo RH
+ *   5 "Cancelado"   desconsiderada
+ *
+ * Ver `domain/work-schedule-status.js`, que expõe isso como constantes.
+ *
  * @returns {string} Query SQL
  */
 function sqlGetStatus() {
@@ -29,13 +99,23 @@ function sqlGetStatus() {
  * os dois lados da comparação — assim tanto '208' quanto '0208' encontram a
  * filial, seguindo o mesmo padrão de sqlGetTimeRecordsByCodWork.
  *
+ * O filtro `id_status_fk IN (1, 2)` é explícito de propósito. Até 08/2026 ele
+ * era herdado de vw_work_records, que filtrava `IN (1, 2)` no fundo da cadeia
+ * de views. Esse filtro foi ampliado para `IN (1, 2, 3)` para que jornadas
+ * aprovadas pelo gerente cheguem ao cálculo de pagamento — sem repetir a
+ * restrição aqui, esta rota passaria a devolver as aprovadas também.
+ *
+ * Não devolve valores monetários — ver `summarySelectList`.
+ *
+ * @param {boolean} [withValues=false]
  * @returns {string} Query SQL — requer parâmetros @branch e @cost_center
  */
-function sqlGetPaymentRegistered() {
+function sqlGetPaymentRegistered(withValues = false) {
     return `
-        SELECT *
+        SELECT ${summarySelectList(withValues)}
         FROM GIPP.dbo.vw_employee_work_summary
-        WHERE (@branch IS NULL
+        WHERE id_status_fk IN (1, 2)
+          AND (@branch IS NULL
                OR RIGHT('0000' + LTRIM(RTRIM(branch_cod)), 4)
                 = RIGHT('0000' + LTRIM(RTRIM(@branch)), 4))
           AND (@cost_center IS NULL
@@ -65,6 +145,68 @@ function sqlGetPaymentRegistered() {
 // }
 
 /**
+ * Mesma leitura de `sqlGetPaymentRegistered`, porém restrita a um único status.
+ *
+ * Usada pelas filas de aprovação:
+ *   - gerente → status 2 (jornada fechada, aguardando aprovação)
+ *   - RH      → status 3 (aprovada, aguardando finalização)
+ *
+ * ⚠️ `@status` nunca vem do cliente. O caso de uso injeta a constante de
+ * `WORK_SCHEDULE_STATUS` correspondente à rota, para que a permissão de cada
+ * rota realmente delimite o que aquele papel enxerga.
+ *
+ * Os valores monetários só acompanham a fila do RH (status 3) — a do gerente
+ * mostra apenas horas, que é o que ele precisa para decidir.
+ *
+ * @param {boolean} [withValues=false]
+ * @returns {string} Query SQL — requer @status, @branch e @cost_center
+ */
+function sqlGetPaymentByStatus(withValues = false) {
+    return `
+        SELECT ${summarySelectList(withValues)}
+        FROM GIPP.dbo.vw_employee_work_summary
+        WHERE id_status_fk = @status
+          AND (@branch IS NULL
+               OR RIGHT('0000' + LTRIM(RTRIM(branch_cod)), 4)
+                = RIGHT('0000' + LTRIM(RTRIM(@branch)), 4))
+          AND (@cost_center IS NULL
+               OR LTRIM(RTRIM(cost_center)) = LTRIM(RTRIM(@cost_center)))
+        ORDER BY collaborator;
+    `;
+}
+
+/**
+ * Jornadas ainda no encargo de quem as lançou — status 1 (aberta) e 2 (fechada,
+ * na fila do gerente), filtradas por `launched_by`.
+ *
+ * `launched_by` vem de `vw_employee_work_summary` e corresponde ao `id_global`
+ * de quem registrou a ENTRADA (tipo 1), que é o registro que cria a jornada.
+ *
+ * Diferente das outras rotas da família /payment, esta NÃO exige filial ou
+ * centro de custo: o próprio `launched_by` já restringe o resultado ao que uma
+ * pessoa lançou, então a consulta não fica cara sem filtro adicional.
+ *
+ * Nunca devolve valores monetários: o encarregado confere o que lançou pelas
+ * horas, e não tem por que ver salário nem valor a pagar dos colaboradores.
+ *
+ * @returns {string} Query SQL — requer @launched_by, @branch e @cost_center
+ */
+function sqlGetPaymentByLauncher() {
+    return `
+        SELECT ${summarySelectList(false)}
+        FROM GIPP.dbo.vw_employee_work_summary
+        WHERE id_status_fk IN (1, 2)
+          AND launched_by = @launched_by
+          AND (@branch IS NULL
+               OR RIGHT('0000' + LTRIM(RTRIM(branch_cod)), 4)
+                = RIGHT('0000' + LTRIM(RTRIM(@branch)), 4))
+          AND (@cost_center IS NULL
+               OR LTRIM(RTRIM(cost_center)) = LTRIM(RTRIM(@cost_center)))
+        ORDER BY collaborator;
+    `;
+}
+
+/**
  * Retorna os tipos de registro de ponto ativos.
  * Ex: 1=Entrada, 2=Início Intervalo, 3=Fim Intervalo, 4=Saída.
  * @returns {string} Query SQL
@@ -78,7 +220,12 @@ function sqlGetRecordTypes() {
 /**
  * Busca todos os registros de ponto de uma jornada específica,
  * enriquecidos com nome do colaborador, data, hora, centro de custo e filial.
- * Filtra apenas jornadas com status <= 2 (Pendente ou Calculando).
+ *
+ * Aceita jornada aberta (1), aguardando aprovação (2) e aprovada (3).
+ *
+ * O status 3 entrou em 08/2026: este endpoint alimenta o modal de detalhe, e o
+ * RH trabalha justamente com jornada aprovada. Com o recorte antigo (`<= 2`) ele
+ * abria a jornada e via zero batidas — sem erro, parecendo jornada sem marcação.
  *
  * @returns {string} Query SQL — requer parâmetro @codWorkSchedule
  */
@@ -97,7 +244,7 @@ function sqlGetTimeRecordsByCodWork() {
         LEFT JOIN GIPP.dbo.view_employee_with_company_info EMPL
             ON RIGHT('000000' + LTRIM(RTRIM(WS.employee_id)), 6) = EMPL.EmployeeID
             AND RIGHT('0000' + LTRIM(RTRIM(WS.branch_time_record)), 4) = EMPL.BranchCode
-        WHERE WS.id_status_fk <= 2
+        WHERE WS.id_status_fk <= 3
           AND REC.cod_work_schedule = @codWorkSchedule
         ORDER BY REC.cod_work_schedule DESC, REC.id_time_records;
     `;
@@ -165,14 +312,78 @@ function sqlUpdateTimeRecord() {
 
 /**
  * Cancela uma jornada de trabalho alterando seu status para 5 (Cancelado).
- * @returns {string} Query SQL — requer parâmetro @cod_work_schedule
+ *
+ * A guarda de status entrou em 08/2026: antes disso o UPDATE não checava o
+ * estado atual e cancelava qualquer jornada, inclusive já finalizada em 4 —
+ * o que apagava um pagamento fechado sem deixar rastro. Agora só jornada
+ * aberta (1) ou aguardando aprovação (2) pode ser desconsiderada.
+ *
+ * `rowsAffected` volta zerado quando a guarda barra; o caso de uso traduz
+ * isso em 409 em vez de responder sucesso silencioso.
+ *
+ * @returns {string} Query SQL — requer @cod_work_schedule, @st_open e @st_awaiting_approval
  */
 function sqlCancelWorkSchedule() {
     return `
         UPDATE GIPP.dbo.cf_work_schedules
-        SET id_status_fk = 5
-        WHERE cod_work_schedule = @cod_work_schedule;
+        SET id_status_fk = @st_cancelled
+        WHERE cod_work_schedule = @cod_work_schedule
+          AND id_status_fk IN (@st_open, @st_awaiting_approval);
     `;
+}
+
+/**
+ * Estado atual de uma lista de jornadas. Usado antes das transições para
+ * separar o que pode avançar do que precisa ser reportado como ignorado.
+ *
+ * @param {string[]} scheduleList
+ * @returns {{ sql: string, params: object }}
+ */
+function sqlGetWorkSchedulesStatus(scheduleList) {
+    const params = {};
+    const placeholders = scheduleList.map((s, i) => {
+        params[`ws${i}`] = s;
+        return `@ws${i}`;
+    });
+
+    return {
+        sql: `
+            SELECT cod_work_schedule, id_status_fk
+            FROM GIPP.dbo.cf_work_schedules
+            WHERE cod_work_schedule IN (${placeholders.join(', ')});
+        `,
+        params,
+    };
+}
+
+/**
+ * Aprovação do gerente — move jornadas de 2 (aguardando aprovação) para
+ * 3 (aguardando o RH).
+ *
+ * O `AND id_status_fk = @from_status` é a trava real da transição: mesmo que
+ * um código de jornada em 1, 4 ou 5 chegue por engano na lista, a linha não é
+ * tocada. A validação no caso de uso existe para dar mensagem, não para
+ * garantir a regra.
+ *
+ * @param {string[]} scheduleList
+ * @returns {{ sql: string, params: object }}
+ */
+function sqlApproveWorkSchedules(scheduleList) {
+    const params = {};
+    const placeholders = scheduleList.map((s, i) => {
+        params[`ws${i}`] = s;
+        return `@ws${i}`;
+    });
+
+    return {
+        sql: `
+            UPDATE GIPP.dbo.cf_work_schedules
+            SET id_status_fk = @to_status
+            WHERE cod_work_schedule IN (${placeholders.join(', ')})
+              AND id_status_fk = @from_status;
+        `,
+        params,
+    };
 }
 
 /**
@@ -493,12 +704,16 @@ function sqlGetTimeRecordsForValidation() {
 module.exports = {
     sqlGetStatus,
     sqlGetPaymentRegistered,
+    sqlGetPaymentByStatus,
+    sqlGetPaymentByLauncher,
     sqlGetRecordTypes,
     sqlGetTimeRecords,
     sqlGetTimeRecordsByCodWork,
     sqlInsertTimeRecord,
     sqlUpdateTimeRecord,
     sqlCancelWorkSchedule,
+    sqlGetWorkSchedulesStatus,
+    sqlApproveWorkSchedules,
     sqlProcessWorkSchedules,
     sqlGetPayments,
     // Fechamento de jornada

@@ -75,10 +75,36 @@ async function me(req, res) {
     registration:             u.registration,
     status:                   u.status,
     application_ids:          u.application_ids,
+    // `application_ids` diz quais telas o usuário enxerga; `permissions` diz o
+    // que ele pode fazer. São eixos independentes — os middlewares canAny/canAll
+    // avaliam apenas `permissions`, então o front não consegue deduzir o acesso
+    // a uma rota a partir do id da aplicação. Ambos já vinham no token; só não
+    // eram devolvidos aqui.
+    roles:                    u.roles ?? [],
+    permissions:              u.permissions ?? [],
     company_name:             u.company_name,
     branch_name:              u.branch_name,
     cost_center_description:  u.cost_center_description
   });
+};
+
+/**
+ * PUT /change-password
+ * Body: { current_password, new_password }
+ *
+ * O usuário vem sempre do token (`req.user.id`). Depois de trocar, a sessão é
+ * encerrada: os cookies atuais foram emitidos com a senha antiga, e forçar novo
+ * login é o que garante que uma sessão roubada não sobreviva à troca.
+ */
+async function changePassword(req, res) {
+  const { current_password, new_password } = req.body;
+
+  await useCases.changeOwnPassword(req.user.id, current_password, new_password);
+
+  res.clearCookie('accessToken', cookieOpts());
+  res.clearCookie('refreshToken', cookieOpts());
+
+  return respond.message(res, 'Senha alterada com sucesso. Faça login novamente.');
 };
 
 async function logout(req, res) {
@@ -91,5 +117,6 @@ async function logout(req, res) {
 module.exports = {
   me,
   logout,
+  changePassword,
   globalLogin
 };

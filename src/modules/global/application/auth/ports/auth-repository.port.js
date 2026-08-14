@@ -24,6 +24,16 @@ class AuthRepositoryPort {
      * @returns {Promise<object>}
      */
     upsertAdLogin(user) { throw new Error('Not implemented'); }
+
+    /**
+     * Credenciais mínimas para troca de senha própria.
+     * @param {number} userId
+     * @returns {Promise<{id:number, password:string, ad_guid:?string}|null>}
+     */
+    findCredentialsById(userId) { throw new Error('Not implemented'); }
+
+    /** @param {number} userId @param {string} passwordHash @returns {Promise<void>} */
+    updatePassword(userId, passwordHash) { throw new Error('Not implemented'); }
 }
 
 module.exports = { AuthRepositoryPort };
