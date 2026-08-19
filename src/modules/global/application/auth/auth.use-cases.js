@@ -7,6 +7,7 @@ const { AppError } = require('../../../../errors/app.error');
 const { UnauthorizedError } = require('../../../../errors/unauthorized.error');
 const { User } = require('../../domain/user.entity');
 const { verifyPassword, hashPassword } = require('../../domain/auth/password.utils');
+const { generateTemporaryPassword } = require('../../domain/auth/temporary-password');
 const { mapUserWithOrganization } = require('../../domain/auth/login-payload.mapper');
 
 class AuthUseCases {
@@ -76,6 +77,52 @@ class AuthUseCases {
         }
 
         await this.repository.updatePassword(userId, await hashPassword(newPassword));
+    }
+
+    /**
+     * Reset de senha pela gestão de acessos.
+     *
+     * Gera uma senha temporária aleatória, grava o hash e liga
+     * `must_change_password`. A senha em claro é devolvida UMA ÚNICA VEZ, para
+     * quem resetou entregar ao usuário — não fica gravada em lugar nenhum e não
+     * há como recuperá-la depois.
+     *
+     * Só vale para usuário local: quem tem `ad_guid` recebe a senha do Active
+     * Directory sobrescrita a cada login, então resetar aqui não teria efeito
+     * nenhum e daria uma falsa sensação de que o acesso foi restabelecido.
+     *
+     * @param {number} targetUserId
+     * @returns {Promise<{user_id: number, temporary_password: string}>}
+     * @throws {AppError} 404 se o usuário não existe / 400 se for usuário de AD
+     */
+    async resetUserPassword(targetUserId) {
+        const account = await this.repository.findCredentialsById(targetUserId);
+
+        if (!account) {
+            throw new AppError('Usuário não encontrado.', 404, { code: 'USER_NOT_FOUND' });
+        }
+
+        if (account.ad_guid) {
+            throw new AppError(
+                'Este usuário é do Active Directory. A senha dele é gerenciada pelo Windows e não pode ser resetada por aqui.',
+                400,
+                { code: 'AD_USER' },
+            );
+        }
+
+        const temporaryPassword = generateTemporaryPassword();
+        const affected = await this.repository.resetPassword(
+            targetUserId,
+            await hashPassword(temporaryPassword),
+        );
+
+        if (affected === 0) {
+            throw new AppError('Não foi possível resetar a senha deste usuário.', 500, {
+                code: 'RESET_FAILED',
+            });
+        }
+
+        return { user_id: targetUserId, temporary_password: temporaryPassword };
     }
 
     /** @private */

@@ -315,21 +315,35 @@ function sqlUpdateTimeRecord() {
  *
  * A guarda de status entrou em 08/2026: antes disso o UPDATE não checava o
  * estado atual e cancelava qualquer jornada, inclusive já finalizada em 4 —
- * o que apagava um pagamento fechado sem deixar rastro. Agora só jornada
- * aberta (1) ou aguardando aprovação (2) pode ser desconsiderada.
+ * o que apagava um pagamento fechado sem deixar rastro.
+ *
+ * Quais status podem ser cancelados depende de QUEM está cancelando, e por isso
+ * a lista chega por parâmetro em vez de ficar fixa aqui: encarregado e gerente
+ * alcançam 1 e 2; o RH alcança também a 3, que está na fila dele. Ver
+ * `DISCARDABLE_STATUSES` e `PAYROLL_DISCARDABLE_STATUSES` no domínio.
  *
  * `rowsAffected` volta zerado quando a guarda barra; o caso de uso traduz
  * isso em 409 em vez de responder sucesso silencioso.
  *
- * @returns {string} Query SQL — requer @cod_work_schedule, @st_open e @st_awaiting_approval
+ * @param {number[]} allowedStatuses
+ * @returns {{ sql: string, params: object }} Requer ainda @cod_work_schedule e @st_cancelled
  */
-function sqlCancelWorkSchedule() {
-    return `
-        UPDATE GIPP.dbo.cf_work_schedules
-        SET id_status_fk = @st_cancelled
-        WHERE cod_work_schedule = @cod_work_schedule
-          AND id_status_fk IN (@st_open, @st_awaiting_approval);
-    `;
+function sqlCancelWorkSchedule(allowedStatuses) {
+    const params = {};
+    const placeholders = allowedStatuses.map((s, i) => {
+        params[`st${i}`] = s;
+        return `@st${i}`;
+    });
+
+    return {
+        sql: `
+            UPDATE GIPP.dbo.cf_work_schedules
+            SET id_status_fk = @st_cancelled
+            WHERE cod_work_schedule = @cod_work_schedule
+              AND id_status_fk IN (${placeholders.join(', ')});
+        `,
+        params,
+    };
 }
 
 /**

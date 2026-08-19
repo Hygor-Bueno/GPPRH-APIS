@@ -1,0 +1,194 @@
+/**
+ * @fileoverview Rotas do controle de refeitório.
+ *
+ * Montado em **`/gipp/meal`** pelo app interno. O prefixo não é o nome do
+ * módulo: no Apache do 10.10.10.99 as regras de proxy são por FONTE DE DADOS —
+ * `/global` para o MySQL, `/gipp` para o SQL Server GIPP, `/protheus` para o
+ * Protheus. Como o refeitório lê `GIPP.dbo`, ele entra sob `/gipp` e herda a
+ * regra que já existe, em vez de exigir uma nova a cada módulo.
+ *
+ * Só o app interno — o operador usa aparelho da empresa, na rede da empresa. O
+ * único endpoint que um dia sairá para a internet é o autocadastro facial por
+ * link (etapa 6), e ele vive no app público, com par de segredos JWT separado.
+ *
+ * URL completa vista pelo cliente: `https://gigpp.com.br:73/api/v1/gipp/meal/...`
+ *
+ * @module modules/meal/routes
+ */
+
+const express = require('express');
+const router = express.Router();
+const authMiddleware = require('../../middlewares/auth.middleware');
+const { canAny } = require('../../middlewares/permission.middleware');
+const { asyncHandler } = require('../../middlewares/async-handler.middleware');
+const { validate } = require('../../middlewares/validate.middleware');
+const {
+    postMealLogSchema,
+    postDinerGroupSchema,
+} = require('../../schemas/meal.schema');
+const mealController = require('./controllers/meal.controller');
+const enrollController = require('./controllers/meal-enroll.controller');
+
+/** Quem serve a refeição. Também é quem lê a lista e os botões. */
+const CAN_SERVE = ['MEAL_SERVE', 'MEAL_MANAGE'];
+
+/** Quem cadastra os baldes — RH, não o operador. */
+const CAN_MANAGE_GROUPS = ['MEAL_MANAGE_GROUPS', 'MEAL_MANAGE'];
+
+/**
+ * Quem lê relatório. Separado de MEAL_SERVE de propósito: o operador registra
+ * refeição e não precisa ver o consolidado por centro de custo da empresa.
+ */
+const CAN_VIEW_REPORT = ['MEAL_VIEW_REPORT', 'MEAL_MANAGE'];
+
+// ─── Sessão do operador ───────────────────────────────────────────────────────
+
+/** Confere a loja escolhida na sessão antes de servir a primeira refeição. */
+router.get('/sites/:siteCode',
+    authMiddleware,
+    canAny(CAN_SERVE),
+    asyncHandler(mealController.getSite));
+
+// ─── Comensais ────────────────────────────────────────────────────────────────
+
+// A rota de lista vem ANTES da rota de item por engano frequente de ordem em
+// Express — aqui não há ambiguidade porque os caminhos têm profundidade
+// diferente, mas manter a ordem evita a pegadinha se alguém acrescentar
+// `/diners/:algo` depois.
+router.get('/diners',
+    authMiddleware,
+    canAny(CAN_SERVE),
+    asyncHandler(mealController.getDiners));
+
+/** A chave tem três partes: a matrícula só é única dentro de uma empresa. */
+router.get('/diners/:companyCode/:branchCode/:employeeId',
+    authMiddleware,
+    canAny(CAN_SERVE),
+    asyncHandler(mealController.getDiner));
+
+// ─── Baldes (grupos sem matrícula) ────────────────────────────────────────────
+
+router.get('/diner-groups',
+    authMiddleware,
+    canAny([...CAN_SERVE, ...CAN_MANAGE_GROUPS]),
+    asyncHandler(mealController.getDinerGroups));
+
+router.post('/diner-groups',
+    authMiddleware,
+    canAny(CAN_MANAGE_GROUPS),
+    validate(postDinerGroupSchema),
+    asyncHandler(mealController.postDinerGroup));
+
+// Não existe DELETE de propósito: desativar é `is_active = 0`. A FK é
+// NO_ACTION, e um grupo com refeição registrada não pode desaparecer sem levar
+// o histórico de custo com ele.
+router.patch('/diner-groups/:id',
+    authMiddleware,
+    canAny(CAN_MANAGE_GROUPS),
+    asyncHandler(mealController.patchDinerGroup));
+
+// ─── Relatórios ───────────────────────────────────────────────────────────────
+//
+// Todos exigem recorte de datas (`date_from` e `date_to`), limitado a 92 dias.
+// Não é preferência: `IX_meal_log_rpt` tem `service_date` como primeira coluna
+// da chave, então a consulta com recorte é seek e a sem recorte é varredura da
+// tabela inteira.
+
+router.get('/reports/daily',
+    authMiddleware,
+    canAny(CAN_VIEW_REPORT),
+    asyncHandler(mealController.getDailyReport));
+
+router.get('/reports/cost-center',
+    authMiddleware,
+    canAny(CAN_VIEW_REPORT),
+    asyncHandler(mealController.getCostCenterReport));
+
+router.get('/reports/payee',
+    authMiddleware,
+    canAny(CAN_VIEW_REPORT),
+    asyncHandler(mealController.getPayeeReport));
+
+router.get('/reports/exceptions',
+    authMiddleware,
+    canAny(CAN_VIEW_REPORT),
+    asyncHandler(mealController.getExceptionsReport));
+
+// ─── Autocadastro facial (etapa 6) ────────────────────────────────────────────
+//
+// ⚠️ Três rotas aqui NÃO têm authMiddleware, e isso é o desenho, não descuido.
+//   Quem se autocadastra é o colaborador, do celular dele, e a maioria de quem
+//   come no refeitório NÃO TEM LOGIN — foi essa constatação que fez a fonte de
+//   colaborador ser o SRA020 e não o `_user`. Exigir sessão aqui excluiria
+//   justamente o público do módulo.
+//
+//   A credencial dessas rotas é o TOKEN ASSINADO INDIVIDUAL, não o cookie. Sem
+//   token válido não há resposta nenhuma — nem a informação de que a matrícula
+//   existe. Ver `_loadOpenToken` e o comentário sobre o oráculo em
+//   meal-enroll.use-cases.js.
+//
+//   Como a autenticação é o token e não a sessão, este bloco funciona igual
+//   montado no app público — mover é trocar o prefixo, não reescrever.
+
+/** Emitir convite é ato do RH, e exige sessão. */
+router.post('/enroll/invites',
+    authMiddleware,
+    canAny(CAN_MANAGE_GROUPS),
+    asyncHandler(enrollController.postInvite));
+
+/** A tela do operador usa para esconder o modo facial quando o serviço cai. */
+router.get('/enroll/health',
+    authMiddleware,
+    canAny(CAN_SERVE),
+    asyncHandler(enrollController.getFaceHealth));
+
+/** Comparação 1:1. Não registra refeição — só confere o rosto. */
+router.post('/enroll/verify',
+    authMiddleware,
+    canAny(CAN_SERVE),
+    asyncHandler(enrollController.postVerify));
+
+router.get('/enroll/status/:company/:branch/:employee',
+    authMiddleware,
+    canAny([...CAN_SERVE, ...CAN_MANAGE_GROUPS]),
+    asyncHandler(enrollController.getStatus));
+
+/** Revogação. Direito de eliminação — não pede justificativa. */
+router.delete('/enroll/status/:company/:branch/:employee',
+    authMiddleware,
+    canAny([...CAN_SERVE, ...CAN_MANAGE_GROUPS]),
+    asyncHandler(enrollController.deleteEnrollment));
+
+// ─── Sem sessão: o colaborador, no celular dele ───────────────────────────────
+//
+// A ordem aqui é invariante, não estilo. O Express resolve na ordem de registro e
+// um parâmetro casa qualquer coisa: `/enroll/:token` engoliria `/enroll/health`,
+// `/enroll/verify` e `/enroll/complete` se viesse antes deles. Por isso TODA rota
+// de caminho literal fica acima das que têm `:token` — inclusive as sem sessão.
+
+/** O token de conferência vai no CORPO: URL vaza para log de acesso e histórico. */
+router.post('/enroll/complete',
+    asyncHandler(enrollController.postComplete));
+
+router.get('/enroll/:token',
+    asyncHandler(enrollController.getInvite));
+
+router.post('/enroll/:token/confirm',
+    asyncHandler(enrollController.postConfirm));
+
+// ─── Registro de refeição ─────────────────────────────────────────────────────
+
+router.post('/logs',
+    authMiddleware,
+    canAny(CAN_SERVE),
+    validate(postMealLogSchema),
+    asyncHandler(mealController.postMealLog));
+
+// Sem `validate` de envelope: o lote é validado item a item no caso de uso, para
+// que um registro inválido não derrube os outros vinte e nove.
+router.post('/logs/sync',
+    authMiddleware,
+    canAny(CAN_SERVE),
+    asyncHandler(mealController.postMealLogSync));
+
+module.exports = router;

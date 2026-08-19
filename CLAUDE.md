@@ -5,8 +5,39 @@
 - **MySQL** (`poolGlobal`) — banco `global` em `10.10.10.99`
 - **SQL Server** (mssql) — banco GIPP/Protheus em `10.10.10.51`
 - **Oracle** (oracledb Thick mode) — ERP Consinco em `10.10.10.191:1521/orcl`
-- **PM2** — processo `api-gpprh`; reiniciar com `pm2 restart api-gpprh`
+- **Docker Compose** — 3 containers no servidor `192.168.0.99` (ver **Deploy** abaixo)
 - **URL produção** — `https://vagas.gpprh.com.br/api/v1/global/`
+
+## Deploy
+
+⚠️ Desde **2026-08-06** quem atende a produção são **containers Docker**. O PM2 **do host** (`api-gpprh`, `ws-gpprh`, `front-gpprh`) foi parado nessa data — `pm2 restart api-gpprh` no host **não surte efeito nenhum**.
+
+Compose project `api`, em `/home/administrador/Documents/gpprh/api` (Ubuntu 24.04, Docker 29.1.3, Compose v2.40.3). Todas as portas são publicadas **só no loopback** — quem alcança os containers é o Apache do próprio host.
+
+| Container | Porta (host) | Papel | Dockerfile |
+|---|---|---|---|
+| `api-gipp-enterprises` | `127.0.0.1:4002` | Backend interno (GTPP, EPP, GAPP, GIPP-RH, Protheus, chat) | `Dockerfile.internal` |
+| `ws-gipp-enterprises` | `127.0.0.1:4011` → `4001` no container | WebSocket (mesma imagem do interno, só o comando muda) | `Dockerfile.internal` |
+| `api-gpprh` | `127.0.0.1:4010` | Backend público (site de vagas / candidatos) | `Dockerfile.public` |
+
+**Aplicar mudança de código:** `docker compose build && docker compose up -d` no diretório acima.
+
+**Diagnosticar:** `docker compose ps` / `docker compose logs -f <serviço>` — nunca `pm2 list` no host.
+
+### PM2 ainda existe — dentro do container interno
+O `Dockerfile.internal` roda `pm2-runtime start ecosystem.docker.config.js`, que sobe `src/server.internal.js` em **cluster com 2 instâncias**. Motivo: o cluster mode compartilha uma porta única, que é como o Apache enxerga o upstream. São dois arquivos ecosystem e só um está vivo:
+
+| Arquivo | Onde roda | Status |
+|---|---|---|
+| `ecosystem.config.js` (raiz) | PM2 do host | **morto** — histórico |
+| `ecosystem.docker.config.js` | `pm2-runtime` no container | **ativo — não apagar** |
+
+### Detalhes que só funcionam dentro do Compose
+- A porta do WebSocket é **hardcoded 4001** em `src/websocket/websocketServer.js` — só funciona pelo mapeamento `4011:4001`.
+- `WS_EMIT_URL` resolve `ws-gipp-enterprises` **por nome de container** na rede `api_default`.
+- `MYSQL_HOST=host.docker.internal` — o MySQL do banco `gpprh` está no host, não no container.
+- Oracle Instant Client é **bind mount** de `/opt/oracle/instantclient_19_27` (não embutido na imagem); sem `LD_LIBRARY_PATH` → `DPI-1047`.
+- Os pares de segredo JWT são **diferentes** entre interno e público (`INTERNAL_JWT_*` / `PUBLIC_JWT_*` no `.env`): é isso que impede um token de candidato de ser verificável no lado interno.
 
 ## Autenticação
 - **Apenas via cookie HttpOnly** (`accessToken`, `refreshToken`, `userRole`)

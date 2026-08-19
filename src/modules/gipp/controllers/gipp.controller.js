@@ -3,6 +3,11 @@ const { SqlServerGippRepository } = require('../infrastructure/sqlserver-gipp.re
 const { MysqlGippReplicationRepository } = require('../infrastructure/mysql-gipp-replication.repository');
 const { respond } = require('../../../utils/respond');
 const { BadRequestError } = require('../../../errors/bad-request.error');
+const {
+    DISCARDABLE_STATUSES,
+    PAYROLL_DISCARDABLE_STATUSES,
+} = require('../domain/work-schedule-status');
+const { appendCloseAudit } = require('../infrastructure/csv-close-audit.logger');
 
 const useCases = new GippUseCases({
     repository: new SqlServerGippRepository(),
@@ -103,7 +108,7 @@ async function postTimeRecord(req, res) {
     const { user, body } = req;
 
     if (!body.employee_id || !body.id_record_type_fk || !body.branch_time_record) {
-        throw new BadRequestError('employee_id, id_record_type_fk and branch_time_record are required');
+        throw new BadRequestError('Informe employee_id, id_record_type_fk e branch_time_record.');
     }
 
     const data = await useCases.insertTimeRecord(body, user.id);
@@ -114,21 +119,32 @@ async function putTimeRecord(req, res) {
     const { user, body } = req;
 
     if (!body.times || !body.id_time_records) {
-        throw new BadRequestError("Provide 'times' and 'id_time_records' to update a time record");
+        throw new BadRequestError('Informe times e id_time_records para atualizar a marcação.');
     }
 
     const data = await useCases.updateTimeRecord(body, user.id);
     return respond.ok(res, data);
 }
 
+/** Permissões que alcançam também a jornada já aprovada (status 3). */
+const CAN_DISCARD_APPROVED = ['GIPP_CREATE_PAYMENT', 'GIPP_MANAGE_PAYMENT', 'SYSTEM_OWNER'];
+
 async function discardTimeRecord(req, res) {
-    const { body } = req;
+    const { body, user } = req;
 
     if (!body.cod_work_schedule) {
-        throw new BadRequestError("Provide 'cod_work_schedule' to discard a work schedule");
+        throw new BadRequestError('Informe cod_work_schedule para desconsiderar a jornada.');
     }
 
-    await useCases.cancelWorkSchedule(body.cod_work_schedule);
+    // Encarregado e gerente desconsideram o que ainda não foi aprovado (1 e 2).
+    // O RH alcança também a jornada aprovada (3), que está na fila dele e ainda
+    // não virou recibo — é a via de estorno antes da finalização.
+    const permissions = user?.permissions || [];
+    const allowedStatuses = CAN_DISCARD_APPROVED.some(p => permissions.includes(p))
+        ? PAYROLL_DISCARDABLE_STATUSES
+        : DISCARDABLE_STATUSES;
+
+    await useCases.cancelWorkSchedule(body.cod_work_schedule, allowedStatuses);
     return respond.message(res, 'Work schedule discarded successfully');
 }
 
@@ -143,7 +159,7 @@ async function approveTimeRecords(req, res) {
     const codes = body.cod_work_schedules ?? body.codWorkSchedules;
 
     if (!Array.isArray(codes) || codes.length === 0) {
-        throw new BadRequestError('cod_work_schedules is required and must not be empty');
+        throw new BadRequestError('Informe ao menos uma jornada em cod_work_schedules.');
     }
 
     const result = await useCases.approveWorkSchedules(codes);
@@ -162,7 +178,7 @@ async function postPayments(req, res) {
     const codWorkSchedules = body.cod_work_schedules ?? body.codWorkSchedules;
 
     if (!codWorkSchedules?.length) {
-        throw new BadRequestError('cod_work_schedules is required and must not be empty');
+        throw new BadRequestError('Informe ao menos uma jornada em cod_work_schedules.');
     }
 
     const data = await useCases.processWorkSchedules(
@@ -170,6 +186,15 @@ async function postPayments(req, res) {
         user.registration,
         user.branch_code
     );
+
+    // `processWorkSchedules` chama `closeWorkSchedules` internamente — o
+    // resultado por jornada vem em `data.closing`.
+    appendCloseAudit({
+        results: data.closing,
+        userId: user.registration,
+        branchCode: user.branch_code,
+    });
+
     return respond.ok(res, { message: 'Final markings completed successfully', data });
 }
 
@@ -178,7 +203,7 @@ async function postPaymentsClose(req, res) {
     const codWorkSchedules = body.cod_work_schedules ?? body.codWorkSchedules;
 
     if (!codWorkSchedules?.length) {
-        throw new BadRequestError('cod_work_schedules is required and must not be empty');
+        throw new BadRequestError('Informe ao menos uma jornada em cod_work_schedules.');
     }
 
     const results = await useCases.closeWorkSchedules(
@@ -186,6 +211,12 @@ async function postPaymentsClose(req, res) {
         user.registration,
         user.branch_code
     );
+
+    appendCloseAudit({
+        results,
+        userId: user.registration,
+        branchCode: user.branch_code,
+    });
 
     const inserted = results.filter(r => r.status === 'inserted').length;
     const skipped  = results.filter(r => r.status === 'skipped').length;

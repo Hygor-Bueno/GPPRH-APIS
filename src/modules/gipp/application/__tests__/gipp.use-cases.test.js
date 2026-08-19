@@ -33,6 +33,7 @@ function makeFakeRepository(overrides = {}) {
     repo.findPaymentDataByCodWork = jest.fn().mockResolvedValue({ normal_payment: 100, extra_hour_payment: 0, night_bonus_payment: 0 });
     repo.findWorkDurations = jest.fn().mockResolvedValue({ FullExpedient: 1 });
     repo.insertReceiptItem = jest.fn().mockResolvedValue();
+    repo.revertToPayrollQueue = jest.fn().mockResolvedValue(1);
     return Object.assign(repo, overrides);
 }
 
@@ -258,7 +259,7 @@ describe('GippUseCases', () => {
 
             await useCases.cancelWorkSchedule('A');
 
-            expect(repository.cancelWorkSchedule).toHaveBeenCalledWith('A');
+            expect(repository.cancelWorkSchedule).toHaveBeenCalledWith('A', [1, 2]);
         });
 
         it.each([
@@ -286,6 +287,52 @@ describe('GippUseCases', () => {
             expect(repository.cancelWorkSchedule).not.toHaveBeenCalled();
         });
 
+        it('should let the payroll list reach an approved schedule', async () => {
+            const repository = makeFakeRepository({
+                findWorkSchedulesStatus: jest.fn().mockResolvedValue([status('A', 3)]),
+            });
+            const useCases = makeUseCases({ repository });
+
+            // O RH estorna a jornada aprovada antes de ela virar recibo.
+            await useCases.cancelWorkSchedule('A', [1, 2, 3]);
+
+            expect(repository.cancelWorkSchedule).toHaveBeenCalledWith('A', [1, 2, 3]);
+        });
+
+        it('should still refuse an approved schedule with the default list', async () => {
+            const repository = makeFakeRepository({
+                findWorkSchedulesStatus: jest.fn().mockResolvedValue([status('A', 3)]),
+            });
+            const useCases = makeUseCases({ repository });
+
+            // Encarregado e gerente não alcançam o que já foi aprovado.
+            await expect(useCases.cancelWorkSchedule('A')).rejects.toMatchObject({ statusCode: 409 });
+            expect(repository.cancelWorkSchedule).not.toHaveBeenCalled();
+        });
+
+        it('should refuse a finished schedule even for payroll', async () => {
+            const repository = makeFakeRepository({
+                findWorkSchedulesStatus: jest.fn().mockResolvedValue([status('A', 4)]),
+            });
+            const useCases = makeUseCases({ repository });
+
+            // Status 4 já gerou recibo: cancelar sem estornar deixaria órfão.
+            await expect(useCases.cancelWorkSchedule('A', [1, 2, 3])).rejects.toMatchObject({ statusCode: 409 });
+            expect(repository.cancelWorkSchedule).not.toHaveBeenCalled();
+        });
+
+        it('should pass the allowed list through to the repository', async () => {
+            const repository = makeFakeRepository({
+                findWorkSchedulesStatus: jest.fn().mockResolvedValue([status('A', 2)]),
+            });
+            const useCases = makeUseCases({ repository });
+
+            // A lista precisa chegar ao UPDATE — é lá que a regra é garantida.
+            await useCases.cancelWorkSchedule('A');
+
+            expect(repository.cancelWorkSchedule).toHaveBeenCalledWith('A', [1, 2]);
+        });
+
         it('should throw 409 when the status changes between the check and the update', async () => {
             // Passa na validação (status 2) mas o UPDATE não afeta nada: alguém
             // aprovou a jornada nesse intervalo. Sem isto, respondia sucesso.
@@ -308,28 +355,27 @@ describe('GippUseCases', () => {
             expect(repository.findWorkScheduleData).not.toHaveBeenCalled();
         });
 
-        it('should throw 404 when the work schedule is not found', async () => {
-            const repository = makeFakeRepository({ findWorkScheduleData: jest.fn().mockResolvedValue(null) });
+        // Estes quatro casos deixaram de lançar em 08/2026: a falha de uma jornada
+        // não pode abortar o lote, então vira `failed` no resultado e a jornada é
+        // devolvida à fila do RH.
+        it.each([
+            ['jornada não encontrada', { findWorkScheduleData: jest.fn().mockResolvedValue(null) }],
+            ['sem registro de entrada', { findTimeRecordsForValidation: jest.fn().mockResolvedValue([{ id_record_type_fk: 4 }]) }],
+            ['sem referência YYYYMM', { findWorkScheduleReference: jest.fn().mockResolvedValue({ reference: null, work_date: null }) }],
+            ['sem valores de pagamento', { findPaymentDataByCodWork: jest.fn().mockResolvedValue(null) }],
+        ])('deve reportar %s como failed, sem lançar', async (_label, overrides) => {
+            const repository = makeFakeRepository(overrides);
             const useCases = makeUseCases({ repository });
-            await expect(useCases.closeWorkSchedules(['WS1'], 68, '0209')).rejects.toThrow(AppError);
-        });
 
-        it('should throw 422 when time records are invalid (no entry)', async () => {
-            const repository = makeFakeRepository({ findTimeRecordsForValidation: jest.fn().mockResolvedValue([{ id_record_type_fk: 4 }]) });
-            const useCases = makeUseCases({ repository });
-            await expect(useCases.closeWorkSchedules(['WS1'], 68, '0209')).rejects.toThrow(AppError);
-        });
+            const [result] = await useCases.closeWorkSchedules(['WS1'], 68, '0209');
 
-        it('should throw 422 when no reference can be determined', async () => {
-            const repository = makeFakeRepository({ findWorkScheduleReference: jest.fn().mockResolvedValue({ reference: null, work_date: null }) });
-            const useCases = makeUseCases({ repository });
-            await expect(useCases.closeWorkSchedules(['WS1'], 68, '0209')).rejects.toThrow(AppError);
-        });
-
-        it('should throw 422 when payment data is missing', async () => {
-            const repository = makeFakeRepository({ findPaymentDataByCodWork: jest.fn().mockResolvedValue(null) });
-            const useCases = makeUseCases({ repository });
-            await expect(useCases.closeWorkSchedules(['WS1'], 68, '0209')).rejects.toThrow(AppError);
+            expect(result).toMatchObject({
+                cod_work_schedule: 'WS1',
+                status: 'failed',
+                reverted_to_payroll_queue: true,
+            });
+            expect(result.reason).toBeTruthy();
+            expect(repository.insertReceiptItem).not.toHaveBeenCalled();
         });
 
         it('should skip when every payment value is zero', async () => {
@@ -357,6 +403,63 @@ describe('GippUseCases', () => {
             const results = await useCases.closeWorkSchedules('WS1, WS2', 68, '0209');
             expect(results).toHaveLength(2);
             expect(results.map(r => r.cod_work_schedule)).toEqual(['WS1', 'WS2']);
+        });
+    });
+
+    describe('closeWorkSchedules — isolamento de falha', () => {
+        it('não deve deixar uma jornada com problema derrubar as outras do lote', async () => {
+            // Era o bug: o throw abortava o loop e as jornadas seguintes ficavam
+            // em status 4 sem recibo, porque a procedure já havia commitado.
+            const repository = makeFakeRepository({
+                findWorkScheduleData: jest.fn()
+                    .mockResolvedValueOnce(WS)      // A: ok
+                    .mockResolvedValueOnce(null)    // B: quebra
+                    .mockResolvedValueOnce(WS),     // C: ok
+            });
+            const useCases = makeUseCases({ repository });
+
+            const results = await useCases.closeWorkSchedules(['A', 'B', 'C'], 1, '0203');
+
+            expect(results.map(r => r.status)).toEqual(['inserted', 'failed', 'inserted']);
+            expect(repository.insertReceiptItem).toHaveBeenCalled();
+        });
+
+        it('deve devolver a jornada que falhou para a fila do RH (4 → 3)', async () => {
+            const repository = makeFakeRepository({
+                findWorkScheduleData: jest.fn().mockResolvedValue(null),
+            });
+            const useCases = makeUseCases({ repository });
+
+            const [result] = await useCases.closeWorkSchedules(['A'], 1, '0203');
+
+            // Volta para 3, não para 2: a aprovação do gerente segue válida,
+            // o que falhou foi a etapa do RH.
+            expect(repository.revertToPayrollQueue).toHaveBeenCalledWith('A');
+            expect(result).toMatchObject({ status: 'failed', reverted_to_payroll_queue: true });
+        });
+
+        it('deve reportar a jornada mesmo se a própria reversão falhar', async () => {
+            const repository = makeFakeRepository({
+                findWorkScheduleData: jest.fn().mockResolvedValue(null),
+                revertToPayrollQueue: jest.fn().mockRejectedValue(new Error('banco fora')),
+            });
+            const useCases = makeUseCases({ repository });
+
+            const [result] = await useCases.closeWorkSchedules(['A'], 1, '0203');
+
+            expect(result).toMatchObject({ status: 'failed', reverted_to_payroll_queue: false });
+        });
+
+        it('não deve reverter jornada apenas ignorada', async () => {
+            const repository = makeFakeRepository({
+                hasExistingReceipt: jest.fn().mockResolvedValue(true),
+            });
+            const useCases = makeUseCases({ repository });
+
+            const [result] = await useCases.closeWorkSchedules(['A'], 1, '0203');
+
+            expect(result.status).toBe('skipped');
+            expect(repository.revertToPayrollQueue).not.toHaveBeenCalled();
         });
     });
 

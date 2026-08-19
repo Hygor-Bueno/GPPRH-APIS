@@ -504,6 +504,21 @@ router.delete('/access/users/:id',
     canAny(['ACCESS_MANAGE']),
     asyncHandler(accessController.deleteUser));
 
+/**
+ * @route POST /access/users/:id/reset-password
+ * @description Reseta a senha de um usuário LOCAL. Gera uma senha temporária
+ * aleatória, devolve-a em claro UMA ÚNICA VEZ e marca o usuário para trocar no
+ * próximo acesso (`must_change_password`).
+ *
+ * Recusa usuário de AD com 400: a senha dele vem do Active Directory e é
+ * sobrescrita a cada login, então o reset não teria efeito.
+ * @access Requer `ACCESS_MANAGE`
+ */
+router.post('/access/users/:id/reset-password',
+    authMiddleware,
+    canAny(['ACCESS_MANAGE']),
+    asyncHandler(authController.resetUserPassword));
+
 // ─── Gestão de Acessos — Vínculos Usuário ↔ Papel ─────────────────────────────
 
 /**

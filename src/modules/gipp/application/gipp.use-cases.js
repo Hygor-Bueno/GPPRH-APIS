@@ -12,7 +12,7 @@ const { randomUUID } = require('crypto');
 const { AppError } = require('../../../errors/app.error');
 const { validateTimeRecords } = require('../domain/time-record-validation.rules');
 const { buildReceiptItems } = require('../domain/receipt-items.builder');
-const { WORK_SCHEDULE_STATUS } = require('../domain/work-schedule-status');
+const { WORK_SCHEDULE_STATUS, DISCARDABLE_STATUSES } = require('../domain/work-schedule-status');
 
 /**
  * Normaliza filtro vindo da query string: string vazia ou só espaços vira null,
@@ -108,7 +108,7 @@ class GippUseCases {
     async getPaymentByLauncher(launchedBy, filters = {}) {
         const id = Number(launchedBy);
         if (!Number.isInteger(id) || id <= 0) {
-            throw new AppError('A valid launcher id is required', 400);
+            throw new AppError('Informe um identificador de lançador válido.', 400, { code: 'INVALID_LAUNCHER' });
         }
 
         return this.repository.findPaymentByLauncher(id, {
@@ -182,7 +182,7 @@ class GippUseCases {
 
         const codes = scheduleList.map(c => String(c).trim()).filter(Boolean);
         if (!codes.length) {
-            throw new AppError('codWorkSchedules is required and must not be empty', 400);
+            throw new AppError('Informe ao menos uma jornada.', 400, { code: 'EMPTY_SCHEDULE_LIST' });
         }
 
         const current = await this.repository.findWorkSchedulesStatus(codes);
@@ -217,46 +217,58 @@ class GippUseCases {
     // ─── Cancelamento e Processamento ───────────────────────────────────────
 
     /**
-     * Desconsidera uma jornada (→ 5). Serve tanto para o encarregado limpar
-     * uma jornada aberta quanto para o gerente reprovar uma que está na fila.
+     * Desconsidera uma jornada (→ 5).
      *
-     * Só jornada em 1 ou 2 pode ser cancelada: sem essa checagem, um código de
-     * jornada já finalizada apagaria um pagamento fechado.
+     * O que pode ser cancelado depende de quem cancela — a lista vem pronta do
+     * controller, montada a partir das permissões do usuário:
+     *
+     *   encarregado / gerente ... `DISCARDABLE_STATUSES` .......... 1 e 2
+     *   RH ..................... `PAYROLL_DISCARDABLE_STATUSES` ... 1, 2 e 3
+     *
+     * O RH alcança a jornada aprovada (3) porque ela está na fila dele e ainda
+     * não virou recibo. Status 4 fica fora para todos: desfazer jornada paga
+     * exige estornar `gipp_payment_receipt` e `cf_payments`, o que este endpoint
+     * não faz — cancelar sem estornar deixaria o recibo órfão.
+     *
+     * ⚠️ Esta validação existe para dar mensagem, não para garantir a regra. A
+     * trava real é o `IN (...)` do UPDATE em `sqlCancelWorkSchedule`, que recebe
+     * a mesma lista. Ao alterar o que pode ser cancelado, mexa na lista de
+     * status — não aqui.
      *
      * @param {string} codWorkSchedule
-     * @throws {AppError} 404 se a jornada não existe / 409 se já saiu do fluxo
+     * @param {number[]} [allowedStatuses=DISCARDABLE_STATUSES]
+     * @throws {AppError} 404 se a jornada não existe / 409 se está fora da lista
      */
-    async cancelWorkSchedule(codWorkSchedule) {
+    async cancelWorkSchedule(codWorkSchedule, allowedStatuses = DISCARDABLE_STATUSES) {
         const [current] = await this.repository.findWorkSchedulesStatus([codWorkSchedule]);
 
         if (!current) {
-            throw new AppError(`Work schedule ${codWorkSchedule} not found`, 404);
+            throw new AppError(`Jornada ${codWorkSchedule} não encontrada.`, 404, {
+                code: 'SCHEDULE_NOT_FOUND',
+            });
         }
 
-        const cancellable = [
-            WORK_SCHEDULE_STATUS.OPEN,
-            WORK_SCHEDULE_STATUS.AWAITING_APPROVAL
-        ];
-        
-        if (!cancellable.includes(current.id_status_fk)) {
+        if (!allowedStatuses.includes(current.id_status_fk)) {
             throw new AppError(
-                `Work schedule ${codWorkSchedule} is in status ${current.id_status_fk} and can no longer be discarded`,
+                `Jornada ${codWorkSchedule} está em status ${current.id_status_fk} e não pode mais ser desconsiderada.`,
                 409,
+                { code: 'INVALID_STATUS', details: { current_status: current.id_status_fk } },
             );
         }
 
-        const affected = await this.repository.cancelWorkSchedule(codWorkSchedule);
+        const affected = await this.repository.cancelWorkSchedule(codWorkSchedule, allowedStatuses);
 
-        // A checagem acima e o UPDATE são duas idas ao banco: entre uma e outra o
-        // gerente pode ter aprovado a mesma jornada. Aí a guarda do UPDATE barra e
-        // nada é alterado — sem este teste, o usuário receberia "desconsiderada
-        // com sucesso" para uma jornada que seguiu para o RH.
-        // if (affected === 0) {
-        //     throw new AppError(
-        //         `Work schedule ${codWorkSchedule} changed status concurrently and was not discarded`,
-        //         409,
-        //     );
-        // }
+        // A checagem acima e o UPDATE são duas idas ao banco: entre uma e outra a
+        // jornada pode ter mudado de status. Aí a guarda do UPDATE barra e nada é
+        // alterado — sem este teste, o usuário receberia "desconsiderada com
+        // sucesso" para uma jornada que seguiu adiante.
+        if (affected === 0) {
+            throw new AppError(
+                `Jornada ${codWorkSchedule} mudou de status durante a operação e não foi desconsiderada.`,
+                409,
+                { code: 'CONCURRENT_CHANGE' },
+            );
+        }
 
         return affected;
     }
@@ -299,8 +311,9 @@ class GippUseCases {
 
         if (!scheduleList.length) {
             throw new AppError(
-                'No work schedule approved by the manager (status 3) in the given list',
+                'Nenhuma jornada da lista foi aprovada pelo gerente. Só é possível finalizar jornadas aprovadas.',
                 409,
+                { code: 'NOT_APPROVED', details: { rejected } },
             );
         }
 
@@ -310,7 +323,11 @@ class GippUseCases {
 
         const payments = await this.repository.findPaymentsForReplication(scheduleList);
         if (!payments.length) {
-            throw new AppError('No payment data found after processing work schedules', 404);
+            throw new AppError(
+                'Nenhum valor de pagamento foi encontrado após o processamento das jornadas.',
+                404,
+                { code: 'NO_PAYMENT_DATA' },
+            );
         }
 
         for (const payment of payments) {
@@ -340,75 +357,121 @@ class GippUseCases {
         const results = [];
 
         for (const codWorkSchedule of scheduleList) {
-            // 1 — Verifica duplicata pelo event_code que embute o cod_work_schedule
-            const alreadyClosed = await this.repository.hasExistingReceipt(codWorkSchedule);
-            if (alreadyClosed) {
+            try {
+                results.push(await this._closeOne(codWorkSchedule, userId, userBranchCode));
+            } catch (error) {
+                // Uma jornada com problema não pode derrubar as demais do lote.
+                // Até 08/2026 o `throw` daqui abortava o loop inteiro — e como a
+                // procedure já havia commitado o status 4 de TODAS, as jornadas
+                // seguintes ficavam marcadas como pagas sem recibo, sem volta
+                // (o discard não alcança status 4). Foi assim que 19 jornadas da
+                // filial 0208 ficaram órfãs entre 11 e 16/08.
+                const reverted = await this._revertFailedClose(codWorkSchedule);
+
                 results.push({
                     cod_work_schedule: codWorkSchedule,
-                    status: 'skipped',
-                    reason: 'Recibo já gerado para esta jornada.',
+                    status: 'failed',
+                    reason: error.message,
+                    reverted_to_payroll_queue: reverted,
                 });
-                continue;
             }
-
-            // 2 — Dados da jornada + colaborador + empresa
-            const ws = await this.repository.findWorkScheduleData(codWorkSchedule);
-            if (!ws) {
-                throw new AppError(`Jornada ${codWorkSchedule} não encontrada.`, 404);
-            }
-
-            // 3 — Valida registros de ponto (entrada obrigatória, pares de intervalo)
-            const records = await this.repository.findTimeRecordsForValidation(codWorkSchedule);
-            validateTimeRecords(records, codWorkSchedule);
-
-            // 4 — Referência YYYYMM (derivada do primeiro registro de entrada)
-            const { reference, work_date: workDate } = await this.repository.findWorkScheduleReference(codWorkSchedule);
-            if (!reference) {
-                throw new AppError(
-                    `Jornada ${codWorkSchedule}: não foi possível determinar a referência (YYYYMM).`, 422
-                );
-            }
-
-            // 5 — Valores de pagamento calculados no processamento
-            const pay = await this.repository.findPaymentDataByCodWork(codWorkSchedule);
-            if (!pay) {
-                throw new AppError(
-                    `Jornada ${codWorkSchedule}: valores de pagamento não encontrados. ` +
-                    `Execute o processamento antes do fechamento.`, 422
-                );
-            }
-
-            // 6 — UUID único por jornada + durações individuais
-            const receiptGroupId = randomUUID();
-            const dur = await this.repository.findWorkDurations(codWorkSchedule);
-
-            const items = buildReceiptItems({
-                ws, pay, dur, workDate, codWorkSchedule, reference, receiptGroupId, userId, userBranchCode,
-            });
-
-            if (!items.length) {
-                results.push({
-                    cod_work_schedule: codWorkSchedule,
-                    status: 'skipped',
-                    reason: 'Todos os valores de pagamento são zero.',
-                });
-                continue;
-            }
-
-            // 7 — Insere cada item; todos compartilham o mesmo receipt_group_id desta jornada
-            for (const item of items) {
-                await this.repository.insertReceiptItem(item);
-            }
-
-            results.push({
-                cod_work_schedule: codWorkSchedule,
-                status: 'inserted',
-                items: items.length,
-                details: items.map(i => ({ description: i.description, amount: i.amount })),
-            });
         }
 
         return results;
+    }
+
+    /**
+     * Devolve a jornada de 4 para 3 quando o recibo não pôde ser gerado.
+     *
+     * A procedure marca status 4 antes de o recibo existir, então uma falha aqui
+     * deixaria a jornada como paga sem contrapartida. Voltar para 3 — e não para
+     * 2 — é o correto: a aprovação do gerente continua válida, o que falhou foi a
+     * etapa do RH. A jornada reaparece em `/payment/approved` para nova tentativa.
+     *
+     * @returns {Promise<boolean>} `false` se a própria reversão falhar.
+     * @private
+     */
+    async _revertFailedClose(codWorkSchedule) {
+        try {
+            const affected = await this.repository.revertToPayrollQueue(codWorkSchedule);
+            return affected > 0;
+        } catch {
+            // Reverter é melhor-esforço: se falhar, o resultado já reporta a
+            // jornada como `failed` e ela aparece na verificação de órfãs.
+            return false;
+        }
+    }
+
+    /**
+     * Fecha uma única jornada. Lança em qualquer inconsistência — quem chama
+     * traduz isso em `failed` e reverte o status.
+     * @private
+     */
+    async _closeOne(codWorkSchedule, userId, userBranchCode) {
+        // 1 — Verifica duplicata pelo event_code que embute o cod_work_schedule
+        const alreadyClosed = await this.repository.hasExistingReceipt(codWorkSchedule);
+        if (alreadyClosed) {
+            return {
+                cod_work_schedule: codWorkSchedule,
+                status: 'skipped',
+                reason: 'Recibo já gerado para esta jornada.',
+            };
+        }
+
+        // 2 — Dados da jornada + colaborador + empresa
+        const ws = await this.repository.findWorkScheduleData(codWorkSchedule);
+        if (!ws) {
+            throw new AppError(`Jornada ${codWorkSchedule} não encontrada.`, 404);
+        }
+
+        // 3 — Valida registros de ponto (entrada obrigatória, pares de intervalo)
+        const records = await this.repository.findTimeRecordsForValidation(codWorkSchedule);
+        validateTimeRecords(records, codWorkSchedule);
+
+        // 4 — Referência YYYYMM (derivada do primeiro registro de entrada)
+        const { reference, work_date: workDate } = await this.repository.findWorkScheduleReference(codWorkSchedule);
+        if (!reference) {
+            throw new AppError(
+                `Jornada ${codWorkSchedule}: não foi possível determinar a referência (YYYYMM).`, 422
+            );
+        }
+
+        // 5 — Valores de pagamento calculados no processamento
+        const pay = await this.repository.findPaymentDataByCodWork(codWorkSchedule);
+        if (!pay) {
+            throw new AppError(
+                `Jornada ${codWorkSchedule}: valores de pagamento não encontrados. ` +
+                `Execute o processamento antes do fechamento.`, 422
+            );
+        }
+
+        // 6 — UUID único por jornada + durações individuais
+        const receiptGroupId = randomUUID();
+        const dur = await this.repository.findWorkDurations(codWorkSchedule);
+
+        const items = buildReceiptItems({
+            ws, pay, dur, workDate, codWorkSchedule, reference, receiptGroupId, userId, userBranchCode,
+        });
+
+        if (!items.length) {
+            return {
+                cod_work_schedule: codWorkSchedule,
+                status: 'skipped',
+                reason: 'Todos os valores de pagamento são zero.',
+            };
+        }
+
+        // 7 — Insere cada item; todos compartilham o mesmo receipt_group_id desta jornada
+        for (const item of items) {
+            await this.repository.insertReceiptItem(item);
+        }
+
+        return {
+            cod_work_schedule: codWorkSchedule,
+            status: 'inserted',
+            items: items.length,
+            details: items.map(i => ({ description: i.description, amount: i.amount })),
+        };
     }
 }
 

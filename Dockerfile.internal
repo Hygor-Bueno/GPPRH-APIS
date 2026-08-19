@@ -66,7 +66,7 @@ COPY src ./src
 
 # `uploads/` e `storage/` são bind mounts (estado em disco). Criados aqui com o
 # dono correto para o caso de o mount ainda não existir no host.
-RUN mkdir -p uploads storage && chown -R node:node uploads storage /opt/puppeteer
+RUN mkdir -p uploads storage logs && chown -R node:node uploads storage logs /opt/puppeteer
 
 USER node
 

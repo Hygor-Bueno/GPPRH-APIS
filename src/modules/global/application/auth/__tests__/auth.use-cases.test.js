@@ -12,9 +12,12 @@ const { LdapAuthenticatorPort } = require('../ports/ldap-authenticator.port');
 const { AppError } = require('../../../../../errors/app.error');
 const { UnauthorizedError } = require('../../../../../errors/unauthorized.error');
 
+// Espelha o retorno de `sp_get_user_authorization`. Se a procedure ganhar uma
+// coluna, este fixture precisa acompanhar — o mapper recusa payload incompleto.
 const SESSION_ROW = {
     id: 1, user: 'fulano', name: 'Fulano Silva', registration: '123', ad_status: 'active',
     roles: 'ADMIN', permissions: 'A,B', application_ids: '1,2', branch_code: '0101',
+    must_change_password: 0,
 };
 
 function makeFakeRepository(overrides = {}) {

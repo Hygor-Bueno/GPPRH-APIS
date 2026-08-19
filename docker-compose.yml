@@ -1,21 +1,22 @@
 # Backends em container no servidor 192.168.0.99.
 #
-# Sobe TUDO em paralelo ao PM2 atual, em portas que não colidem. Nada em
-# produção muda até você repontar o Apache. O monolito na 4000 e o ws-gpprh na
-# 4001 continuam intactos.
+# ⚠️ Este é o deploy de PRODUÇÃO desde 2026-08-06. O PM2 do host (`api-gpprh`,
+# `ws-gpprh`, `front-gpprh`) foi parado nessa data e o Apache aponta para os
+# containers abaixo. `pm2 restart` no host não surte efeito — para aplicar
+# mudança de código é `docker compose build && docker compose up -d`.
 #
 #   docker compose build
 #   docker compose up -d
 #   docker compose logs -f
 #
-# Portas durante a validação → depois da virada:
-#   api-gipp-enterprises   127.0.0.1:4002   (mantém 4002)
-#   ws-gipp-enterprises    127.0.0.1:4011   (mantém 4011; o Apache passa a apontar aqui)
-#   api-gpprh              127.0.0.1:4010   (mantém 4010)
+# Portas (todas no loopback):
+#   api-gipp-enterprises   127.0.0.1:4002   HTTP interno
+#   ws-gipp-enterprises    127.0.0.1:4011   WebSocket (4001 dentro do container)
+#   api-gpprh              127.0.0.1:4010   HTTP público (site de vagas)
 #
-# ⚠️ Durante o período em paralelo existe um `api-gpprh` no PM2 (o monolito, que
-# atende todo o tráfego) e este `api-gpprh` em container (ocioso). Ao diagnosticar,
-# confira sempre se está olhando `pm2 list` ou `docker compose ps`.
+# Diagnóstico: `docker compose ps` / `docker compose logs`, não `pm2 list`.
+# (Há um PM2 vivo DENTRO do api-gipp-enterprises — o pm2-runtime do cluster
+# mode, ver ecosystem.docker.config.js. Não confundir com o PM2 do host.)
 #
 # Todas publicadas SÓ no loopback: os containers ficam inalcançáveis pela rede,
 # só o Apache do próprio host chega neles.
@@ -94,6 +95,10 @@ services:
       # Estado em disco — anexos de chat e arquivos de módulos
       - ./uploads:/app/uploads
       - ./storage:/app/storage
+      # Trilha de auditoria em CSV do fechamento de jornada (GIPP). Mount
+      # próprio, separado de `storage/`: log operacional e anexo de usuário têm
+      # ciclos de backup e limpeza diferentes.
+      - ./logs:/app/logs
 
     # Contém o vazamento do Chromium (~800MB de processos órfãos hoje). O
     # max_memory_restart do PM2 não pega isso porque o Chromium é processo-filho.
@@ -164,5 +169,59 @@ services:
       JWT_REFRESH_SECRET: ${PUBLIC_JWT_REFRESH_SECRET:?defina PUBLIC_JWT_REFRESH_SECRET no .env}
 
     mem_limit: 512m
+    extra_hosts: *extra-hosts
+    logging: *logging
+
+  # ===========================================================================
+  # Reconhecimento facial do refeitório — etapa 6
+  # ===========================================================================
+  #
+  # ⚠️ NÃO declara `ports:`, e isso é a decisão de segurança, não esquecimento.
+  #   Sem porta publicada o serviço não é alcançável do host nem da rede — só de
+  #   dentro da rede do compose, pelo nome `face`. É mais restrito que publicar
+  #   em 127.0.0.1, e o vetor nunca sai da máquina.
+  #
+  #   Quem fala com ele é o api-gipp-enterprises, em `http://face:8000`.
+  #
+  # O build baixa ~330 MB de modelo e compila extensões C++ — leva alguns
+  # minutos na primeira vez e a imagem fica em torno de 1,5 GB. Depois disso o
+  # container sobe offline, o que é o ponto: um restart sem internet não pode
+  # deixar o refeitório sem reconhecimento.
+  face:
+    build:
+      context: ./face
+      dockerfile: Dockerfile
+      args:
+        # Trocar aqui exige trocar FACE_MODEL_PACK abaixo E recadastrar os
+        # rostos: o model_tag muda, e vetores de modelos diferentes não se
+        # comparam (ver CK do meal_biometric e a rota /verify).
+        MODEL_PACK: buffalo_l
+    image: face-gipp-refeitorio:local
+    container_name: face-gipp-refeitorio
+    restart: unless-stopped
+
+    environment:
+      FACE_MODEL_PACK: buffalo_l
+      FACE_MODEL_TAG: insightface-buffalo_l-w600k_r50
+      # Confiança mínima do DETECTOR. Não é o limiar de identidade — esse é
+      # calibrado no piloto e mora na API.
+      FACE_MIN_DET_SCORE: "0.55"
+
+    # Sem volume nenhum. O serviço não escreve em disco, e não ter volume torna
+    # isso verificável em vez de prometido.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+
+    # ~700 MB por worker com o modelo carregado, mais folga.
+    mem_limit: 2g
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
     extra_hosts: *extra-hosts
     logging: *logging

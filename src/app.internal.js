@@ -14,6 +14,7 @@ const { createApp } = require('./app.factory');
 const globalRoutes = require('./modules/global/routes');
 const protheusRoutes = require('./modules/protheus/routes');
 const gippRoutes = require('./modules/gipp/routes');
+const mealRoutes = require('./modules/meal/routes');
 const wsRoutes = require('./websocket/routes/ws.routes');
 
 const ALLOWED_ORIGINS = [
@@ -37,6 +38,9 @@ module.exports = createApp({
     { prefix: '/global', router: globalRoutes },
     { prefix: '/protheus', router: protheusRoutes },
     { prefix: '/gipp', router: gippRoutes },
+    // Sob /gipp porque o prefixo identifica a fonte de dados, não o módulo: o
+    // refeitório lê GIPP.dbo. Ver o comentário em app.js.
+    { prefix: '/gipp/meal', router: mealRoutes },
     { prefix: '/monitoring', router: wsRoutes }
   ]
 });

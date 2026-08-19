@@ -57,7 +57,11 @@ class MysqlAccessRepository extends AccessRepositoryPort {
             return rows;
         } catch (error) {
             if (error.code === 'ER_DUP_ENTRY') throw error;
-            throw new AppError(error.message || 'Erro ao acessar o banco de dados', 500, 'MYSQL_ERROR', error);
+            // O terceiro parâmetro de AppError é um objeto { code, details }.
+            throw new AppError('Erro ao acessar o banco de dados', 500, {
+                code: error.code || 'MYSQL_ERROR',
+                details: error,
+            });
         } finally {
             conn.release();
         }
@@ -74,7 +78,10 @@ class MysqlAccessRepository extends AccessRepositoryPort {
             await conn.commit();
         } catch (err) {
             await conn.rollback();
-            throw new AppError(err.message || 'Erro na transação', 500, 'MYSQL_ERROR', err);
+            throw new AppError('Erro na transação', 500, {
+                code: err.code || 'MYSQL_ERROR',
+                details: err,
+            });
         } finally {
             conn.release();
         }

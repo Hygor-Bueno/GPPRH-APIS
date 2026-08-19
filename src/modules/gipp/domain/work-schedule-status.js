@@ -48,4 +48,32 @@ const LEGACY_PAYMENT_STATUSES = Object.freeze([
     WORK_SCHEDULE_STATUS.AWAITING_APPROVAL,
 ]);
 
-module.exports = { WORK_SCHEDULE_STATUS, LEGACY_PAYMENT_STATUSES };
+/**
+ * O que o encarregado e o gerente podem desconsiderar: jornada aberta e jornada
+ * na fila de aprovação. Depois de aprovada ela já é responsabilidade do RH.
+ */
+const DISCARDABLE_STATUSES = Object.freeze([
+    WORK_SCHEDULE_STATUS.OPEN,
+    WORK_SCHEDULE_STATUS.AWAITING_APPROVAL,
+]);
+
+/**
+ * O que o RH pode desconsiderar — inclui a jornada já aprovada (3), que está na
+ * fila dele e ainda não virou recibo.
+ *
+ * `FINISHED` (4) fica de fora para todos: desfazer jornada paga exige estornar
+ * as linhas de `gipp_payment_receipt` e `cf_payments`, o que este endpoint não
+ * faz. Cancelar sem estornar deixaria o recibo órfão.
+ */
+const PAYROLL_DISCARDABLE_STATUSES = Object.freeze([
+    WORK_SCHEDULE_STATUS.OPEN,
+    WORK_SCHEDULE_STATUS.AWAITING_APPROVAL,
+    WORK_SCHEDULE_STATUS.AWAITING_PAYROLL,
+]);
+
+module.exports = {
+    WORK_SCHEDULE_STATUS,
+    LEGACY_PAYMENT_STATUSES,
+    DISCARDABLE_STATUSES,
+    PAYROLL_DISCARDABLE_STATUSES,
+};

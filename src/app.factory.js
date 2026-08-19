@@ -6,11 +6,11 @@
  * Protheus, WebSocket) — compartilhando a mesma configuração de middleware sem
  * duplicá-la.
  *
- * Deliberadamente NÃO substitui o `app.js`. O `app.js` continua sendo o app
- * monolítico em produção; esta fábrica é consumida apenas por `app.public.js`
- * e `app.internal.js`, que ficam inertes até o `ecosystem.config.js` apontar
- * para eles. Quando a separação estiver validada em produção, o `app.js` e o
- * `server.js` podem ser removidos e a duplicação de middleware desaparece.
+ * Desde 2026-08-06 esta fábrica é o caminho de PRODUÇÃO: os containers rodam
+ * `server.internal.js` e `server.public.js`, que consomem `app.internal.js` e
+ * `app.public.js`. O `app.js`/`server.js` monolítico é legado — só o
+ * `ecosystem.config.js` da raiz (PM2 do host, parado) aponta para ele, e pode
+ * ser removido junto com a duplicação de middleware.
  *
  * @module app.factory
  */

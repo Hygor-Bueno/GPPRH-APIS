@@ -78,10 +78,31 @@ class MysqlAuthRepository extends AuthRepositoryPort {
     async updatePassword(userId, passwordHash) {
         const conn = await poolGlobal.getConnection();
         try {
+            // Trocar a senha sempre desarma a exigência — é exatamente o que a
+            // flag estava cobrando. Zerar aqui, e não no caso de uso, garante
+            // que nenhum caminho de troca deixe o usuário preso.
             await conn.execute(
-                'UPDATE global._user SET password = ? WHERE id = ?',
+                'UPDATE global._user SET password = ?, must_change_password = 0 WHERE id = ?',
                 [passwordHash, userId]
             );
+        } finally {
+            conn.release();
+        }
+    }
+
+    /**
+     * Reset feito pela gestão de acessos: grava a senha temporária e liga a
+     * exigência de troca.
+     * @returns {Promise<number>} Linhas afetadas — 0 se o id não existir.
+     */
+    async resetPassword(userId, passwordHash) {
+        const conn = await poolGlobal.getConnection();
+        try {
+            const [result] = await conn.execute(
+                'UPDATE global._user SET password = ?, must_change_password = 1 WHERE id = ?',
+                [passwordHash, userId]
+            );
+            return result.affectedRows ?? 0;
         } finally {
             conn.release();
         }

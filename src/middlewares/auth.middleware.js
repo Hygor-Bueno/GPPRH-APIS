@@ -1,5 +1,6 @@
 const { authenticateFromCookies } = require("../application/auth/auth-session.service.js");
 const { parseTime } = require("../utils/time-parser.js");
+const { mustChangePassword } = require("./must-change-password.middleware.js");
 
 module.exports = async (req, res, next) => {
   try {
@@ -29,7 +30,12 @@ module.exports = async (req, res, next) => {
     }
 
     req.user = user;
-    next();
+
+    // Troca de senha pendente após reset da gestão de acessos: libera apenas
+    // /me, /change-password e /logout. Fica aqui porque é o único ponto em que
+    // `req.user` já existe para todos os módulos — aplicar rota a rota deixaria
+    // buracos silenciosos a cada rota nova.
+    return mustChangePassword(req, res, next);
 
   } catch (err) {
     return res.status(401).json({

@@ -64,6 +64,16 @@ app.use('/gpprh', gpprhRoutes);
 const gippRoutes = require('./modules/gipp/routes');
 app.use('/gipp', gippRoutes);
 
+// Controle de refeitório — etapa 2. Tabelas em GIPP.dbo desde 18/08/2026
+// (refeitorio_etapa1_deploy.sql).
+//
+// Montado sob `/gipp` porque o prefixo de rota aqui identifica a FONTE DE DADOS,
+// não o módulo: `/global` é o MySQL, `/gipp` é o SQL Server GIPP, `/protheus` é
+// o Protheus. O refeitório lê `GIPP.dbo`, então mora em `/gipp/meal` — assim não
+// é preciso uma regra nova de proxy no Apache para cada módulo novo.
+const mealRoutes = require('./modules/meal/routes');
+app.use('/gipp/meal', mealRoutes);
+
 const wsRoutes = require('./websocket/routes/ws.routes');
 app.use('/monitoring', wsRoutes);
 

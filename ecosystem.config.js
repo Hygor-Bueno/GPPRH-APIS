@@ -1,3 +1,10 @@
+// ⚠️ LEGADO — config do PM2 do HOST, que foi parado em 2026-08-06.
+//
+// Produção roda em Docker Compose (ver docker-compose.yml). `pm2 restart` no
+// host não surte efeito nenhum. Este arquivo é mantido só como histórico do
+// que rodava antes; o ecosystem VIVO é o `ecosystem.docker.config.js`, lido
+// pelo pm2-runtime DENTRO do container interno.
+
 module.exports = {
   apps: [
 

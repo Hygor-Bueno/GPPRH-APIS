@@ -1,0 +1,21 @@
+# Reconhecimento facial do refeitório — etapa 6.
+#
+# Versões fixas de propósito. Trocar a versão do onnxruntime ou do pacote de
+# modelos muda os vetores gerados, e vetor de um modelo não compara com o de
+# outro (ver meal_biometric.model_tag). Uma atualização silenciosa aqui degrada a
+# acurácia sem nenhum sintoma visível.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+
+# CPU. A versão com GPU não entra: o servidor não tem placa, e o pacote
+# onnxruntime-gpu falha na inicialização em vez de cair para CPU.
+onnxruntime==1.20.1
+
+insightface==0.7.3
+numpy==1.26.4
+
+# headless: sem GTK/Qt. O container não tem servidor de janelas, e a versão
+# completa do opencv-python arrasta ~200 MB de bibliotecas gráficas para nada.
+opencv-python-headless==4.10.0.84

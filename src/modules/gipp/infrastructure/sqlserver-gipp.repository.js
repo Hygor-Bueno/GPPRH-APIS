@@ -6,7 +6,8 @@
 const { poolPromise, sql } = require('../../../config/sqlserver');
 const { AppError } = require('../../../errors/app.error');
 const { GippRepositoryPort } = require('../application/ports/gipp-repository.port');
-const { WORK_SCHEDULE_STATUS } = require('../domain/work-schedule-status');
+const { WORK_SCHEDULE_STATUS, DISCARDABLE_STATUSES } = require('../domain/work-schedule-status');
+const { translateSqlServerError } = require('./sqlserver-error.translator');
 const {
     sqlGetStatus,
     sqlGetPaymentRegistered,
@@ -31,13 +32,36 @@ const {
 } = require('../repositories/sqlserver/gipp.queries');
 
 class SqlServerGippRepository extends GippRepositoryPort {
-    /** @private */
+    /**
+     * Executa o acesso ao banco traduzindo a falha.
+     *
+     * Erros de regra de negócio lançados pelas procedures com `RAISERROR` viram
+     * 4xx em português (ver `sqlserver-error.translator`). O que não for
+     * reconhecido é falha técnica e continua 500 — mas com a mensagem genérica
+     * do módulo, não com o texto cru do SQL Server, que expõe nome de objeto e
+     * estrutura interna do banco a quem chamou.
+     *
+     * @private
+     */
     async _run(fn, fallbackMessage) {
         try {
             return await fn();
         } catch (error) {
             if (error instanceof AppError) throw error;
-            throw new AppError(error.message || fallbackMessage, 500, error.code || 'SQLSERVER_ERROR', error);
+
+            const known = translateSqlServerError(error);
+            if (known) {
+                throw new AppError(known.message, known.status, { code: known.code, details: error });
+            }
+
+            // O terceiro parâmetro de AppError é um OBJETO { code, details }.
+            // Até 08/2026 passava-se uma string aqui e o erro original como
+            // quarto argumento — com isso `options.code` ficava undefined, o
+            // code caía para 'GENERIC_ERROR' e os detalhes eram descartados.
+            throw new AppError(fallbackMessage, 500, {
+                code: error.code || 'SQLSERVER_ERROR',
+                details: error,
+            });
         }
     }
 
@@ -48,7 +72,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
             const pool = await poolPromise;
             const result = await pool.request().query(sqlGetStatus());
             return result.recordset;
-        }, 'Error fetching status');
+        }, 'Não foi possível consultar os status de jornada.');
     }
 
     async findPaymentRegistered(filters = {}) {
@@ -59,7 +83,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
                 .input('cost_center', sql.VarChar(20), filters.costCenter || null)
                 .query(sqlGetPaymentRegistered());
             return result.recordset;
-        }, 'Error fetching payment registered');
+        }, 'Não foi possível consultar as jornadas em aberto.');
     }
 
     async findPaymentByStatus(status, filters = {}, options = {}) {
@@ -71,7 +95,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
                 .input('cost_center', sql.VarChar(20), filters.costCenter || null)
                 .query(sqlGetPaymentByStatus(options.withValues === true));
             return result.recordset;
-        }, 'Error fetching payment by status');
+        }, 'Não foi possível consultar a fila de jornadas.');
     }
 
     async findPaymentByLauncher(launchedBy, filters = {}) {
@@ -83,7 +107,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
                 .input('cost_center', sql.VarChar(20), filters.costCenter || null)
                 .query(sqlGetPaymentByLauncher());
             return result.recordset;
-        }, 'Error fetching payment by launcher');
+        }, 'Não foi possível consultar as jornadas lançadas por este usuário.');
     }
 
     async findRecordTypes() {
@@ -91,7 +115,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
             const pool = await poolPromise;
             const result = await pool.request().query(sqlGetRecordTypes());
             return result.recordset;
-        }, 'Error fetching record types');
+        }, 'Não foi possível consultar os tipos de marcação.');
     }
 
     // ─── Registros de Ponto ─────────────────────────────────────────────────
@@ -103,7 +127,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
                 .input('codWorkSchedule', sql.VarChar(50), codWorkSchedule)
                 .query(sqlGetTimeRecordsByCodWork());
             return result.recordset;
-        }, 'Error fetching time records');
+        }, 'Não foi possível consultar as marcações de ponto.');
     }
 
     async findTimeRecords(filters) {
@@ -119,7 +143,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
                 .input('cost_center', sql.NVarChar(20), filters.costCenter || null)
                 .query(sqlGetTimeRecords());
             return result.recordset;
-        }, 'Error fetching time records');
+        }, 'Não foi possível consultar as marcações de ponto.');
     }
 
     async insertTimeRecord(payload, userId) {
@@ -133,7 +157,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
                 .input('branch_time_record', sql.VarChar(10), payload.branch_time_record)
                 .query(sqlInsertTimeRecord());
             return result.recordset;
-        }, 'Error inserting time record');
+        }, 'Não foi possível registrar a marcação de ponto.');
     }
 
     async updateTimeRecord(payload, userId) {
@@ -145,22 +169,24 @@ class SqlServerGippRepository extends GippRepositoryPort {
                 .input('times', sql.DateTime, payload.times ? new Date(payload.times + 'Z') : null)
                 .query(sqlUpdateTimeRecord());
             return result.recordset;
-        }, 'Error updating time record');
+        }, 'Não foi possível atualizar a marcação de ponto.');
     }
 
     // ─── Jornadas de Trabalho ───────────────────────────────────────────────
 
-    async cancelWorkSchedule(codWorkSchedule) {
+    async cancelWorkSchedule(codWorkSchedule, allowedStatuses = DISCARDABLE_STATUSES) {
         return this._run(async () => {
             const pool = await poolPromise;
-            const result = await pool.request()
+            const { sql: query, params } = sqlCancelWorkSchedule(allowedStatuses);
+            const request = pool.request()
                 .input('cod_work_schedule', sql.VarChar(50), codWorkSchedule)
-                .input('st_cancelled', sql.Int, WORK_SCHEDULE_STATUS.CANCELLED)
-                .input('st_open', sql.Int, WORK_SCHEDULE_STATUS.OPEN)
-                .input('st_awaiting_approval', sql.Int, WORK_SCHEDULE_STATUS.AWAITING_APPROVAL)
-                .query(sqlCancelWorkSchedule());
+                .input('st_cancelled', sql.Int, WORK_SCHEDULE_STATUS.CANCELLED);
+            for (const [key, value] of Object.entries(params)) {
+                request.input(key, sql.Int, value);
+            }
+            const result = await request.query(query);
             return result.rowsAffected[0] ?? 0;
-        }, 'Error cancelling work schedule');
+        }, 'Não foi possível desconsiderar a jornada.');
     }
 
     async findWorkSchedulesStatus(scheduleList) {
@@ -173,7 +199,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
             }
             const result = await request.query(query);
             return result.recordset || [];
-        }, 'Error fetching work schedules status');
+        }, 'Não foi possível consultar o status das jornadas.');
     }
 
     async approveWorkSchedules(scheduleList, fromStatus, toStatus) {
@@ -188,7 +214,16 @@ class SqlServerGippRepository extends GippRepositoryPort {
             }
             const result = await request.query(query);
             return result.rowsAffected[0] ?? 0;
-        }, 'Error approving work schedules');
+        }, 'Não foi possível aprovar as jornadas.');
+    }
+
+    async revertToPayrollQueue(codWorkSchedule) {
+        // Mesma query da aprovação, com a transição invertida: 4 → 3.
+        return this.approveWorkSchedules(
+            [codWorkSchedule],
+            WORK_SCHEDULE_STATUS.FINISHED,
+            WORK_SCHEDULE_STATUS.AWAITING_PAYROLL,
+        );
     }
 
     async processWorkSchedules(scheduleCsv) {
@@ -197,7 +232,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
             await pool.request()
                 .input('CodWorkSchedules', sql.VarChar(sql.MAX), scheduleCsv)
                 .query(sqlProcessWorkSchedules());
-        }, 'Error processing work schedules');
+        }, 'Não foi possível processar as jornadas.');
     }
 
     async findPaymentsForReplication(scheduleList) {
@@ -210,7 +245,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
             }
             const result = await request.query(query);
             return result.recordset || [];
-        }, 'Error fetching payments for replication');
+        }, 'Não foi possível obter os valores calculados das jornadas.');
     }
 
     // ─── Fechamento de Jornada ──────────────────────────────────────────────
@@ -222,7 +257,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
                 .input('cod_work_schedule', sql.VarChar(50), codWorkSchedule)
                 .query(sqlCheckExistingReceipt());
             return (result.recordset[0]?.total ?? 0) > 0;
-        }, 'Error checking existing receipt');
+        }, 'Não foi possível verificar se a jornada já possui recibo.');
     }
 
     async findWorkScheduleData(codWorkSchedule) {
@@ -232,7 +267,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
                 .input('cod_work_schedule', sql.VarChar(50), codWorkSchedule)
                 .query(sqlGetWorkScheduleData());
             return result.recordset[0] ?? null;
-        }, 'Error fetching work schedule data');
+        }, 'Não foi possível obter os dados da jornada.');
     }
 
     async findTimeRecordsForValidation(codWorkSchedule) {
@@ -242,7 +277,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
                 .input('cod_work_schedule', sql.VarChar(50), codWorkSchedule)
                 .query(sqlGetTimeRecordsForValidation());
             return result.recordset;
-        }, 'Error fetching time records for validation');
+        }, 'Não foi possível validar as marcações da jornada.');
     }
 
     async findWorkScheduleReference(codWorkSchedule) {
@@ -252,7 +287,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
                 .input('cod_work_schedule', sql.VarChar(50), codWorkSchedule)
                 .query(sqlGetWorkScheduleReference());
             return result.recordset[0] ?? {};
-        }, 'Error fetching work schedule reference');
+        }, 'Não foi possível determinar a referência da jornada.');
     }
 
     async findPaymentDataByCodWork(codWorkSchedule) {
@@ -262,7 +297,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
                 .input('cod_work_schedule', sql.VarChar(50), codWorkSchedule)
                 .query(sqlGetPaymentDataByCodWork());
             return result.recordset[0] ?? null;
-        }, 'Error fetching payment data');
+        }, 'Não foi possível obter os valores de pagamento da jornada.');
     }
 
     async findWorkDurations(codWorkSchedule) {
@@ -272,7 +307,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
                 .input('cod_work_schedule', sql.VarChar(50), codWorkSchedule)
                 .query(sqlGetWorkDurations());
             return result.recordset[0] ?? null;
-        }, 'Error fetching work durations');
+        }, 'Não foi possível calcular as durações da jornada.');
     }
 
     async insertReceiptItem(item) {
@@ -312,7 +347,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
                         GETDATE(), @created_by, @created_by_branch_code
                     );
                 `);
-        }, 'Error inserting receipt item');
+        }, 'Não foi possível inserir o item do recibo.');
     }
 }
 

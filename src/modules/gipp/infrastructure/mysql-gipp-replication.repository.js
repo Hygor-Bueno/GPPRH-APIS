@@ -31,7 +31,13 @@ class MysqlGippReplicationRepository extends GippReplicationRepositoryPort {
                 ]
             );
         } catch (error) {
-            throw new AppError(error.message || 'Error replicating payment to MySQL', 500, 'MYSQL_GIPP_ERROR', error);
+            // O terceiro parâmetro de AppError é um OBJETO { code, details }.
+            // Passar string aqui fazia `options.code` ficar undefined, o code cair
+            // para 'GENERIC_ERROR' e o erro original ser descartado inteiro.
+            throw new AppError('Não foi possível replicar o pagamento no MySQL.', 500, {
+                code: 'MYSQL_GIPP_ERROR',
+                details: error,
+            });
         } finally {
             conn.release();
         }

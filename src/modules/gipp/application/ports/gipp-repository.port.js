@@ -66,6 +66,18 @@ class GippRepositoryPort {
      */
     approveWorkSchedules(scheduleList, fromStatus, toStatus) { throw new Error('Not implemented'); }
 
+    /**
+     * Devolve uma jornada de 4 (finalizada) para 3 (fila do RH).
+     *
+     * Usado quando a procedure já marcou como finalizada mas a geração do recibo
+     * falhou — sem isso a jornada fica marcada como paga sem recibo, e o discard
+     * não alcança status 4.
+     *
+     * @param {string} codWorkSchedule
+     * @returns {Promise<number>} Linhas afetadas.
+     */
+    revertToPayrollQueue(codWorkSchedule) { throw new Error('Not implemented'); }
+
     /** @param {string} scheduleCsv - Códigos separados por vírgula. */
     processWorkSchedules(scheduleCsv) { throw new Error('Not implemented'); }
 

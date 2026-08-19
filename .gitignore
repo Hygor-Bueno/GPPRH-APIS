@@ -11,6 +11,9 @@ node_modules/
 /storage
 /uploads
 
+# Trilha de auditoria do fechamento de jornada (CSV gerado em runtime)
+/logs
+
 # Saída de testes
 /coverage
 
