@@ -67,6 +67,33 @@ class GippRhRepositoryPort {
      * @returns {Promise<object[]>}
      */
     findReceipt(employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId, dateFrom, dateTo) { throw new Error('Not implemented'); }
+
+    // ─── Jornadas (GIPP) ────────────────────────────────────────────────────
+    // O adapter já implementava os dois; a porta não os declarava. Sem a
+    // declaração, um adapter alternativo (ou um fake de teste) passaria a
+    // checagem de contrato sem ter o método — e a falha só apareceria em
+    // produção, na hora de fechar o pagamento.
+
+    /**
+     * Estado atual das jornadas — usado para separar o que a tesouraria pode
+     * fechar do que precisa voltar como ignorado.
+     * @param {string[]} scheduleList
+     * @returns {Promise<Array<{cod_work_schedule: string, id_status_fk: number}>>}
+     */
+    findWorkSchedulesStatus(scheduleList) { throw new Error('Not implemented'); }
+
+    /**
+     * Fecha as jornadas da tesouraria: 6 (Pagando) → 4 (Finalizado).
+     *
+     * O `actor` não altera nenhuma coluna de `cf_work_schedules` — ele vai para
+     * o `SESSION_CONTEXT`, de onde o trigger de histórico lê o responsável.
+     * Omitir o ator grava a transição como anônima.
+     *
+     * @param {string[]} scheduleList
+     * @param {import('../../../../utils/audit-actor').AuditActor} [actor]
+     * @returns {Promise<number>} Linhas afetadas.
+     */
+    confirmTreasuryPayment(scheduleList, actor) { throw new Error('Not implemented'); }
 }
 
 module.exports = { GippRhRepositoryPort };

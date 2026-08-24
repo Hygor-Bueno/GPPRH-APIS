@@ -2,6 +2,7 @@ const { GippUseCases } = require('../gipp.use-cases');
 const { GippRepositoryPort } = require('../ports/gipp-repository.port');
 const { GippReplicationRepositoryPort } = require('../ports/gipp-replication-repository.port');
 const { AppError } = require('../../../../errors/app.error');
+const { CHANGE_REASON } = require('../../domain/work-schedule-change-reason');
 
 const WS = { company_code: 1, branch_time_record: 203, employee_id: 4043, employee_name: 'Fulano', branch_name: 'Taboao' };
 const VALID_RECORDS = [{ id_record_type_fk: 1 }, { id_record_type_fk: 4 }];
@@ -118,6 +119,73 @@ describe('GippUseCases', () => {
         });
     });
 
+    describe('OPERATION_VISIBLE_STATUSES', () => {
+        it('deve incluir 1, 2, 3 e 6 — tudo que não encerrou', () => {
+            const { OPERATION_VISIBLE_STATUSES } = require('../../domain/work-schedule-status');
+            expect(OPERATION_VISIBLE_STATUSES).toEqual([1, 2, 3, 6]);
+        });
+
+        it('não deve incluir finalizada (4) nem cancelada (5)', () => {
+            const { OPERATION_VISIBLE_STATUSES } = require('../../domain/work-schedule-status');
+            expect(OPERATION_VISIBLE_STATUSES).not.toContain(4);
+            expect(OPERATION_VISIBLE_STATUSES).not.toContain(5);
+        });
+
+        it('não deve permitir cancelar jornada em Pagando (6) nem Finalizado (4)', () => {
+            const {
+                DISCARDABLE_STATUSES,
+                PAYROLL_DISCARDABLE_STATUSES,
+            } = require('../../domain/work-schedule-status');
+
+            // Depois que o RH gera os recibos, ninguém cancela via software.
+            for (const lista of [DISCARDABLE_STATUSES, PAYROLL_DISCARDABLE_STATUSES]) {
+                expect(lista).not.toContain(6);
+                expect(lista).not.toContain(4);
+            }
+        });
+
+        it('deve ordenar o fluxo por workflow_order, não por id', () => {
+            const { WORKFLOW_ORDER, WORK_SCHEDULE_STATUS } = require('../../domain/work-schedule-status');
+
+            // 6 (Pagando) vem ANTES de 4 (Finalizado), apesar do id maior.
+            expect(WORKFLOW_ORDER[WORK_SCHEDULE_STATUS.PAYING])
+                .toBeLessThan(WORKFLOW_ORDER[WORK_SCHEDULE_STATUS.FINISHED]);
+            // 5 (Cancelado) está fora da linha, na ordem 0.
+            expect(WORKFLOW_ORDER[WORK_SCHEDULE_STATUS.CANCELLED]).toBe(0);
+        });
+    });
+
+    describe('sqlGetPaymentByLauncher — colunas de status', () => {
+        const { sqlGetPaymentByLauncher } = require('../../repositories/sqlserver/gipp.queries');
+
+        it('deve trazer name, description e workflow_order de cf_status', () => {
+            const sql = sqlGetPaymentByLauncher();
+
+            expect(sql).toMatch(/st\.name\s+AS status_name/);
+            expect(sql).toMatch(/st\.description\s+AS status_description/);
+            expect(sql).toMatch(/st\.workflow_order\s+AS status_order/);
+            expect(sql).toContain('LEFT JOIN GIPP.dbo.cf_status st');
+        });
+
+        it('deve ordenar por workflow_order, não por id_status_fk', () => {
+            // Pelo id, "Pagando" (6) viria depois de "Finalizado" (4).
+            expect(sqlGetPaymentByLauncher()).toMatch(/ORDER BY st\.workflow_order/);
+        });
+
+        it('deve prefixar as colunas da view para o JOIN não ficar ambíguo', () => {
+            const sql = sqlGetPaymentByLauncher();
+            expect(sql).toContain('v.id_status_fk IN (1, 2, 3, 6)');
+            expect(sql).toContain('v.launched_by = @launched_by');
+        });
+
+        it('não deve expor valores monetários', () => {
+            const sql = sqlGetPaymentByLauncher();
+            for (const coluna of ['month_salary', 'normal_payment', 'total_payment']) {
+                expect(sql).not.toContain(coluna);
+            }
+        });
+    });
+
     describe('getPaymentByLauncher', () => {
         it('should query without requiring branch or cost center', async () => {
             const repository = makeFakeRepository();
@@ -177,7 +245,11 @@ describe('GippUseCases', () => {
 
             expect(result.approved).toEqual(['A']);
             expect(result.skipped).toEqual([]);
-            expect(repository.approveWorkSchedules).toHaveBeenCalledWith(['A'], 2, 3);
+            expect(repository.approveWorkSchedules).toHaveBeenCalledWith(['A'], 2, 3, {
+                actor: null,
+                source: 'BACKEND',
+                reason: CHANGE_REASON.APPROVED_BY_MANAGER,
+            });
         });
 
         it.each([
@@ -227,7 +299,11 @@ describe('GippUseCases', () => {
             expect(result.approved).toEqual(['A', 'C']);
             expect(result.skipped).toHaveLength(1);
             // A jornada já finalizada não pode entrar no UPDATE.
-            expect(repository.approveWorkSchedules).toHaveBeenCalledWith(['A', 'C'], 2, 3);
+            expect(repository.approveWorkSchedules).toHaveBeenCalledWith(['A', 'C'], 2, 3, {
+                actor: null,
+                source: 'BACKEND',
+                reason: CHANGE_REASON.APPROVED_BY_MANAGER,
+            });
         });
 
         it('should accept a comma-separated string of schedules', async () => {
@@ -259,7 +335,7 @@ describe('GippUseCases', () => {
 
             await useCases.cancelWorkSchedule('A');
 
-            expect(repository.cancelWorkSchedule).toHaveBeenCalledWith('A', [1, 2]);
+            expect(repository.cancelWorkSchedule).toHaveBeenCalledWith('A', [1, 2], null);
         });
 
         it.each([
@@ -296,7 +372,7 @@ describe('GippUseCases', () => {
             // O RH estorna a jornada aprovada antes de ela virar recibo.
             await useCases.cancelWorkSchedule('A', [1, 2, 3]);
 
-            expect(repository.cancelWorkSchedule).toHaveBeenCalledWith('A', [1, 2, 3]);
+            expect(repository.cancelWorkSchedule).toHaveBeenCalledWith('A', [1, 2, 3], null);
         });
 
         it('should still refuse an approved schedule with the default list', async () => {
@@ -330,7 +406,7 @@ describe('GippUseCases', () => {
             // A lista precisa chegar ao UPDATE — é lá que a regra é garantida.
             await useCases.cancelWorkSchedule('A');
 
-            expect(repository.cancelWorkSchedule).toHaveBeenCalledWith('A', [1, 2]);
+            expect(repository.cancelWorkSchedule).toHaveBeenCalledWith('A', [1, 2], null);
         });
 
         it('should throw 409 when the status changes between the check and the update', async () => {
@@ -424,7 +500,7 @@ describe('GippUseCases', () => {
             expect(repository.insertReceiptItem).toHaveBeenCalled();
         });
 
-        it('deve devolver a jornada que falhou para a fila do RH (4 → 3)', async () => {
+        it('deve devolver a jornada que falhou para a fila do RH (6 → 3)', async () => {
             const repository = makeFakeRepository({
                 findWorkScheduleData: jest.fn().mockResolvedValue(null),
             });
@@ -434,7 +510,7 @@ describe('GippUseCases', () => {
 
             // Volta para 3, não para 2: a aprovação do gerente segue válida,
             // o que falhou foi a etapa do RH.
-            expect(repository.revertToPayrollQueue).toHaveBeenCalledWith('A');
+            expect(repository.revertToPayrollQueue).toHaveBeenCalledWith('A', null);
             expect(result).toMatchObject({ status: 'failed', reverted_to_payroll_queue: true });
         });
 
@@ -490,7 +566,7 @@ describe('GippUseCases', () => {
 
             const result = await useCases.processWorkSchedules(['A', 'B'], 1, '0203');
 
-            expect(repository.processWorkSchedules).toHaveBeenCalledWith('A');
+            expect(repository.processWorkSchedules).toHaveBeenCalledWith('A', null);
             expect(result.rejected).toEqual([
                 { cod_work_schedule: 'B', status: 2, reason: 'not_approved' },
             ]);
@@ -522,7 +598,7 @@ describe('GippUseCases', () => {
 
             const result = await useCases.processWorkSchedules(['WS1'], '068', '0209');
 
-            expect(repository.processWorkSchedules).toHaveBeenCalledWith('WS1');
+            expect(repository.processWorkSchedules).toHaveBeenCalledWith('WS1', null);
             expect(replicationRepository.replicatePayment).toHaveBeenCalledWith({ cpf: '111' });
             expect(result.payments).toEqual([{ cpf: '111' }]);
             expect(result.closing[0].status).toBe('inserted');

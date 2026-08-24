@@ -36,14 +36,26 @@ RUN pip install --no-cache-dir --prefix=/install/python -r requirements.txt
 # muda e vetores de modelos diferentes não se comparam.
 ARG MODEL_PACK=buffalo_l
 ENV PYTHONPATH=/install/python/lib/python3.11/site-packages
-ENV INSIGHTFACE_HOME=/models
 
+# ⚠️ `root='/models'` é PARÂMETRO, não variável de ambiente.
+#
+# O insightface 0.7.3 não lê `INSIGHTFACE_HOME`: o caminho vem do argumento `root`
+# de FaceAnalysis, cujo default é `~/.insightface`. Usar a env var fez o download
+# ir para /root/.insightface e o COPY abaixo trazer uma pasta vazia — container
+# que subia, respondia /health, e falhava na primeira imagem.
+#
+# Este valor tem que ser IDÊNTICO ao FACE_MODEL_ROOT do app.py.
 RUN mkdir -p /models \
  && python -c "\
 from insightface.app import FaceAnalysis; \
-a = FaceAnalysis(name='${MODEL_PACK}', providers=['CPUExecutionProvider'], allowed_modules=['detection','recognition']); \
+a = FaceAnalysis(name='${MODEL_PACK}', root='/models', providers=['CPUExecutionProvider'], allowed_modules=['detection','recognition']); \
 a.prepare(ctx_id=-1, det_size=(640,640)); \
-print('modelo ${MODEL_PACK} baixado e verificado')"
+print('modelo ${MODEL_PACK} baixado em /models')"
+
+# Falha o build se o modelo não estiver onde o runtime vai procurar. Sem isto, o
+# erro aparece semanas depois, na primeira foto de um colaborador.
+RUN test -n "$(find /models -name '*.onnx' -print -quit)" \
+ || (echo 'ERRO: nenhum .onnx em /models — o root do FaceAnalysis nao bateu' && exit 1)
 
 # ─── Estágio 2: runtime ──────────────────────────────────────────────────────
 FROM python:3.11-slim
@@ -55,9 +67,14 @@ RUN apt-get update \
 COPY --from=deps /install/python /usr/local
 COPY --from=deps /models /models
 
-ENV INSIGHTFACE_HOME=/models \
+ENV FACE_MODEL_ROOT=/models \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    # O insightface arrasta matplotlib, que quer escrever cache de fontes em
+    # ~/.config. Com read_only: true isso falha, ele cai para um diretório
+    # temporário novo a cada boot e regenera o fontManager — ~1,5s de startup
+    # jogados fora, mais um aviso em todo log. Apontar para o tmpfs resolve.
+    MPLCONFIGDIR=/tmp/matplotlib
 
 WORKDIR /app
 COPY app.py .

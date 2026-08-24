@@ -12,7 +12,7 @@ class SqlServerProtheusRepository extends ProtheusRepositoryPort {
         const pool = await poolPromise;
         const result = await pool.request().query(sqlCostCenter(companyCode));
         if (result.recordset.length === 0) {
-            const err = new Error(`No data for company: ${companyCode}`);
+            const err = new Error(`Nenhum dado encontrado para a empresa ${companyCode}.`);
             err.name = 'NoDataError';
             throw err;
         }

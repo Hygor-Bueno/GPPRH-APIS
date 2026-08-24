@@ -19,7 +19,7 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
-const { apiLimiter } = require('./middlewares/rate-limit.middleware');
+const { apiLimiter, userLimiter } = require('./middlewares/rate-limit.middleware');
 const { errorHandler } = require('./middlewares/error.middleware');
 
 /**
@@ -42,6 +42,21 @@ function createApp({ allowedOrigins, routes, serveUploads = false }) {
   // Necessário quando a API está atrás de um proxy reverso (Apache, etc.)
   // Permite que express-rate-limit use o IP real do cliente via X-Forwarded-For
   app.set('trust proxy', 1);
+
+  /**
+   * Corpo JSON maior APENAS no autocadastro facial.
+   *
+   * A página do link envia as 3 a 5 capturas em base64 dentro do JSON — no
+   * navegador a imagem já está em memória como data URL. Cinco fotos passam do
+   * limite padrão de 100 KB do `express.json()`, e o sintoma é um `413` que não
+   * diz qual limite estourou.
+   *
+   * Antes do parser global: o body-parser marca `req._body` e o seguinte não
+   * reprocessa. Escopo por caminho, e não global, porque 15 MB de JSON em toda
+   * rota é superfície de ataque de graça — o caminho do app continua multipart,
+   * com o limite do multer.
+   */
+  app.use('/gipp/meal/enroll', express.json({ limit: '15mb' }));
 
   app.use(express.json());
   app.use(cookieParser());
@@ -73,8 +88,15 @@ function createApp({ allowedOrigins, routes, serveUploads = false }) {
 
   app.use(cors(corsOptions));
 
-  // Rate limiting geral (200 req/IP a cada 15 min)
+  // Rate limiting em duas camadas MUTUAMENTE EXCLUSIVAS — ver o cabeçalho de
+  // rate-limit.middleware para o porquê de cada limite:
+  //   apiLimiter  → só tráfego SEM sessão, por IP        (2000 / 15 min)
+  //   userLimiter → só tráfego COM sessão, por usuário   (1000 / 15 min)
+  //
+  // Precisa vir depois do cookieParser: é do cookie `accessToken` que sai a
+  // identidade usada como chave. E antes das rotas, senão não protege nada.
   app.use(apiLimiter);
+  app.use(userLimiter);
 
   if (serveUploads) {
     // __dirname aqui = .../api/src → sobe 1 nível para .../api/uploads
@@ -87,7 +109,7 @@ function createApp({ allowedOrigins, routes, serveUploads = false }) {
 
   // 404 — deve vir ANTES do errorHandler
   app.use((req, res, next) => {
-    const err = new Error(`Route ${req.originalUrl} not found`);
+    const err = new Error(`Rota ${req.originalUrl} não encontrada.`);
     err.statusCode = 404;
     next(err);
   });

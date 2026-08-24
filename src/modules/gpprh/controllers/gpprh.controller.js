@@ -29,7 +29,7 @@ async function createJob(req, res) {
 // 🔹 UPDATE JOB
 async function updateJob(req, res) {
   await jobUseCases.update(req.body);
-  return respond.message(res, 'Updated successfully');
+  return respond.message(res, 'Atualizado com sucesso.');
 }
 
 // 🔹 FIND ALL JOBS (público)
@@ -71,7 +71,7 @@ async function jobApplication(req, res) {
 }
 
 async function viewJobApplication(req, res) {
-  if (!req.user) throw new UnauthorizedError('Not authenticated');
+  if (!req.user) throw new UnauthorizedError('Não autenticado.');
   const data = await jobUseCases.getJobApplication(req.user.user_id);
   return respond.ok(res, data);
 }

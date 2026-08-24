@@ -21,9 +21,9 @@ describe('createJobSchema', () => {
     it('should fail when required fields are missing', () => {
         const errors = validateSchema({}, createJobSchema);
         expect(errors.length).toBeGreaterThan(0);
-        expect(errors).toContain("'branch_cod' is required");
-        expect(errors).toContain("'description' is required");
-        expect(errors).toContain("'salary_min' is required");
+        expect(errors).toContain("O campo 'branch_cod' é obrigatório.");
+        expect(errors).toContain("O campo 'description' é obrigatório.");
+        expect(errors).toContain("O campo 'salary_min' é obrigatório.");
     });
 
     it('should fail when description is too short', () => {
@@ -31,7 +31,7 @@ describe('createJobSchema', () => {
             { ...validJob, description: 'curta' },
             createJobSchema
         );
-        expect(errors).toContain("'description' must be at least 10 characters");
+        expect(errors).toContain("O campo 'description' deve ter no mínimo 10 caracteres.");
     });
 
     it('should fail when salary_min is negative', () => {
@@ -39,7 +39,7 @@ describe('createJobSchema', () => {
             { ...validJob, salary_min: -100 },
             createJobSchema
         );
-        expect(errors).toContain("'salary_min' must be at least 0");
+        expect(errors).toContain("O campo 'salary_min' deve ser no mínimo 0.");
     });
 
     it('should fail when salary_min is not a number', () => {
@@ -47,14 +47,14 @@ describe('createJobSchema', () => {
             { ...validJob, salary_min: '3000' },
             createJobSchema
         );
-        expect(errors).toContain("'salary_min' must be a number");
+        expect(errors).toContain("O campo 'salary_min' deve ser um número.");
     });
 });
 
 describe('updateJobSchema', () => {
     it('should require id', () => {
         const errors = validateSchema({ position_name: 'Dev' }, updateJobSchema);
-        expect(errors).toContain("'id' is required");
+        expect(errors).toContain("O campo 'id' é obrigatório.");
     });
 
     it('should pass with only id and one field', () => {

@@ -96,7 +96,7 @@ class User {
   setAdStatus(status) {
     const allowed = ['pending', 'active', 'blocked', 'delete'];
     if (!allowed.includes(status)) {
-      throw new Error("Invalid AD status");
+      throw new Error("Status do Active Directory inválido.");
     }
     this.ad_status = status;
   }

@@ -13,7 +13,7 @@ const useCases = new EmployeeUseCases({
 async function getPhotoEmployee(req, res) {
     const { id } = req.params;
     if (!id || id == 0) {
-        throw new AppError('Id is riquired', 400);
+        throw new AppError('Informe o id do colaborador.', 400);
     }
 
     const record = await useCases.getEmployeePhoto(id);
@@ -28,15 +28,15 @@ async function getPhotoEmployee(req, res) {
 async function postPhotoEmployee(req, res) {
     const { id } = req.params;
     if (!id || id == 0) {
-        throw new AppError('Id is required', 400);
+        throw new AppError('Informe o id do colaborador.', 400);
     }
 
     if (!req.file) {
-        throw new AppError('No image was sent', 400);
+        throw new AppError('Envie uma imagem.', 400);
     }
 
     if (!req.file.mimetype.startsWith("image/")) {
-        throw new AppError('The file must be an image', 400);
+        throw new AppError('O arquivo enviado deve ser uma imagem.', 400);
     }
 
     // Basta estar autenticado — não há permissão específica para foto. O ator do
@@ -45,7 +45,7 @@ async function postPhotoEmployee(req, res) {
     // colaborador tivesse enviado.
     await useCases.updateEmployeePhoto(id, req.file, req.user.id);
 
-    respond.message(res, 'Photo saved successfully');
+    respond.message(res, 'Foto salva com sucesso.');
 }
 
 /**

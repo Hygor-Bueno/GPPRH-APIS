@@ -25,7 +25,7 @@ function validateSchema(data = {}, schema) {
         const isEmpty = value === undefined || value === null || value === '';
 
         if (rules.required && isEmpty) {
-            errors.push(`'${field}' is required`);
+            errors.push(`O campo '${field}' é obrigatório.`);
             continue;
         }
 
@@ -44,34 +44,34 @@ function validateSchema(data = {}, schema) {
         }
 
         if (rules.type === 'string' && typeof value !== 'string') {
-            errors.push(`'${field}' must be a string`);
+            errors.push(`O campo '${field}' deve ser um texto.`);
             continue;
         }
         if (rules.type === 'number' && (typeof value !== 'number' || isNaN(value))) {
-            errors.push(`'${field}' must be a number`);
+            errors.push(`O campo '${field}' deve ser um número.`);
             continue;
         }
         if (rules.type === 'boolean' && typeof value !== 'boolean') {
-            errors.push(`'${field}' must be a boolean`);
+            errors.push(`O campo '${field}' deve ser verdadeiro ou falso.`);
             continue;
         }
         if (rules.minLength != null && String(value).length < rules.minLength) {
-            errors.push(`'${field}' must be at least ${rules.minLength} characters`);
+            errors.push(`O campo '${field}' deve ter no mínimo ${rules.minLength} caracteres.`);
         }
         if (rules.maxLength != null && String(value).length > rules.maxLength) {
-            errors.push(`'${field}' must be at most ${rules.maxLength} characters`);
+            errors.push(`O campo '${field}' deve ter no máximo ${rules.maxLength} caracteres.`);
         }
         if (rules.min != null && value < rules.min) {
-            errors.push(`'${field}' must be at least ${rules.min}`);
+            errors.push(`O campo '${field}' deve ser no mínimo ${rules.min}.`);
         }
         if (rules.max != null && value > rules.max) {
-            errors.push(`'${field}' must be at most ${rules.max}`);
+            errors.push(`O campo '${field}' deve ser no máximo ${rules.max}.`);
         }
         if (rules.pattern && !rules.pattern.test(String(value))) {
-            errors.push(`'${field}' has an invalid format`);
+            errors.push(`O campo '${field}' está em formato inválido.`);
         }
         if (rules.enum && !rules.enum.includes(value)) {
-            errors.push(`'${field}' must be one of: ${rules.enum.join(', ')}`);
+            errors.push(`O campo '${field}' deve ser um destes valores: ${rules.enum.join(', ')}.`);
         }
     }
 

@@ -168,10 +168,22 @@ function sqlUpsertBiometric() {
           AND target.employee_id  = source.employee_id
           AND target.branch_code  = source.branch_code
 
+        /* ⚠️ enrolled_at vem por PARAMETRO, nao de SYSDATETIME().
+                   CK_meal_biometric_consent_before_enroll compara consent_at com
+                   enrolled_at. Com consent_at vindo do relogio do container Node e
+                   enrolled_at do relogio do SQL Server, a constraint comparava DOIS
+                   RELOGIOS — e poucos segundos de diferenca entre eles reprovavam todo
+                   cadastro, com a mensagem apontando para a constraint em vez de para a
+                   causa. Aconteceu em 19/08/2026 e custou varias rodadas de diagnostico.
+                   Agora os dois saem do MESMO new Date() da aplicacao, e a constraint
+                   volta a medir o que deveria: a ordem dos eventos, nao o sincronismo de
+                   NTP entre duas maquinas.
+                   (Sem backticks neste comentario: ele vive dentro de um template
+                   literal, e um backtick aqui encerra a string JavaScript.) */
         WHEN MATCHED THEN UPDATE SET
             embedding          = @embedding,
             model_tag          = @model_tag,
-            enrolled_at        = SYSDATETIME(),
+            enrolled_at        = @enrolled_at,
             enroll_verified_by = @enroll_verified_by,
             consent_at         = @consent_at,
             consent_version    = @consent_version,
@@ -182,11 +194,11 @@ function sqlUpsertBiometric() {
 
         WHEN NOT MATCHED THEN INSERT (
             company_code, employee_id, branch_code,
-            embedding, model_tag, enroll_verified_by,
+            embedding, model_tag, enrolled_at, enroll_verified_by,
             consent_at, consent_version, consent_ip
         ) VALUES (
             @company_code, @employee_id, @branch_code,
-            @embedding, @model_tag, @enroll_verified_by,
+            @embedding, @model_tag, @enrolled_at, @enroll_verified_by,
             @consent_at, @consent_version, @consent_ip
         );
     `;
@@ -222,6 +234,54 @@ function sqlFindBiometricForVerify() {
 }
 
 /**
+ * Candidatos para identificação 1:N numa loja.
+ *
+ * ⚠️ O recorte por loja é a primeira das duas travas do 1:N, e é o que torna a
+ *   coisa defensável. Comparar contra as 1.700 pessoas do grupo multiplica a
+ *   chance de erro: se cada comparação erra 0,01%, em 1.700 comparações a chance
+ *   de apontar a pessoa errada passa de 15% por tentativa. Na maior loja são ~164
+ *   pessoas — dez vezes menos exposição.
+ *
+ * O conjunto é a UNIÃO de dois critérios, porque nenhum sozinho basta:
+ *
+ *   1. **Lotação na filial** — quem trabalha ali. Pega quem nunca comeu.
+ *   2. **Comeu ali nos últimos 30 dias** — pega quem é lotado em outra filial e
+ *      almoça nesta. Caso real: existem duas Interlagos, e gente de 0203 come no
+ *      0202.
+ *
+ * Quem não cai em nenhum dos dois não é identificado por rosto e usa o crachá.
+ * Isso é o desenho: um visitante eventual não deve estar no conjunto de busca de
+ * uma loja onde nunca apareceu.
+ *
+ * `revoked_at IS NULL` fica no WHERE, não em quem chama: identificar por rosto
+ * alguém que revogou seria ignorar a revogação.
+ */
+function sqlFindIdentifyCandidates() {
+    return `
+        SELECT b.company_code,
+               b.employee_id,
+               b.branch_code,
+               b.embedding,
+               b.model_tag
+        FROM GIPP.dbo.meal_biometric b
+        WHERE b.revoked_at IS NULL
+          AND b.model_tag = @model_tag
+          AND (
+                b.branch_code = @site_code
+             OR EXISTS (
+                    SELECT 1
+                    FROM GIPP.dbo.meal_log ml
+                    WHERE ml.site_code    = @site_code
+                      AND ml.company_code = b.company_code
+                      AND ml.employee_id  = b.employee_id
+                      AND ml.branch_code  = b.branch_code
+                      AND ml.service_date >= DATEADD(DAY, -30, CAST(GETDATE() AS DATE))
+                )
+              );
+    `;
+}
+
+/**
  * Revoga.
  *
  * Marca, não apaga: o expurgo leva na próxima execução. Isso deixa rastro
@@ -230,8 +290,18 @@ function sqlFindBiometricForVerify() {
  */
 function sqlRevokeBiometric() {
     return `
+        /* revoked_at vem por PARAMETRO e e limitado por enrolled_at.
+           Mesma armadilha dos dois relogios do CK_meal_biometric_consent_before_enroll,
+           espelhada: com SYSDATETIME() aqui e enrolled_at gravado pelo Node, o
+           CK_meal_biometric_revoked_after_enroll reprovava a revogacao quando o
+           relogio do banco estava atras do da aplicacao — e revogacao que falha e
+           direito do titular que nao se exerce.
+           O CASE nao e maquiagem: se as duas datas caem no mesmo instante a menos
+           de segundos, a ordem entre elas e artefato de relogio, nao dos eventos.
+           Registrar revoked_at = enrolled_at e a leitura honesta disso. */
         UPDATE GIPP.dbo.meal_biometric
-           SET revoked_at = SYSDATETIME()
+           SET revoked_at = CASE WHEN @revoked_at > enrolled_at
+                                 THEN @revoked_at ELSE enrolled_at END
          WHERE company_code = @company_code
            AND employee_id  = @employee_id
            AND branch_code  = @branch_code
@@ -262,6 +332,7 @@ module.exports = {
     sqlUpsertBiometric,
     sqlConsumeToken,
     sqlFindBiometricForVerify,
+    sqlFindIdentifyCandidates,
     sqlRevokeBiometric,
     sqlFindBiometricStatus,
 };

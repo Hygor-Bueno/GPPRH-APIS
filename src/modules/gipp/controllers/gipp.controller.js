@@ -8,6 +8,7 @@ const {
     PAYROLL_DISCARDABLE_STATUSES,
 } = require('../domain/work-schedule-status');
 const { appendCloseAudit } = require('../infrastructure/csv-close-audit.logger');
+const { toAuditActor } = require('../../../utils/audit-actor');
 
 const useCases = new GippUseCases({
     repository: new SqlServerGippRepository(),
@@ -111,7 +112,7 @@ async function postTimeRecord(req, res) {
         throw new BadRequestError('Informe employee_id, id_record_type_fk e branch_time_record.');
     }
 
-    const data = await useCases.insertTimeRecord(body, user.id);
+    const data = await useCases.insertTimeRecord(body, toAuditActor(user));
     return respond.created(res, data);
 }
 
@@ -122,7 +123,7 @@ async function putTimeRecord(req, res) {
         throw new BadRequestError('Informe times e id_time_records para atualizar a marcação.');
     }
 
-    const data = await useCases.updateTimeRecord(body, user.id);
+    const data = await useCases.updateTimeRecord(body, toAuditActor(user));
     return respond.ok(res, data);
 }
 
@@ -144,8 +145,8 @@ async function discardTimeRecord(req, res) {
         ? PAYROLL_DISCARDABLE_STATUSES
         : DISCARDABLE_STATUSES;
 
-    await useCases.cancelWorkSchedule(body.cod_work_schedule, allowedStatuses);
-    return respond.message(res, 'Work schedule discarded successfully');
+    await useCases.cancelWorkSchedule(body.cod_work_schedule, allowedStatuses, toAuditActor(user));
+    return respond.message(res, 'Jornada desconsiderada com sucesso.');
 }
 
 /**
@@ -162,7 +163,7 @@ async function approveTimeRecords(req, res) {
         throw new BadRequestError('Informe ao menos uma jornada em cod_work_schedules.');
     }
 
-    const result = await useCases.approveWorkSchedules(codes);
+    const result = await useCases.approveWorkSchedules(codes, toAuditActor(req.user));
 
     return respond.ok(res, {
         message: `${result.approved.length} jornada(s) aprovada(s), ${result.skipped.length} ignorada(s).`,
@@ -184,7 +185,8 @@ async function postPayments(req, res) {
     const data = await useCases.processWorkSchedules(
         codWorkSchedules,
         user.registration,
-        user.branch_code
+        user.branch_code,
+        toAuditActor(user)
     );
 
     // `processWorkSchedules` chama `closeWorkSchedules` internamente — o
@@ -195,7 +197,7 @@ async function postPayments(req, res) {
         branchCode: user.branch_code,
     });
 
-    return respond.ok(res, { message: 'Final markings completed successfully', data });
+    return respond.ok(res, { message: 'Marcações finalizadas com sucesso.', data });
 }
 
 async function postPaymentsClose(req, res) {
@@ -209,7 +211,8 @@ async function postPaymentsClose(req, res) {
     const results = await useCases.closeWorkSchedules(
         codWorkSchedules,
         user.registration,
-        user.branch_code
+        user.branch_code,
+        toAuditActor(user)
     );
 
     appendCloseAudit({

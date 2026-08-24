@@ -5,7 +5,7 @@ const authMiddleware = require('../../middlewares/auth.middleware');
 const GrppController = require('./controllers/gpprh.controller');
 const { canAll } = require('../../middlewares/permission.middleware');
 const { asyncHandler } = require('../../middlewares/async-handler.middleware');
-const { loginLimiter } = require('../../middlewares/rate-limit.middleware');
+const { loginLimiter, loginIpLimiter } = require('../../middlewares/rate-limit.middleware');
 const { validate } = require('../../middlewares/validate.middleware');
 const { loginSchema } = require('../../schemas/auth.schema');
 const { createJobSchema, updateJobSchema, blockUnknownJobFields, validateSalaryRange, jobLikeSchema, jobApplicationSchema, jobCommentSchema } = require('../../schemas/job.schema');
@@ -13,8 +13,8 @@ const { createJobSchema, updateJobSchema, blockUnknownJobFields, validateSalaryR
 // 1 - ROTAS DE AUTENTICAÇÃO
 // 1.1 - PUBLICA
 router.post('/logout', asyncHandler(authController.logout));
-router.post('/ad-login', loginLimiter, validate(loginSchema), asyncHandler(authController.login));
-router.post('/google-login', loginLimiter, asyncHandler(authController.googleLogin)); // Google valida token via SDK
+router.post('/ad-login', loginIpLimiter, loginLimiter, validate(loginSchema), asyncHandler(authController.login));
+router.post('/google-login', loginIpLimiter, loginLimiter, asyncHandler(authController.googleLogin)); // Google valida token via SDK
 // 1.2 - PRIVADA
 router.get('/me', authMiddleware, asyncHandler(authController.me));
 

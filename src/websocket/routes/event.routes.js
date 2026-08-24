@@ -13,7 +13,7 @@ router.post("/emit-event", (req, res) => {
 router.get("/online-users", (req, res) => {
   const apiKey = req.headers['x-api-key'] || req.query.apiKey;
   if (process.env.WS_API_KEY && apiKey !== process.env.WS_API_KEY) {
-    return res.status(401).json({ error: true, message: 'Unauthorized' });
+    return res.status(401).json({ error: true, message: 'Não autorizado.' });
   }
   res.json({ ok: true, users: connectionManager.getOnlineUsersData() });
 });

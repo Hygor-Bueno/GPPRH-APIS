@@ -13,9 +13,32 @@ class MysqlAuthRepository extends AuthRepositoryPort {
         try {
             const [rows] = await conn.execute('call sp_get_user_authorization(?);', [identifier]);
             if (rows[0].length === 0) {
-                throw new AppError('The user does not have assigned permission.');
+                throw new AppError('O usuário não possui permissão atribuída.');
             }
             return rows[0][0];
+        } finally {
+            conn.release();
+        }
+    }
+
+    /**
+     * Uma consulta só, com o JOIN fazendo a checagem de arquivo ativo — em vez
+     * de ler `_user.file_id` e depois conferir `_files` numa segunda ida ao
+     * banco. O `/me` é chamado na abertura do app; não vale gastar dois
+     * round-trips por uma foto.
+     */
+    async findPhotoFileId(userId) {
+        const conn = await poolGlobal.getConnection();
+        try {
+            const [rows] = await conn.execute(
+                `SELECT u.file_id
+                   FROM global._user u
+                   JOIN global._files f ON f.id = u.file_id AND f.status = 1
+                  WHERE u.id = ?
+                  LIMIT 1`,
+                [userId]
+            );
+            return rows.length > 0 ? rows[0].file_id : null;
         } finally {
             conn.release();
         }
@@ -50,7 +73,7 @@ class MysqlAuthRepository extends AuthRepositoryPort {
             );
 
             if (rows[0].length === 0) {
-                throw new AppError('User not found');
+                throw new AppError('Usuário não encontrado.');
             }
             if (rows[0][0]?.result !== 'LOGIN_OK') {
                 throw new AppError(rows[0][0]?.result);

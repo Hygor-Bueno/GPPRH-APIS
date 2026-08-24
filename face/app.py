@@ -46,6 +46,18 @@ from pydantic import BaseModel, Field
 
 MODEL_PACK = os.getenv("FACE_MODEL_PACK", "buffalo_l")
 
+# ⚠️ Onde o modelo está, e por que isto é PARÂMETRO e não variável de ambiente.
+#
+# O insightface 0.7.3 NÃO lê `INSIGHTFACE_HOME`. O caminho vem do argumento `root`
+# de `FaceAnalysis`, cujo default é `~/.insightface`. Confiar na env var custou um
+# container que subia, respondia /health com 200, e só falhava na primeira imagem:
+# o download do build tinha ido para /root/.insightface, o COPY trouxe uma pasta
+# vazia, e em produção ele tentava baixar num sistema de arquivos read-only.
+#
+# O valor tem que ser IDÊNTICO ao usado no Dockerfile. Se divergirem, o sintoma é
+# esse mesmo — saudável no health, quebrado no uso.
+MODEL_ROOT = os.getenv("FACE_MODEL_ROOT", "/models")
+
 # Identifica o modelo que gerou cada vetor. Vai para `meal_biometric.model_tag`,
 # que é VARCHAR(40) — a coluna existe porque vetor de um modelo não compara com o
 # de outro, e sem ela a acurácia cairia em silêncio numa troca de versão.
@@ -96,6 +108,7 @@ def analyzer() -> Any:
         started = time.perf_counter()
         instance = FaceAnalysis(
             name=MODEL_PACK,
+            root=MODEL_ROOT,
             providers=["CPUExecutionProvider"],
             allowed_modules=["detection", "recognition"],
         )
@@ -259,10 +272,25 @@ def decode_reference(reference_b64: str) -> np.ndarray:
 
 @app.get("/health")
 def health() -> dict[str, Any]:
-    """Responde sem carregar o modelo — é sonda de container, não de acurácia."""
+    """
+    Sonda de container.
+
+    Reporta se os ARQUIVOS do modelo estão no lugar, e não só se o processo subiu.
+    Um /health que responde 200 sem olhar o disco foi exatamente o que escondeu a
+    falha do `root` errado: o container parecia saudável e quebrava na primeira
+    imagem. Sonda que não checa a dependência crítica não é sonda.
+    """
+    model_dir = os.path.join(MODEL_ROOT, "models", MODEL_PACK)
+    files = []
+    if os.path.isdir(model_dir):
+        files = sorted(f for f in os.listdir(model_dir) if f.endswith(".onnx"))
+
     return {
-        "status": "ok",
+        "status": "ok" if files else "degraded",
         "model_tag": MODEL_TAG,
+        "model_root": MODEL_ROOT,
+        "model_files": files,
+        "model_present": bool(files),
         "model_loaded": _analyzer is not None,
         "embedding_bytes": EMBEDDING_BYTES,
     }

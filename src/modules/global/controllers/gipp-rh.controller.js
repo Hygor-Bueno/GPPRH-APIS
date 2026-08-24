@@ -12,6 +12,7 @@
 const { GippRhUseCases }   = require('../application/gipp-rh/gipp-rh.use-cases');
 const { SqlServerGippRhRepository } = require('../infrastructure/gipp-rh/sqlserver-gipp-rh.repository');
 const { generateReceipt }  = require("../../../templates/receipt/receipt.generator");
+const { toAuditActor }     = require('../../../utils/audit-actor');
 const { BadRequestError }  = require('../../../errors/bad-request.error');
 const { AppError }         = require('../../../errors/app.error');
 const { respond }          = require('../../../utils/respond');
@@ -183,7 +184,7 @@ async function downloadReceipt(req, res, next) {
 
     try {
         if (!employee_code && !payee_id) {
-            throw new BadRequestError("Provide 'employee_code' or 'payee_id'.");
+            throw new BadRequestError("Informe 'employee_code' ou 'payee_id'.");
         }
 
         const dataFromDB = await useCases.getReceiptData(
@@ -220,13 +221,13 @@ async function downloadReceiptByGroup(req, res, next) {
 
     try {
         if (!receipt_group_ids?.length) {
-            throw new BadRequestError("Provide at least one 'receipt_group_id'.");
+            throw new BadRequestError("Informe ao menos um 'receipt_group_id'.");
         }
 
         const dataFromDB = await useCases.getReceiptsByGroupIds(receipt_group_ids);
 
         if (!dataFromDB?.length) {
-            throw new AppError("No receipts found for the provided receipt_group_ids.", 404);
+            throw new AppError("Nenhum recibo encontrado para os receipt_group_ids informados.", 404);
         }
 
         const pdf      = await generateReceipt(dataFromDB);
@@ -360,14 +361,74 @@ async function patchPaymentReceipt(req, res) {
  * Retorna recibos para exibição em tela (não PDF), filtrados por colaborador,
  * filial, intervalo de referência e tipo de pagamento.
  *
- * Query params: `employeeCode`, `branchCode`, `referenceInit`, `referenceEnd`, `paymentTypeId`.
+ * Query params: `employeeCode`, `branchCode`, `referenceInit`, `referenceEnd`,
+ * `paymentTypeId`, `date_from`, `date_to`, `workScheduleStatus`.
+ *
+ * `workScheduleStatus` filtra pelo status da jornada de origem — 6 (Pagando)
+ * para o que está em aberto, 4 (Finalizado) para o já encerrado. Recibo sem
+ * jornada vinculada (salário, férias, rescisão) só aparece quando o filtro é
+ * omitido, porque o JOIN é por `work_schedule_id`.
  * @route GET /gipp-rh/receipt
  */
 async function getReceipt(req, res) {
-    const { employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId, date_from, date_to } = req.query;
+    const {
+        employeeCode, branchCode, referenceInit, referenceEnd,
+        paymentTypeId, date_from, date_to, workScheduleStatus,
+    } = req.query;
 
-    const data = await useCases.getReceipt(employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId, date_from, date_to);
+    const data = await useCases.getReceipt(
+        employeeCode, branchCode, referenceInit, referenceEnd,
+        paymentTypeId, date_from, date_to, workScheduleStatus,
+    );
     return respond.ok(res, data);
+}
+
+// ─── Tesouraria ────────────────────────────────────────────────────────────────
+
+/**
+ * Recibos de compra de folga para a tesouraria imprimir.
+ *
+ * Travada em `payment_type_id = 6`. Sem `workScheduleStatus`, devolve o que está
+ * em aberto (status 6); com `workScheduleStatus=4`, reimprime o já encerrado.
+ *
+ * Não altera estado — fechar as jornadas é o `PATCH /gipp-rh/treasury/confirm`.
+ * @route GET /gipp-rh/treasury/receipts
+ */
+async function getTreasuryReceipts(req, res) {
+    const { branchCode, referenceInit, referenceEnd, date_from, date_to, workScheduleStatus } = req.query;
+
+    const data = await useCases.getTreasuryReceipts({
+        branchCode,
+        referenceInit,
+        referenceEnd,
+        dateFrom: date_from,
+        dateTo: date_to,
+        workScheduleStatus,
+    });
+    return respond.ok(res, data);
+}
+
+/**
+ * Fecha as jornadas impressas: 6 (Pagando) → 4 (Finalizado).
+ *
+ * Body: `{ cod_work_schedules: string[] }` — aceita também `codWorkSchedules`.
+ * Jornada fora do status 6 volta em `skipped`, sem derrubar o lote.
+ * @route PATCH /gipp-rh/treasury/confirm
+ */
+async function confirmTreasuryPayment(req, res) {
+    const { body } = req;
+    const codes = body.cod_work_schedules ?? body.codWorkSchedules;
+
+    if (!Array.isArray(codes) || codes.length === 0) {
+        throw new BadRequestError('Informe ao menos uma jornada em cod_work_schedules.');
+    }
+
+    const result = await useCases.confirmTreasuryPayment(codes, toAuditActor(req.user));
+
+    return respond.ok(res, {
+        message: `${result.confirmed.length} jornada(s) finalizada(s), ${result.skipped.length} ignorada(s).`,
+        ...result,
+    });
 }
 
 // ─── Tipos de Pagamento ────────────────────────────────────────────────────────
@@ -397,5 +458,7 @@ module.exports = {
     getPaymentReceipts,
     putPaymentReceipt,
     patchPaymentReceipt,
+    getTreasuryReceipts,
+    confirmTreasuryPayment,
     getPaymentTypes
 };

@@ -25,6 +25,21 @@ class AuthUseCases {
     }
 
     /**
+     * `file_id` da foto do usuário da sessão, ou `null`.
+     *
+     * Consultado no `/me` em vez de carimbado no token de propósito: o token só
+     * é reemitido no login ou no refresh, então uma foto trocada hoje só
+     * apareceria na próxima sessão. Aqui a resposta é sempre a atual, ao custo
+     * de uma consulta numa rota que o front chama na abertura do app.
+     *
+     * @param {number} userId
+     * @returns {Promise<number|null>}
+     */
+    async getPhotoFileId(userId) {
+        return this.repository.findPhotoFileId(userId);
+    }
+
+    /**
      * Autentica via AD (com fallback pro cadastro local em caso de credenciais
      * inválidas no AD) e retorna o payload de sessão já enriquecido com dados
      * do Protheus.

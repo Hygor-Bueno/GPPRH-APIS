@@ -31,6 +31,13 @@ x-internal-env: &internal-env
   # do container (4001), não na porta publicada no host (4011).
   WS_EMIT_URL: http://ws-gipp-enterprises:4001/ws/emit-event
 
+  # Refeitorio — reconhecimento facial. O servico nao publica porta: e alcancavel
+  # so pela rede do compose, pelo nome `face`.
+  FACE_SERVICE_URL: http://face:8000
+  # IGUAL ao FACE_MAX_IMAGE_BYTES do servico face. Dois limites que discordam
+  # fazem o 413 aparecer no lugar errado — foi o que aconteceu em 19/08/2026.
+  FACE_MAX_IMAGE_BYTES: "12582912"
+
   # Oracle thick mode: o initOracleClient({libDir}) do config/oracle.js acha o
   # libclntsh.so, mas as dependências dele (libnnz19.so, libociei.so...) são
   # resolvidas pelo linker dinâmico, que só olha LD_LIBRARY_PATH e o cache do
@@ -206,6 +213,11 @@ services:
       # Confiança mínima do DETECTOR. Não é o limiar de identidade — esse é
       # calibrado no piloto e mora na API.
       FACE_MIN_DET_SCORE: "0.55"
+      # Teto por imagem. Foto de camera de celular em resolucao cheia passa de 4 MB
+      # com facilidade — 413 no /embed foi exatamente isso. Este valor tem que ser
+      # IGUAL ao FACE_MAX_IMAGE_BYTES do api-gipp-enterprises: dois limites que
+      # discordam fazem o erro aparecer no lugar errado.
+      FACE_MAX_IMAGE_BYTES: "12582912"
 
     # Sem volume nenhum. O serviço não escreve em disco, e não ter volume torna
     # isso verificável em vez de prometido.

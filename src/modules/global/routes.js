@@ -53,7 +53,7 @@ const authMiddleware     = require('../../middlewares/auth.middleware');
 const upload             = require('../../middlewares/upload.middleware');
 const { canAll, canAny } = require('../../middlewares/permission.middleware');
 const { asyncHandler }   = require('../../middlewares/async-handler.middleware');
-const { loginLimiter, changePasswordLimiter } = require('../../middlewares/rate-limit.middleware');
+const { loginLimiter, loginIpLimiter, changePasswordLimiter } = require('../../middlewares/rate-limit.middleware');
 const { validate }       = require('../../middlewares/validate.middleware');
 const { loginSchema, changePasswordSchema }   = require('../../schemas/auth.schema');
 const {
@@ -133,7 +133,11 @@ router.post('/logout', asyncHandler(authController.logout));
  * Aplica rate limiting (`loginLimiter`) e validação de schema.
  * @access Público
  */
-router.post('/login', loginLimiter, validate(loginSchema), asyncHandler(authController.globalLogin));
+// Dois limiters no login, com papéis distintos: `loginLimiter` conta falhas
+// por IP+usuário (senha errada de um não trava os colegas do mesmo IP) e
+// `loginIpLimiter` põe um teto por IP, para que trocar de conta a cada 10
+// tentativas não vire brecha.
+router.post('/login', loginIpLimiter, loginLimiter, validate(loginSchema), asyncHandler(authController.globalLogin));
 
 /**
  * @route PUT /change-password
@@ -371,8 +375,38 @@ router.post('/gipp-rh/receipt-by-group',
  */
 router.get('/gipp-rh/receipt',
     authMiddleware,
-    canAny(['GIPPRH_VIEW_RECEIPT', 'GIPPRH_MANAGE_RECEIPT']),
+    canAny(['GIPPRH_VIEW_RECEIPT','GIPPRH_DOWNLOAD_RECEIPT', 'GIPPRH_MANAGE_RECEIPT']),
     asyncHandler(gippRhController.getReceipt));
+
+// ─── Tesouraria ───────────────────────────────────────────────────────────────
+
+/**
+ * @route GET /gipp-rh/treasury/receipts
+ * @description Recibos de compra de folga para a tesouraria imprimir. Travada em
+ * `payment_type_id = 6`.
+ *
+ * Query: `branchCode`, `referenceInit`, `referenceEnd`, `date_from`, `date_to`,
+ * `workScheduleStatus` (opcional — padrão 6 "Pagando"; use 4 para reimprimir).
+ *
+ * Não altera estado: fechar as jornadas é o PATCH abaixo.
+ * @access Requer `GIPPRH_DOWNLOAD_RECEIPT`
+ */
+router.get('/gipp-rh/treasury/receipts',
+    authMiddleware,
+    canAny(['GIPPRH_DOWNLOAD_RECEIPT', 'GIPPRH_MANAGE_RECEIPT']),
+    asyncHandler(gippRhController.getTreasuryReceipts));
+
+/**
+ * @route PATCH /gipp-rh/treasury/confirm
+ * @description Fecha as jornadas depois da impressão: 6 (Pagando) → 4 (Finalizado).
+ * Body: `{ cod_work_schedules: string[] }`. Jornada fora do status 6 volta em
+ * `skipped` sem derrubar o lote.
+ * @access Requer `GIPPRH_DOWNLOAD_RECEIPT`
+ */
+router.patch('/gipp-rh/treasury/confirm',
+    authMiddleware,
+    canAny(['GIPPRH_DOWNLOAD_RECEIPT', 'GIPPRH_MANAGE_RECEIPT']),
+    asyncHandler(gippRhController.confirmTreasuryPayment));
 
 /**
  * @route GET /gipp-rh/payment-types
@@ -381,7 +415,7 @@ router.get('/gipp-rh/receipt',
  */
 router.get('/gipp-rh/payment-types',
     authMiddleware,
-    canAny(['GIPPRH_VIEW_RECEIPT', 'GIPPRH_MANAGE_RECEIPT']),
+    canAny(['GIPPRH_DOWNLOAD_RECEIPT','GIPPRH_VIEW_RECEIPT', 'GIPPRH_MANAGE_RECEIPT']),
     asyncHandler(gippRhController.getPaymentTypes));
 
 // ─── Payee (Freelancers e Prestadores) ────────────────────────────────────────

@@ -11,6 +11,23 @@ const app = express();
 app.set('trust proxy', 1);
 
 // Carregar middlewares básicos
+/**
+ * Corpo JSON maior APENAS no autocadastro facial.
+ *
+ * A página do link envia as 3 a 5 capturas em base64 dentro do JSON — no
+ * navegador a imagem já está em memória como data URL, e montar multipart ali
+ * seria trabalho para desfazer no servidor. Cinco fotos passam facilmente do
+ * limite padrão de 100 KB do `express.json()`, e o sintoma é um `413` que não
+ * diz qual limite estourou.
+ *
+ * Registrado ANTES do parser global de propósito: o body-parser marca
+ * `req._body` e o parser seguinte não reprocessa. Escopo restrito ao caminho, e
+ * não global, porque abrir 15 MB de JSON em toda rota da API é superfície de
+ * ataque de graça — o caminho do app continua sendo multipart, com o limite do
+ * multer.
+ */
+app.use('/gipp/meal/enroll', express.json({ limit: '15mb' }));
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -82,7 +99,7 @@ app.use('/monitoring', wsRoutes);
  * Deve vir ANTES do errorHandler
  */
 app.use((req, res, next) => {
-  const err = new Error(`Route ${req.originalUrl} not found`);
+  const err = new Error(`Rota ${req.originalUrl} não encontrada.`);
   err.statusCode = 404;
   next(err);
 });

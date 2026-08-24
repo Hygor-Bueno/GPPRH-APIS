@@ -7,6 +7,12 @@ const { poolPromise, sql } = require('../../../config/sqlserver');
 const { AppError } = require('../../../errors/app.error');
 const { GippRepositoryPort } = require('../application/ports/gipp-repository.port');
 const { WORK_SCHEDULE_STATUS, DISCARDABLE_STATUSES } = require('../domain/work-schedule-status');
+const { CHANGE_REASON } = require('../domain/work-schedule-change-reason');
+const {
+    CHANGE_SOURCE,
+    bindContext,
+    withAuditContext,
+} = require('../../../infra/sqlserver/session-context');
 const { translateSqlServerError } = require('./sqlserver-error.translator');
 const {
     sqlGetStatus,
@@ -63,6 +69,24 @@ class SqlServerGippRepository extends GippRepositoryPort {
                 details: error,
             });
         }
+    }
+
+    /**
+     * Contagem de linhas da operação de negócio dentro de um batch com contexto
+     * de auditoria.
+     *
+     * Não dá para usar `rowsAffected[0]`: o batch começa com seis
+     * `EXEC sys.sp_set_session_context`, então o índice 0 passa a ser o do
+     * primeiro deles, não o do UPDATE. Por isso `withAuditContext` acrescenta um
+     * `SELECT @@ROWCOUNT AS affected_rows` logo depois da operação, e é ele que
+     * lemos aqui.
+     *
+     * @param {import('mssql').IResult<any>} result
+     * @returns {number}
+     * @private
+     */
+    _affectedRows(result) {
+        return result.recordset?.[0]?.affected_rows ?? 0;
     }
 
     // ─── Status e Tipos ─────────────────────────────────────────────────────
@@ -146,27 +170,68 @@ class SqlServerGippRepository extends GippRepositoryPort {
         }, 'Não foi possível consultar as marcações de ponto.');
     }
 
-    async insertTimeRecord(payload, userId) {
+    /**
+     * Registra a marcação.
+     *
+     * `id_global` e os dois snapshots descrevem a MESMA pessoa: o usuário
+     * autenticado que lançou a marcação. Não é o colaborador da jornada — esse é
+     * `cf_work_schedules.employee_id` + `branch_time_record`, informados no
+     * payload. Confundir os dois foi o risco levantado na revisão de 08/2026, e
+     * a coerência é verificável: as 66.457 linhas com snapshot preenchido têm 28
+     * matrículas distintas (os lançadores), não 1.247 (os colaboradores).
+     *
+     * A marcação de entrada (tipo 1) cria a jornada e a de saída (tipo 4) move
+     * 1 → 2, ambas dentro da procedure — por isso a chamada vai envolvida no
+     * contexto de auditoria: os dois eventos de `cf_work_schedule_status_history`
+     * nascem daqui.
+     *
+     * @param {object} payload
+     * @param {import('../../../utils/audit-actor').AuditActor} actor
+     */
+    async insertTimeRecord(payload, actor) {
         return this._run(async () => {
             const pool = await poolPromise;
-            const result = await pool.request()
+            const request = pool.request()
                 .input('employee_id', sql.VarChar(20), payload.employee_id)
-                .input('id_global', sql.Int, userId)
+                .input('id_global', sql.Int, actor?.globalUserId ?? null)
                 .input('id_record_type_fk', sql.Int, payload.id_record_type_fk)
                 .input('times', sql.DateTime, payload.times ? new Date(payload.times + 'Z') : null)
                 .input('branch_time_record', sql.VarChar(10), payload.branch_time_record)
-                .query(sqlInsertTimeRecord());
+                .input('registration_snapshot', sql.VarChar(6), actor?.registration ?? null)
+                .input('branch_code_snapshot', sql.VarChar(4), actor?.branchCode ?? null);
+
+            bindContext(request, actor, {
+                source: CHANGE_SOURCE.BACKEND,
+                reason: Number(payload.id_record_type_fk) === 4
+                    ? CHANGE_REASON.SENT_TO_APPROVAL
+                    : CHANGE_REASON.CREATED,
+            });
+
+            const result = await request.query(withAuditContext(sqlInsertTimeRecord()));
             return result.recordset;
         }, 'Não foi possível registrar a marcação de ponto.');
     }
 
-    async updateTimeRecord(payload, userId) {
+    /**
+     * Atualiza a marcação.
+     *
+     * A procedure sobrescreve `id_global` com quem editou, então os snapshots
+     * vão junto e passam a descrever o editor — mantendo as três colunas
+     * coerentes entre si. Não altera `cf_work_schedules`, portanto não gera
+     * evento de histórico; o contexto não é necessário aqui.
+     *
+     * @param {object} payload
+     * @param {import('../../../utils/audit-actor').AuditActor} actor
+     */
+    async updateTimeRecord(payload, actor) {
         return this._run(async () => {
             const pool = await poolPromise;
             const result = await pool.request()
                 .input('id_time_records', sql.Int, payload.id_time_records)
-                .input('id_global', sql.Int, userId)
+                .input('id_global', sql.Int, actor?.globalUserId ?? null)
                 .input('times', sql.DateTime, payload.times ? new Date(payload.times + 'Z') : null)
+                .input('registration_snapshot', sql.VarChar(6), actor?.registration ?? null)
+                .input('branch_code_snapshot', sql.VarChar(4), actor?.branchCode ?? null)
                 .query(sqlUpdateTimeRecord());
             return result.recordset;
         }, 'Não foi possível atualizar a marcação de ponto.');
@@ -174,7 +239,7 @@ class SqlServerGippRepository extends GippRepositoryPort {
 
     // ─── Jornadas de Trabalho ───────────────────────────────────────────────
 
-    async cancelWorkSchedule(codWorkSchedule, allowedStatuses = DISCARDABLE_STATUSES) {
+    async cancelWorkSchedule(codWorkSchedule, allowedStatuses = DISCARDABLE_STATUSES, actor = null) {
         return this._run(async () => {
             const pool = await poolPromise;
             const { sql: query, params } = sqlCancelWorkSchedule(allowedStatuses);
@@ -184,8 +249,16 @@ class SqlServerGippRepository extends GippRepositoryPort {
             for (const [key, value] of Object.entries(params)) {
                 request.input(key, sql.Int, value);
             }
-            const result = await request.query(query);
-            return result.rowsAffected[0] ?? 0;
+
+            bindContext(request, actor, {
+                source: CHANGE_SOURCE.BACKEND,
+                reason: CHANGE_REASON.CANCELLED,
+            });
+
+            const result = await request.query(
+                withAuditContext(query, { captureRowCount: true })
+            );
+            return this._affectedRows(result);
         }, 'Não foi possível desconsiderar a jornada.');
     }
 
@@ -202,7 +275,20 @@ class SqlServerGippRepository extends GippRepositoryPort {
         }, 'Não foi possível consultar o status das jornadas.');
     }
 
-    async approveWorkSchedules(scheduleList, fromStatus, toStatus) {
+    /**
+     * UPDATE em lote — uma única instrução para N jornadas.
+     *
+     * O trigger é `FROM inserted` / `LEFT JOIN deleted`, ou seja, baseado em
+     * conjunto: um UPDATE que muda 30 linhas gera 30 eventos de histórico, todos
+     * com o mesmo responsável e o mesmo motivo. Não há laço por jornada aqui, e
+     * não deve haver — seria N conexões e N contextos.
+     *
+     * @param {string[]} scheduleList
+     * @param {number} fromStatus
+     * @param {number} toStatus
+     * @param {{ actor?: object|null, source?: string, reason?: string|null }} [audit]
+     */
+    async approveWorkSchedules(scheduleList, fromStatus, toStatus, audit = {}) {
         return this._run(async () => {
             const pool = await poolPromise;
             const { sql: query, params } = sqlApproveWorkSchedules(scheduleList);
@@ -212,26 +298,80 @@ class SqlServerGippRepository extends GippRepositoryPort {
             for (const [key, value] of Object.entries(params)) {
                 request.input(key, sql.VarChar(50), value);
             }
-            const result = await request.query(query);
-            return result.rowsAffected[0] ?? 0;
+
+            bindContext(request, audit.actor ?? null, {
+                source: audit.source ?? CHANGE_SOURCE.BACKEND,
+                reason: audit.reason ?? null,
+            });
+
+            const result = await request.query(
+                withAuditContext(query, { captureRowCount: true })
+            );
+            return this._affectedRows(result);
         }, 'Não foi possível aprovar as jornadas.');
     }
 
-    async revertToPayrollQueue(codWorkSchedule) {
-        // Mesma query da aprovação, com a transição invertida: 4 → 3.
+    async revertToPayrollQueue(codWorkSchedule, actor = null) {
+        // Mesma query da aprovação, com a transição invertida: 6 → 3.
+        // A procedure agora marca 6 (Pagando), não 4 — reverter de 4 não casaria
+        // com nada e a jornada ficaria órfã sem ninguém perceber.
+        //
+        // Origem FINANCIAL_JOB e não BACKEND: a reversão não é uma ação que
+        // alguém pediu, é a compensação automática de um fechamento que falhou.
+        // Quem auditar precisa distinguir as duas coisas.
         return this.approveWorkSchedules(
             [codWorkSchedule],
-            WORK_SCHEDULE_STATUS.FINISHED,
+            WORK_SCHEDULE_STATUS.PAYING,
             WORK_SCHEDULE_STATUS.AWAITING_PAYROLL,
+            {
+                actor,
+                source: CHANGE_SOURCE.FINANCIAL_JOB,
+                reason: CHANGE_REASON.REVERTED_TO_PAYROLL,
+            },
         );
     }
 
-    async processWorkSchedules(scheduleCsv) {
+    async confirmTreasuryPayment(scheduleList, actor = null) {
+        // Transição da tesouraria: 6 → 4, fechando o ciclo.
+        return this.approveWorkSchedules(
+            scheduleList,
+            WORK_SCHEDULE_STATUS.PAYING,
+            WORK_SCHEDULE_STATUS.FINISHED,
+            {
+                actor,
+                source: CHANGE_SOURCE.BACKEND,
+                reason: CHANGE_REASON.PAYMENT_FINISHED,
+            },
+        );
+    }
+
+    /**
+     * Processa as jornadas (3 → 6) via procedure.
+     *
+     * `pcr_process_work_schedules` abre transação própria e dá ROLLBACK no
+     * CATCH dela, por isso o contexto vai por batch e NÃO por `sql.Transaction`:
+     * o rollback interno zeraria o `@@TRANCOUNT` e o COMMIT do Node estouraria
+     * erro 3902 em cima do erro real. Ver `infra/sqlserver/session-context`.
+     *
+     * @param {string} scheduleCsv
+     * @param {import('../../../utils/audit-actor').AuditActor|null} [actor]
+     */
+    async processWorkSchedules(scheduleCsv, actor = null) {
         return this._run(async () => {
             const pool = await poolPromise;
-            await pool.request()
-                .input('CodWorkSchedules', sql.VarChar(sql.MAX), scheduleCsv)
-                .query(sqlProcessWorkSchedules());
+            const request = pool.request()
+                .input('CodWorkSchedules', sql.VarChar(sql.MAX), scheduleCsv);
+
+            // BACKEND, e não CALCULATION_JOB: quem dispara é o RH em
+            // `POST /gipp/payments`, com usuário autenticado. `CALCULATION_JOB`
+            // fica reservado para quando o cálculo virar rotina sem usuário —
+            // marcar uma ação humana como job apagaria essa distinção.
+            bindContext(request, actor, {
+                source: CHANGE_SOURCE.BACKEND,
+                reason: CHANGE_REASON.CALCULATION_STARTED,
+            });
+
+            await request.query(withAuditContext(sqlProcessWorkSchedules()));
         }, 'Não foi possível processar as jornadas.');
     }
 

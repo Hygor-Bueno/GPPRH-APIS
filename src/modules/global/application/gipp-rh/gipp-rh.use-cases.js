@@ -5,6 +5,21 @@
  */
 
 const { AppError } = require('../../../../errors/app.error');
+const { WORK_SCHEDULE_STATUS } = require('../../../gipp/domain/work-schedule-status');
+
+/** "Compra de folga" em `gipp_payment_type` — o único tipo que a tesouraria imprime. */
+const TREASURY_PAYMENT_TYPE_ID = 6;
+
+/**
+ * Status de jornada que fornecem recibo para impressão.
+ *
+ * 6 (Pagando) é o que está em aberto; 4 (Finalizado) permite reimprimir o que já
+ * foi fechado. Qualquer outro não tem recibo gerado ainda.
+ */
+const PRINTABLE_STATUSES = Object.freeze([
+    WORK_SCHEDULE_STATUS.PAYING,
+    WORK_SCHEDULE_STATUS.FINISHED,
+]);
 
 class GippRhUseCases {
     /** @param {{repository: import('./ports/gipp-rh-repository.port').GippRhRepositoryPort}} deps */
@@ -84,25 +99,110 @@ class GippRhUseCases {
     /** @throws {AppError} 404 se o recibo não for encontrado */
     async updatePaymentReceipt(payload) {
         const receipt = await this.repository.updatePaymentReceipt(payload);
-        if (!receipt) throw new AppError('Payment receipt not found', 404);
+        if (!receipt) throw new AppError('Recibo de pagamento não encontrado.', 404);
         return receipt;
     }
 
     /** @throws {AppError} 400 se nenhum campo for enviado / 404 se o recibo não for encontrado */
     async patchPaymentReceipt(id, fields, updatedBy, updatedByBranchCode) {
         if (!Object.keys(fields).length) {
-            throw new AppError('No fields provided to update', 400);
+            throw new AppError('Informe ao menos um campo para atualizar.', 400);
         }
 
         const receipt = await this.repository.patchPaymentReceipt(id, fields, updatedBy, updatedByBranchCode);
-        if (!receipt) throw new AppError('Payment receipt not found', 404);
+        if (!receipt) throw new AppError('Recibo de pagamento não encontrado.', 404);
         return receipt;
     }
 
     // ─── Recibos — listagem consolidada ─────────────────────────────────────
 
-    async getReceipt(employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId, dateFrom, dateTo) {
-        return this.repository.findReceipt(employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId, dateFrom, dateTo);
+    async getReceipt(employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId, dateFrom, dateTo, workScheduleStatus) {
+        return this.repository.findReceipt(
+            employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId, dateFrom, dateTo, workScheduleStatus
+        );
+    }
+
+    // ─── Tesouraria ─────────────────────────────────────────────────────────
+
+    /**
+     * Recibos de compra de folga para a tesouraria imprimir.
+     *
+     * Travada em `payment_type_id = 6` (Compra de folga): a tesouraria não
+     * imprime salário, férias nem rescisão por aqui.
+     *
+     * `workScheduleStatus` é opcional — o padrão é 6 (Pagando), o que está em
+     * aberto. Passando 4 (Finalizado) ela reimprime o que já foi fechado.
+     */
+    async getTreasuryReceipts(filters = {}) {
+        const status = filters.workScheduleStatus !== undefined && filters.workScheduleStatus !== null
+            ? Number(filters.workScheduleStatus)
+            : WORK_SCHEDULE_STATUS.PAYING;
+
+        if (!PRINTABLE_STATUSES.includes(status)) {
+            throw new AppError(
+                `Status ${status} não fornece recibo para impressão. ` +
+                `Use ${WORK_SCHEDULE_STATUS.PAYING} (em aberto) ou ${WORK_SCHEDULE_STATUS.FINISHED} (reimpressão).`,
+                400,
+                { code: 'INVALID_PRINT_STATUS' },
+            );
+        }
+
+        return this.repository.findReceipt(
+            null,
+            filters.branchCode || null,
+            filters.referenceInit || null,
+            filters.referenceEnd || null,
+            TREASURY_PAYMENT_TYPE_ID,
+            filters.dateFrom || null,
+            filters.dateTo || null,
+            status,
+        );
+    }
+
+    /**
+     * Fecha as jornadas depois da impressão: 6 (Pagando) → 4 (Finalizado).
+     *
+     * Separado da impressão de propósito: o GET não altera estado, então
+     * reimprimir não muda nada, e uma falha na geração do PDF não deixa a jornada
+     * fechada sem ter sido impressa — o que seria irreversível, já que a partir
+     * do 6 ninguém cancela.
+     *
+     * @param {string[]|string} codWorkSchedules
+     * @returns {Promise<{confirmed: string[], skipped: Array<{cod_work_schedule: string, status: ?number, reason: string}>}>}
+     */
+    async confirmTreasuryPayment(codWorkSchedules, actor = null) {
+        const requested = Array.isArray(codWorkSchedules)
+            ? codWorkSchedules
+            : String(codWorkSchedules).split(',');
+
+        const codes = [...new Set(requested.map(c => String(c).trim()).filter(Boolean))];
+        if (!codes.length) {
+            throw new AppError('Informe ao menos uma jornada.', 400, { code: 'EMPTY_SCHEDULE_LIST' });
+        }
+
+        const current = await this.repository.findWorkSchedulesStatus(codes);
+        const statusByCode = new Map(current.map(r => [r.cod_work_schedule, r.id_status_fk]));
+
+        const confirmed = [];
+        const skipped = [];
+
+        for (const code of codes) {
+            const status = statusByCode.get(code);
+
+            if (status === undefined) {
+                skipped.push({ cod_work_schedule: code, status: null, reason: 'not_found' });
+            } else if (status !== WORK_SCHEDULE_STATUS.PAYING) {
+                skipped.push({ cod_work_schedule: code, status, reason: 'not_paying' });
+            } else {
+                confirmed.push(code);
+            }
+        }
+
+        if (confirmed.length) {
+            await this.repository.confirmTreasuryPayment(confirmed, actor);
+        }
+
+        return { confirmed, skipped };
     }
 }
 

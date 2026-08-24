@@ -13,6 +13,8 @@ const { AppError } = require('../../../errors/app.error');
 const { validateTimeRecords } = require('../domain/time-record-validation.rules');
 const { buildReceiptItems } = require('../domain/receipt-items.builder');
 const { WORK_SCHEDULE_STATUS, DISCARDABLE_STATUSES } = require('../domain/work-schedule-status');
+const { CHANGE_REASON } = require('../domain/work-schedule-change-reason');
+const { CHANGE_SOURCE } = require('../../../infra/sqlserver/session-context');
 
 /**
  * Normaliza filtro vindo da query string: string vazia ou só espaços vira null,
@@ -154,12 +156,20 @@ class GippUseCases {
         return this.repository.findTimeRecords(filters);
     }
 
-    async insertTimeRecord(payload, userId) {
-        return this.repository.insertTimeRecord(payload, userId);
+    /**
+     * @param {object} payload - Dados da marcação, incluindo o colaborador.
+     * @param {import('../../../utils/audit-actor').AuditActor} actor - Quem lançou.
+     */
+    async insertTimeRecord(payload, actor) {
+        return this.repository.insertTimeRecord(payload, actor);
     }
 
-    async updateTimeRecord(payload, userId) {
-        return this.repository.updateTimeRecord(payload, userId);
+    /**
+     * @param {object} payload
+     * @param {import('../../../utils/audit-actor').AuditActor} actor - Quem editou.
+     */
+    async updateTimeRecord(payload, actor) {
+        return this.repository.updateTimeRecord(payload, actor);
     }
 
     // ─── Aprovação do Gerente ───────────────────────────────────────────────
@@ -175,7 +185,7 @@ class GippUseCases {
      * @returns {Promise<{approved: string[], skipped: Array<{cod_work_schedule: string, status: ?number, reason: string}>}>}
      * @throws {AppError} 400 se a lista vier vazia
      */
-    async approveWorkSchedules(codWorkSchedules) {
+    async approveWorkSchedules(codWorkSchedules, actor = null) {
         const scheduleList = Array.isArray(codWorkSchedules)
             ? codWorkSchedules
             : String(codWorkSchedules).split(',');
@@ -208,6 +218,7 @@ class GippUseCases {
                 approved,
                 WORK_SCHEDULE_STATUS.AWAITING_APPROVAL,
                 WORK_SCHEDULE_STATUS.AWAITING_PAYROLL,
+                { actor, source: CHANGE_SOURCE.BACKEND, reason: CHANGE_REASON.APPROVED_BY_MANAGER },
             );
         }
 
@@ -239,7 +250,7 @@ class GippUseCases {
      * @param {number[]} [allowedStatuses=DISCARDABLE_STATUSES]
      * @throws {AppError} 404 se a jornada não existe / 409 se está fora da lista
      */
-    async cancelWorkSchedule(codWorkSchedule, allowedStatuses = DISCARDABLE_STATUSES) {
+    async cancelWorkSchedule(codWorkSchedule, allowedStatuses = DISCARDABLE_STATUSES, actor = null) {
         const [current] = await this.repository.findWorkSchedulesStatus([codWorkSchedule]);
 
         if (!current) {
@@ -256,7 +267,7 @@ class GippUseCases {
             );
         }
 
-        const affected = await this.repository.cancelWorkSchedule(codWorkSchedule, allowedStatuses);
+        const affected = await this.repository.cancelWorkSchedule(codWorkSchedule, allowedStatuses, actor);
 
         // A checagem acima e o UPDATE são duas idas ao banco: entre uma e outra a
         // jornada pode ter mudado de status. Aí a guarda do UPDATE barra e nada é
@@ -288,7 +299,7 @@ class GippUseCases {
      * @throws {AppError} 409 se nenhuma jornada da lista estiver aprovada
      * @throws {AppError} 404 se nenhum dado de pagamento for encontrado após o processamento
      */
-    async processWorkSchedules(codWorkSchedules, userId, userBranchCode) {
+    async processWorkSchedules(codWorkSchedules, userId, userBranchCode, actor = null) {
         const requested = Array.isArray(codWorkSchedules) ? codWorkSchedules : codWorkSchedules.split(',');
 
         const current = await this.repository.findWorkSchedulesStatus(requested);
@@ -319,7 +330,7 @@ class GippUseCases {
 
         const scheduleString = scheduleList.join(',');
 
-        await this.repository.processWorkSchedules(scheduleString);
+        await this.repository.processWorkSchedules(scheduleString, actor);
 
         const payments = await this.repository.findPaymentsForReplication(scheduleList);
         if (!payments.length) {
@@ -334,7 +345,7 @@ class GippUseCases {
             await this.replicationRepository.replicatePayment(payment);
         }
 
-        const closing = await this.closeWorkSchedules(scheduleList, userId, userBranchCode);
+        const closing = await this.closeWorkSchedules(scheduleList, userId, userBranchCode, actor);
 
         return { payments, closing, rejected };
     }
@@ -349,7 +360,7 @@ class GippUseCases {
      * @throws {AppError} 404 se a jornada não for encontrada / 422 se a referência não puder ser
      *   determinada, os registros de ponto forem inválidos ou os valores de pagamento não existirem
      */
-    async closeWorkSchedules(codWorkSchedules, userId, userBranchCode) {
+    async closeWorkSchedules(codWorkSchedules, userId, userBranchCode, actor = null) {
         const scheduleList = Array.isArray(codWorkSchedules)
             ? codWorkSchedules
             : codWorkSchedules.split(',').map(s => s.trim());
@@ -366,7 +377,7 @@ class GippUseCases {
                 // seguintes ficavam marcadas como pagas sem recibo, sem volta
                 // (o discard não alcança status 4). Foi assim que 19 jornadas da
                 // filial 0208 ficaram órfãs entre 11 e 16/08.
-                const reverted = await this._revertFailedClose(codWorkSchedule);
+                const reverted = await this._revertFailedClose(codWorkSchedule, actor);
 
                 results.push({
                     cod_work_schedule: codWorkSchedule,
@@ -391,9 +402,9 @@ class GippUseCases {
      * @returns {Promise<boolean>} `false` se a própria reversão falhar.
      * @private
      */
-    async _revertFailedClose(codWorkSchedule) {
+    async _revertFailedClose(codWorkSchedule, actor = null) {
         try {
-            const affected = await this.repository.revertToPayrollQueue(codWorkSchedule);
+            const affected = await this.repository.revertToPayrollQueue(codWorkSchedule, actor);
             return affected > 0;
         } catch {
             // Reverter é melhor-esforço: se falhar, o resultado já reporta a

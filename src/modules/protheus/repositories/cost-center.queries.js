@@ -1,7 +1,7 @@
 // repositório que apenas retorna SQL (padrão que você usa)
 function sqlCostCenter(company_code) {
     if (!/^\d+$/.test(String(company_code))) {
-        throw new Error('Invalid company_code: must be numeric');
+        throw new Error('company_code inválido: deve ser numérico.');
     }
     return `
     SELECT

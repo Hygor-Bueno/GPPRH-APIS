@@ -28,7 +28,7 @@ class GpprhLoginUseCases {
         const payload = await this.googleTokenVerifier.verify(credential);
 
         if (!payload?.email) {
-            throw new AppError('Invalid Google payload', 401, { code: 'GOOGLE_AUTH_INVALID' });
+            throw new AppError('Dados do Google inválidos.', 401, { code: 'GOOGLE_AUTH_INVALID' });
         }
 
         const user = await this.repository.spCandidateLogin(payload.name, payload.email);

@@ -6,6 +6,12 @@
 const { poolPromise, sql } = require('../../../../config/sqlserver');
 const { AppError } = require('../../../../errors/app.error');
 const { GippRhRepositoryPort } = require('../../application/gipp-rh/ports/gipp-rh-repository.port');
+const { CHANGE_REASON } = require('../../../gipp/domain/work-schedule-change-reason');
+const {
+    CHANGE_SOURCE,
+    bindContext,
+    withAuditContext,
+} = require('../../../../infra/sqlserver/session-context');
 const {
     sqlActiveBeneficiaries,
     sqlEmployeesCompensations,
@@ -208,11 +214,11 @@ class SqlServerGippRhRepository extends GippRhRepositoryPort {
             // Violação de índice único — combinação employee/branch/reference/group/event já existe
             if (error.number === 2601 || error.number === 2627) {
                 throw new AppError(
-                    'A record with this event_code already exists in this receipt group. Use a different event_code or receipt_group_id.',
+                    'Já existe um lançamento com este event_code neste grupo de recibo. Use outro event_code ou receipt_group_id.',
                     409
                 );
             }
-            throw new AppError(error.message || 'Error inserting payment receipt', 500, error.code || 'SQLSERVER_ERROR', error);
+            throw new AppError(error.message || 'Não foi possível inserir o recibo de pagamento.', 500, error.code || 'SQLSERVER_ERROR', error);
         }
     }
 
@@ -276,11 +282,11 @@ class SqlServerGippRhRepository extends GippRhRepositoryPort {
 
     // ─── Recibos — listagem consolidada ─────────────────────────────────────
 
-    async findReceipt(employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId, dateFrom, dateTo) {
+    async findReceipt(employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId, dateFrom, dateTo, workScheduleStatus) {
         return this._run(async () => {
             const pool = await poolPromise;
             const { sql: query, params } = sqlGetReceipt(
-                employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId, dateFrom, dateTo
+                employeeCode, branchCode, referenceInit, referenceEnd, paymentTypeId, dateFrom, dateTo, workScheduleStatus
             );
             const request = pool.request();
             for (const [key, value] of Object.entries(params)) {
@@ -288,7 +294,68 @@ class SqlServerGippRhRepository extends GippRhRepositoryPort {
             }
             const result = await request.query(query);
             return result.recordset;
-        }, 'Error when entering compensation');
+        }, 'Não foi possível consultar os recibos.');
+    }
+
+    /**
+     * Fecha as jornadas da tesouraria: 6 (Pagando) → 4 (Finalizado).
+     *
+     * A guarda `AND id_status_fk = 6` é a trava real: jornada que não está em 6
+     * não é tocada, ainda que o código chegue na lista.
+     *
+     * @param {string[]} scheduleList
+     * @returns {Promise<number>} Linhas afetadas.
+     */
+    async confirmTreasuryPayment(scheduleList, actor = null) {
+        return this._run(async () => {
+            const pool = await poolPromise;
+            const placeholders = scheduleList.map((_, i) => `@ws${i}`);
+            const request = pool.request()
+                .input('from_status', sql.Int, 6)
+                .input('to_status', sql.Int, 4);
+            scheduleList.forEach((code, i) => request.input(`ws${i}`, sql.VarChar(50), code));
+
+            // Sem o contexto, o trigger de histórico registra esta transição —
+            // a que encerra o pagamento — como 'DIRECT_DATABASE' e sem autor.
+            bindContext(request, actor, {
+                source: CHANGE_SOURCE.BACKEND,
+                reason: CHANGE_REASON.PAYMENT_FINISHED,
+            });
+
+            const result = await request.query(withAuditContext(`
+                UPDATE GIPP.dbo.cf_work_schedules
+                SET id_status_fk = @to_status
+                WHERE cod_work_schedule IN (${placeholders.join(', ')})
+                  AND id_status_fk = @from_status;
+            `, { captureRowCount: true }));
+
+            // `rowsAffected[0]` passaria a ser o do primeiro
+            // `sp_set_session_context` do batch, não o do UPDATE.
+            return result.recordset?.[0]?.affected_rows ?? 0;
+        }, 'Não foi possível confirmar o pagamento das jornadas.');
+    }
+
+    /**
+     * Estado atual das jornadas informadas — usado para separar o que a
+     * tesouraria pode fechar do que precisa ser reportado como ignorado.
+     *
+     * @param {string[]} scheduleList
+     * @returns {Promise<Array<{cod_work_schedule: string, id_status_fk: number}>>}
+     */
+    async findWorkSchedulesStatus(scheduleList) {
+        return this._run(async () => {
+            const pool = await poolPromise;
+            const placeholders = scheduleList.map((_, i) => `@ws${i}`);
+            const request = pool.request();
+            scheduleList.forEach((code, i) => request.input(`ws${i}`, sql.VarChar(50), code));
+
+            const result = await request.query(`
+                SELECT cod_work_schedule, id_status_fk
+                FROM GIPP.dbo.cf_work_schedules
+                WHERE cod_work_schedule IN (${placeholders.join(', ')});
+            `);
+            return result.recordset || [];
+        }, 'Não foi possível consultar o status das jornadas.');
     }
 }
 

@@ -12,7 +12,7 @@ class MysqlGpprhRepository extends GpprhRepositoryPort {
         try {
             const [rows] = await conn.execute(sqlUsers(), [identifier]);
             if (rows[0].length === 0) {
-                throw new Error('User not found');
+                throw new Error('Usuário não encontrado.');
             }
             return rows[0][0];
         } finally {
@@ -27,7 +27,7 @@ class MysqlGpprhRepository extends GpprhRepositoryPort {
             if (rows[0][0]?.result !== 'LOGIN_OK') {
                 throw new AppError(rows[0][0]?.result);
             } else if (rows[0].length === 0) {
-                throw new AppError('User not found');
+                throw new AppError('Usuário não encontrado.');
             }
         } finally {
             conn.release();
@@ -39,7 +39,7 @@ class MysqlGpprhRepository extends GpprhRepositoryPort {
         try {
             const [rows] = await conn.execute(spCandidateLogin(), [name, email]);
             if (rows[0].length === 0) {
-                throw new AppError('User not found');
+                throw new AppError('Usuário não encontrado.');
             }
             return rows[0][0];
         } finally {

@@ -20,6 +20,7 @@ const {
     sqlUpsertBiometric,
     sqlConsumeToken,
     sqlFindBiometricForVerify,
+    sqlFindIdentifyCandidates,
     sqlRevokeBiometric,
     sqlFindBiometricStatus,
 } = require('../repositories/sqlserver/meal-enroll.queries');
@@ -142,7 +143,7 @@ class SqlServerMealEnrollRepository extends SqlServerMealRepository {
     async completeEnrollment({
         companyCode, employeeId, branchCode, jti,
         embedding, modelTag, enrollVerifiedBy,
-        consentAt, consentVersion, consentIp,
+        consentAt, consentVersion, consentIp, enrolledAt,
     }) {
         return this._run(async () => {
             const pool = await poolPromise;
@@ -155,7 +156,8 @@ class SqlServerMealEnrollRepository extends SqlServerMealRepository {
                 this._key(upsert, { companyCode, employeeId, branchCode })
                     .input('embedding', sql.VarBinary(2048), embedding)
                     .input('model_tag', sql.VarChar(40), modelTag)
-                    .input('enroll_verified_by', sql.TinyInt, enrollVerifiedBy)
+                    .input('enrolled_at', sql.DateTime2(0), enrolledAt ?? consentAt)
+                .input('enroll_verified_by', sql.TinyInt, enrollVerifiedBy)
                     .input('consent_at', sql.DateTime2(0), consentAt)
                     .input('consent_version', sql.VarChar(20), consentVersion)
                     .input('consent_ip', sql.VarChar(45), consentIp ?? null);
@@ -194,6 +196,34 @@ class SqlServerMealEnrollRepository extends SqlServerMealRepository {
         }, 'Não foi possível concluir o cadastro facial.');
     }
 
+    /**
+     * Grava o vetor sem convite — cadastro presencial, no aparelho do operador.
+     *
+     * Sem transação, ao contrário do `completeEnrollment`: aqui não há segundo
+     * efeito para manter em par. Não existe token a consumir, então o `MERGE`
+     * sozinho é atômico e a transação não protegeria nada.
+     */
+    async saveBiometric({
+        companyCode, employeeId, branchCode,
+        embedding, modelTag, enrollVerifiedBy,
+        consentAt, consentVersion, consentIp, enrolledAt,
+    }) {
+        return this._run(async () => {
+            const pool = await poolPromise;
+            const request = this._key(pool.request(), { companyCode, employeeId, branchCode })
+                .input('embedding', sql.VarBinary(2048), embedding)
+                .input('model_tag', sql.VarChar(40), modelTag)
+                .input('enrolled_at', sql.DateTime2(0), enrolledAt ?? consentAt)
+                .input('enroll_verified_by', sql.TinyInt, enrollVerifiedBy)
+                .input('consent_at', sql.DateTime2(0), consentAt)
+                .input('consent_version', sql.VarChar(20), consentVersion)
+                .input('consent_ip', sql.VarChar(45), consentIp ?? null);
+
+            await request.query(sqlUpsertBiometric());
+            return { saved: true };
+        }, 'Não foi possível gravar o cadastro facial.');
+    }
+
     // ─── Verificação e revogação ────────────────────────────────────────────
 
     async findBiometricForVerify(key) {
@@ -205,10 +235,31 @@ class SqlServerMealEnrollRepository extends SqlServerMealRepository {
         }, 'Não foi possível consultar o cadastro facial.');
     }
 
+    /**
+     * Vetores candidatos de uma loja, para identificação 1:N.
+     *
+     * Filtra por `model_tag` na própria query: vetor de outro modelo não compara,
+     * e deixar essa checagem para o código que percorre a lista significaria
+     * calcular scores sem significado e possivelmente eleger um deles.
+     */
+    async findIdentifyCandidates(siteCode, modelTag) {
+        return this._run(async () => {
+            const pool = await poolPromise;
+            const result = await pool.request()
+                .input('site_code', sql.VarChar(10), siteCode)
+                .input('model_tag', sql.VarChar(40), modelTag)
+                .query(sqlFindIdentifyCandidates());
+            return result.recordset;
+        }, 'Não foi possível carregar os rostos cadastrados desta loja.');
+    }
+
     async revokeBiometric(key) {
         return this._run(async () => {
             const pool = await poolPromise;
             const result = await this._key(pool.request(), key)
+                /* Relogio da aplicacao, o mesmo que gravou enrolled_at. Ver o
+                   comentario em sqlRevokeBiometric. */
+                .input('revoked_at', sql.DateTime2(0), new Date())
                 .query(sqlRevokeBiometric());
             return result.rowsAffected?.[0] ?? 0;
         }, 'Não foi possível revogar o cadastro facial.');

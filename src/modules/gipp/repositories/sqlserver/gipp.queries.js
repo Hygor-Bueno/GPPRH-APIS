@@ -52,15 +52,19 @@ const PAYMENT_VALUE_COLUMNS = new Set([
 
 /**
  * Monta a lista de colunas do SELECT.
+ *
  * @param {boolean} withValues - `true` apenas para a fila do RH.
+ * @param {string} [alias] - Prefixo da tabela. Necessário quando a query tem
+ *   JOIN, senão o SQL Server acusa ambiguidade nas colunas repetidas.
  * @returns {string}
  */
-function summarySelectList(withValues) {
+function summarySelectList(withValues, alias = '') {
     const columns = withValues
         ? SUMMARY_ALL_COLUMNS
         : SUMMARY_ALL_COLUMNS.filter(c => !PAYMENT_VALUE_COLUMNS.has(c));
 
-    return columns.join(',\n               ');
+    const prefix = alias ? `${alias}.` : '';
+    return columns.map(c => `${prefix}${c}`).join(',\n               ');
 }
 
 // ─── Status e Tipos ───────────────────────────────────────────────────────────
@@ -189,20 +193,36 @@ function sqlGetPaymentByStatus(withValues = false) {
  * Nunca devolve valores monetários: o encarregado confere o que lançou pelas
  * horas, e não tem por que ver salário nem valor a pagar dos colaboradores.
  *
+ * Traz `IN (1, 2, 3, 6)` — tudo que ainda não encerrou. Antes de 08/2026 parava
+ * em 2, então a jornada desaparecia da lista no instante em que o gerente
+ * aprovava; agora o encarregado acompanha até a tesouraria fechar. Só finalizada
+ * (4) e cancelada (5) saem da vista.
+ *
+ * Acompanha `status_name`, `status_description` e `status_order` de `cf_status`,
+ * para a tela mostrar em que etapa a jornada está sem ter que replicar a tabela
+ * de status no front. O `status_order` é o `workflow_order`, que é por onde a
+ * lista deve ser ordenada — pelo id, "Pagando" (6) apareceria depois de
+ * "Finalizado" (4), e "Cancelado" (5) no meio do fluxo.
+ *
  * @returns {string} Query SQL — requer @launched_by, @branch e @cost_center
  */
 function sqlGetPaymentByLauncher() {
     return `
-        SELECT ${summarySelectList(false)}
-        FROM GIPP.dbo.vw_employee_work_summary
-        WHERE id_status_fk IN (1, 2)
-          AND launched_by = @launched_by
+        SELECT ${summarySelectList(false, 'v')},
+               st.name             AS status_name,
+               st.description      AS status_description,
+               st.workflow_order   AS status_order
+        FROM GIPP.dbo.vw_employee_work_summary v
+        LEFT JOIN GIPP.dbo.cf_status st
+            ON st.id_status = v.id_status_fk
+        WHERE v.id_status_fk IN (1, 2, 3, 6)
+          AND v.launched_by = @launched_by
           AND (@branch IS NULL
-               OR RIGHT('0000' + LTRIM(RTRIM(branch_cod)), 4)
+               OR RIGHT('0000' + LTRIM(RTRIM(v.branch_cod)), 4)
                 = RIGHT('0000' + LTRIM(RTRIM(@branch)), 4))
           AND (@cost_center IS NULL
-               OR LTRIM(RTRIM(cost_center)) = LTRIM(RTRIM(@cost_center)))
-        ORDER BY collaborator;
+               OR LTRIM(RTRIM(v.cost_center)) = LTRIM(RTRIM(@cost_center)))
+        ORDER BY st.workflow_order, v.collaborator;
     `;
 }
 
@@ -271,16 +291,25 @@ function sqlGetTimeRecords() {
 /**
  * Insere um novo registro de ponto via stored procedure.
  * A procedure valida sequência de registros e cria a jornada se necessário.
+ *
+ * `@registration_snapshot` e `@branch_code_snapshot` entraram em 08/2026 e são
+ * a fotografia histórica do usuário de `@id_global` no momento da marcação —
+ * VARCHAR, com zeros à esquerda preservados (`'002351'`, `'0202'`). O INSERT
+ * mora dentro da procedure, então preencher as colunas exigiu acrescentar os
+ * dois parâmetros lá: ver `alter-prc-cf-time-records-snapshots.sql`.
+ *
  * @returns {string} Query SQL de EXEC
  */
 function sqlInsertTimeRecord() {
     return `
         EXEC GIPP.dbo.prc_insert_cf_time_records
-            @employee_id        = @employee_id,
-            @id_global          = @id_global,
-            @id_record_type_fk  = @id_record_type_fk,
-            @times              = @times,
-            @branch_time_record = @branch_time_record;
+            @employee_id           = @employee_id,
+            @id_global             = @id_global,
+            @id_record_type_fk     = @id_record_type_fk,
+            @times                 = @times,
+            @branch_time_record    = @branch_time_record,
+            @registration_snapshot = @registration_snapshot,
+            @branch_code_snapshot  = @branch_code_snapshot;
     `;
 }
 
@@ -288,6 +317,13 @@ function sqlInsertTimeRecord() {
  * Atualiza um registro de ponto existente via stored procedure.
  * Valida o formato da data antes de executar (ISO 8601 - formato 126).
  * Lança erro 50000 se o formato da data for inválido.
+ *
+ * Os snapshots viajam junto porque a procedure faz
+ * `id_global = ISNULL(@id_global, id_global)` — cada edição sobrescreve o
+ * `id_global` com quem editou. Sem atualizar matrícula e filial no mesmo
+ * comando, a linha ficaria com `id_global` de uma pessoa e snapshot de outra,
+ * que é justamente a incoerência que essas colunas existem para evitar.
+ *
  * @returns {string} Query SQL com validação e EXEC
  */
 function sqlUpdateTimeRecord() {
@@ -302,9 +338,11 @@ function sqlUpdateTimeRecord() {
         END
 
         EXEC GIPP.dbo.prc_update_cf_time_records
-            @id_time_records = @id_time_records,
-            @id_global       = @id_global,
-            @times           = @times_converted;
+            @id_time_records       = @id_time_records,
+            @id_global             = @id_global,
+            @times                 = @times_converted,
+            @registration_snapshot = @registration_snapshot,
+            @branch_code_snapshot  = @branch_code_snapshot;
     `;
 }
 

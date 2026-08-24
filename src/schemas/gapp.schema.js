@@ -50,15 +50,15 @@ function validateVehicleAndInsurancePayload(req, res, next) {
     const isVehicle = Number(is_vehicle) === 1;
 
     if (isVehicle && (vehicle == null || typeof vehicle !== 'object' || Array.isArray(vehicle))) {
-        return next(new BadRequestError("'vehicle' is required as an object when 'is_vehicle' = 1"));
+        return next(new BadRequestError("'vehicle' é obrigatório como objeto quando 'is_vehicle' = 1."));
     }
 
     if (insurance != null) {
         if (typeof insurance !== 'object' || Array.isArray(insurance)) {
-            return next(new BadRequestError("'insurance' must be an object"));
+            return next(new BadRequestError("'insurance' deve ser um objeto."));
         }
         if (!isVehicle) {
-            return next(new BadRequestError("'insurance' only applies when 'is_vehicle' = 1"));
+            return next(new BadRequestError("'insurance' só se aplica quando 'is_vehicle' = 1."));
         }
     }
 
@@ -231,7 +231,7 @@ function validateExpenseTypePayload(req, res, next) {
     const value = req.body[requiredField];
     if (value == null || typeof value !== 'object' || Array.isArray(value)) {
         return next(new BadRequestError(
-            `'${requiredField}' is required as an object when exp_type_id_fk = ${typeId}`
+            `'${requiredField}' é obrigatório como objeto quando exp_type_id_fk = ${typeId}.`
         ));
     }
     next();

@@ -36,11 +36,23 @@ class GippRepositoryPort {
     /** @param {object} filters @returns {Promise<object[]>} */
     findTimeRecords(filters) { throw new Error('Not implemented'); }
 
-    /** @param {object} payload @param {number} userId @returns {Promise<object[]>} */
-    insertTimeRecord(payload, userId) { throw new Error('Not implemented'); }
+    /**
+     * O `actor` descreve QUEM lançou — vira `id_global`,
+     * `registration_snapshot` e `branch_code_snapshot` na mesma linha. O
+     * colaborador da jornada vem no `payload` (`employee_id`,
+     * `branch_time_record`) e é outra pessoa.
+     * @param {object} payload
+     * @param {import('../../../../utils/audit-actor').AuditActor} actor
+     * @returns {Promise<object[]>}
+     */
+    insertTimeRecord(payload, actor) { throw new Error('Not implemented'); }
 
-    /** @param {object} payload @param {number} userId @returns {Promise<object[]>} */
-    updateTimeRecord(payload, userId) { throw new Error('Not implemented'); }
+    /**
+     * @param {object} payload
+     * @param {import('../../../../utils/audit-actor').AuditActor} actor
+     * @returns {Promise<object[]>}
+     */
+    updateTimeRecord(payload, actor) { throw new Error('Not implemented'); }
 
     // ─── Jornadas de Trabalho ───────────────────────────────────────────────
     /**
@@ -48,7 +60,7 @@ class GippRepositoryPort {
      * @param {string} codWorkSchedule
      * @returns {Promise<number>} Linhas afetadas — 0 quando a guarda de status barra.
      */
-    cancelWorkSchedule(codWorkSchedule) { throw new Error('Not implemented'); }
+    cancelWorkSchedule(codWorkSchedule, allowedStatuses, actor) { throw new Error('Not implemented'); }
 
     /**
      * @param {string[]} scheduleList
@@ -64,7 +76,7 @@ class GippRepositoryPort {
      * @param {number} toStatus
      * @returns {Promise<number>} Linhas afetadas.
      */
-    approveWorkSchedules(scheduleList, fromStatus, toStatus) { throw new Error('Not implemented'); }
+    approveWorkSchedules(scheduleList, fromStatus, toStatus, audit) { throw new Error('Not implemented'); }
 
     /**
      * Devolve uma jornada de 4 (finalizada) para 3 (fila do RH).
@@ -76,10 +88,10 @@ class GippRepositoryPort {
      * @param {string} codWorkSchedule
      * @returns {Promise<number>} Linhas afetadas.
      */
-    revertToPayrollQueue(codWorkSchedule) { throw new Error('Not implemented'); }
+    revertToPayrollQueue(codWorkSchedule, actor) { throw new Error('Not implemented'); }
 
     /** @param {string} scheduleCsv - Códigos separados por vírgula. */
-    processWorkSchedules(scheduleCsv) { throw new Error('Not implemented'); }
+    processWorkSchedules(scheduleCsv, actor) { throw new Error('Not implemented'); }
 
     /** @param {string[]} scheduleList @returns {Promise<object[]>} */
     findPaymentsForReplication(scheduleList) { throw new Error('Not implemented'); }

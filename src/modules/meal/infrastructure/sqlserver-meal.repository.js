@@ -63,6 +63,32 @@ class SqlServerMealRepository extends MealRepositoryPort {
         } catch (error) {
             if (error instanceof AppError) throw error;
 
+            /**
+             * Loga ANTES de embrulhar, e isto não é redundância.
+             *
+             * O `error.middleware.js` da casa faz
+             * `if (!(err instanceof AppError)) console.error(...)` — ou seja,
+             * `AppError` NÃO é logado, por decisão deliberada: erro operacional
+             * conhecido não precisa de stack no log.
+             *
+             * A consequência é que uma falha TÉCNICA de banco embrulhada em
+             * AppError 500 sai daqui invisível: a mensagem chega ao operador e o
+             * servidor não registra nada. Em 19/08/2026 isso custou várias
+             * rodadas de diagnóstico — o cadastro facial falhava, as fotos eram
+             * processadas com sucesso, e não havia uma linha de log em lugar
+             * nenhum.
+             *
+             * 500 é falha técnica, não regra de negócio. Merece log.
+             */
+            console.error(
+                `[meal] ${fallbackMessage}`,
+                {
+                    number: error?.number,
+                    code: error?.code,
+                    message: error?.message,
+                },
+            );
+
             throw new AppError(fallbackMessage, 500, {
                 code: error.number ? `SQLSERVER_${error.number}` : 'SQLSERVER_ERROR',
                 details: error,

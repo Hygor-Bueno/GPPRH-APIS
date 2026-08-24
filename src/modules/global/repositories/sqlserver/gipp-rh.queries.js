@@ -439,7 +439,7 @@ function sqlPatchPaymentReceipt(fields) {
  * @param {number|null} paymentTypeId  - Tipo de pagamento (ex: 1=salário, 6=fechamento GIPP)
  * @returns {{ sql: string, params: object }} Query e parâmetros
  */
-function sqlGetReceipt(employeeCode, branchCode, referenceInit, referenceTwo, paymentTypeId, dateFrom, dateTo) {
+function sqlGetReceipt(employeeCode, branchCode, referenceInit, referenceTwo, paymentTypeId, dateFrom, dateTo, workScheduleStatus) {
     const params = {};
     let where = [];
 
@@ -453,6 +453,17 @@ function sqlGetReceipt(employeeCode, branchCode, referenceInit, referenceTwo, pa
     }
     if (dateFrom) { where.push(`CAST(c.reference_date AS DATE) >= @dateFrom`); params.dateFrom = dateFrom; }
     if (dateTo)   { where.push(`CAST(c.reference_date AS DATE) <= @dateTo`);   params.dateTo   = dateTo; }
+
+    // Filtro por status da jornada — a tesouraria separa o que está em aberto
+    // (6, Pagando) do que já foi encerrado (4, Finalizado, para reimpressão).
+    //
+    // O JOIN é LEFT de propósito: recibo de Salário, Férias, Rescisão, Bônus e
+    // Adiantamento não tem jornada vinculada (`work_schedule_id` nulo). Com
+    // INNER JOIN esses recibos desapareceriam da listagem — hoje são 74.
+    if (workScheduleStatus) {
+        where.push(`ws.id_status_fk = @workScheduleStatus`);
+        params.workScheduleStatus = workScheduleStatus;
+    }
 
     // Sempre filtra apenas recibos ativos na listagem
     where.push('c.is_active = 1');
@@ -470,6 +481,8 @@ function sqlGetReceipt(employeeCode, branchCode, referenceInit, referenceTwo, pa
             c.reference,
             c.receipt_group_id,
             c.work_schedule_id,
+            ws.id_status_fk          AS work_schedule_status,
+            st.name                  AS work_schedule_status_name,
             c.payment_type_id,
             pt.description           AS payment_type,
             -- MIN evita duplicatas quando múltiplos itens têm created_at ligeiramente diferentes
@@ -489,6 +502,10 @@ function sqlGetReceipt(employeeCode, branchCode, referenceInit, referenceTwo, pa
                AND comp.D_E_L_E_T_ <> '*'
             LEFT JOIN GIPP.dbo.gipp_payment_type pt
                 ON pt.id = c.payment_type_id
+            LEFT JOIN GIPP.dbo.cf_work_schedules ws
+                ON ws.cod_work_schedule = c.work_schedule_id
+            LEFT JOIN GIPP.dbo.cf_status st
+                ON st.id_status = ws.id_status_fk
         ${whereClause}
         GROUP BY
             c.payee_id,
@@ -502,7 +519,9 @@ function sqlGetReceipt(employeeCode, branchCode, referenceInit, referenceTwo, pa
             pt.description,
             c.branch_name,
             c.receipt_group_id,
-            c.work_schedule_id
+            c.work_schedule_id,
+            ws.id_status_fk,
+            st.name
         ORDER BY c.reference DESC, c.work_schedule_id;
     `;
     return { sql, params };

@@ -106,7 +106,7 @@ function verifyEntries(data) {
     );
 
   if (!entries.length) {
-    throw new Error('No valid fields to update');
+    throw new Error('Nenhum campo válido para atualizar.');
   }
 
   return entries;

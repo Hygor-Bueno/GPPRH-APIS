@@ -18,7 +18,7 @@ function canAny(requiredPermissions) {
     if (!hasAny) {
       return res.status(403).json({
         error: true,
-        message: 'Permission denied'
+        message: 'Você não tem permissão para acessar este recurso.'
       });
     }
     next();
@@ -43,7 +43,7 @@ function canAll(requiredPermissions = []) {
     if (!hasAll) {
       return res.status(403).json({
         error: true,
-        message: 'Permission denied'
+        message: 'Você não tem permissão para acessar este recurso.'
       });
     }
 

@@ -34,6 +34,19 @@ class AuthRepositoryPort {
 
     /** @param {number} userId @param {string} passwordHash @returns {Promise<void>} */
     updatePassword(userId, passwordHash) { throw new Error('Not implemented'); }
+
+    /**
+     * `file_id` da foto do usuário, ou `null`.
+     *
+     * Devolve o id apenas quando o arquivo está ATIVO em `_files`: `_user.file_id`
+     * continua apontando para o arquivo depois de um soft-delete, e entregar
+     * esse id ao front faria a foto ser pedida em `/global/files/:id`, que
+     * responde 404 para arquivo inativo.
+     *
+     * @param {number} userId
+     * @returns {Promise<number|null>}
+     */
+    findPhotoFileId(userId) { throw new Error('Not implemented'); }
 }
 
 module.exports = { AuthRepositoryPort };

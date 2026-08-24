@@ -72,6 +72,23 @@ const MAX_IMAGES = 5;
  */
 const MATCH_THRESHOLD = Number(process.env.MEAL_FACE_THRESHOLD || 0.5);
 
+/**
+ * Margem mínima sobre o segundo colocado, na identificação 1:N.
+ *
+ * A segunda trava do rosto sem crachá. Passar do limiar não basta: se dois rostos
+ * ficam a 0,001 um do outro, escolher o maior é escolher no ruído — e o ruído
+ * aqui decide de quem é a refeição. Irmãos, primos e gêmeos são o caso comum, não
+ * o exótico, numa base de mil e setecentas pessoas.
+ *
+ * Empate devolve `ambiguous` e a tela pede o crachá. Recusar identificar é
+ * incômodo; identificar errado lança a refeição no centro de custo de outra
+ * pessoa e não tem sintoma.
+ *
+ * ⚠️ Como o limiar, este número é provisório e sai do piloto. Ele é medido junto:
+ *   a distância entre o primeiro e o segundo colocado, nas comparações reais.
+ */
+const IDENTIFY_MARGIN = Number(process.env.MEAL_FACE_MARGIN || 0.06);
+
 /** Como a identidade foi provada. Espelha CK_meal_biometric_verified_by. */
 const VERIFIED_BY = Object.freeze({
     SIGNED_LINK: 1,
@@ -91,6 +108,35 @@ function secret() {
         );
     }
     return value;
+}
+
+/**
+ * String vazia ou só espaços vira `null`, para não ser confundida com valor
+ * informado.
+ *
+ * Tem uma gêmea em `meal.use-cases.js`. Duplicar um helper de três linhas é
+ * melhor que fazer um destes módulos importar o outro só por causa dela — eles
+ * são independentes de propósito, e essa dependência artificial seria a primeira
+ * de uma série.
+ */
+function trimOrNull(value) {
+    if (typeof value !== 'string') return value ?? null;
+    const trimmed = value.trim();
+    return trimmed === '' ? null : trimmed;
+}
+
+/**
+ * Data civil em `YYYY-MM-DD`, no fuso do servidor.
+ *
+ * Também tem gêmea em `meal.use-cases.js`, e pela mesma razão. O corte é à
+ * meia-noite: decidido em 18/08/2026, com o efeito colateral aceito de que um
+ * turno que atravessa a meia-noite conta como dois dias.
+ */
+function toCivilDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 /** Data plausível de nascimento: ano entre 1900 e hoje, mês e dia reais. */
@@ -218,7 +264,25 @@ class MealEnrollUseCases {
         }
 
         const token = jwt.sign(
-            { ...key, purpose: 'meal-enroll', jti },
+            /* ⚠️ Chaves em snake_case, EXPLICITAMENTE.
+
+               key vem de _validateKey em camelCase (companyCode), e um
+               { ...key } aqui gravava o token nesse formato — enquanto
+               confirmIdentity e enroll leem payload.company_code. O efeito era
+               cruel: o link abria, a pessoa acertava a data de nascimento
+               (gastando uma tentativa real), e o cadastro falhava pedindo
+               empresa e filial que ela nunca digitou.
+
+               Detectado em 19/08/2026 decodificando um token emitido de
+               verdade — nenhum teste cobria a travessia emissao -> conferencia
+               -> cadastro. */
+            {
+                company_code: key.companyCode,
+                employee_id: key.employeeId,
+                branch_code: key.branchCode,
+                purpose: 'meal-enroll',
+                jti,
+            },
             secret(),
             { expiresIn: `${INVITE_TTL_DAYS}d` },
         );
@@ -383,13 +447,18 @@ class MealEnrollUseCases {
 
         const embedding = this._averageVectors(vectors);
 
+        /* Um unico instante para consent_at e enrolled_at. Ver o comentario
+           sobre os dois relogios em sqlUpsertBiometric. */
+        const now = new Date();
+
         await this.repository.completeEnrollment({
             ...key,
             jti: payload.jti,
             embedding,
             modelTag,
             enrollVerifiedBy: VERIFIED_BY.SIGNED_LINK,
-            consentAt: new Date(),
+            consentAt: now,
+            enrolledAt: now,
             consentVersion:
                 input.consentVersion
                 || process.env.MEAL_CONSENT_VERSION
@@ -405,6 +474,88 @@ class MealEnrollUseCases {
                operador confirma uma vez, e só depois o rosto vale sozinho. É o
                backstop contra um cadastro errado passar despercebido. */
             first_meal_requires_qr: true,
+        };
+    }
+
+    /**
+     * Cadastro presencial, feito no aparelho do operador.
+     *
+     * Existe porque o link por navegador resolve escala — mil pessoas sem
+     * campanha — e não resolve o caso de quem está ali, na frente do balcão,
+     * agora. Os dois caminhos convivem.
+     *
+     * A prova de identidade aqui é **mais forte** que a do link, e é por isso que
+     * `enroll_verified_by` é diferente: no link a pessoa digita a data de
+     * nascimento sozinha; aqui ela apresentou o crachá e um operador
+     * identificado estava olhando.
+     *
+     * ⚠️ O consentimento continua sendo da PESSOA, não do operador. Quem toca
+     *   "concordo" é ela, na tela, depois de ler o termo — o operador passa o
+     *   aparelho. Consentimento dado por terceiro não é consentimento, e é
+     *   exatamente o vício que a subordinação já ameaça introduzir.
+     */
+    async enrollDirect({ companyCode, employeeId, branchCode }, input, actor) {
+        const key = this._validateKey({ companyCode, employeeId, branchCode });
+
+        if (!input.consentAccepted) {
+            throw new BadRequestError(
+                'O cadastro do rosto exige que a própria pessoa aceite o termo na tela.',
+            );
+        }
+
+        const images = Array.isArray(input.images) ? input.images : [];
+        if (images.length < MIN_IMAGES || images.length > MAX_IMAGES) {
+            throw new BadRequestError(
+                `Envie de ${MIN_IMAGES} a ${MAX_IMAGES} capturas do rosto.`,
+            );
+        }
+
+        const diner = await this.repository.findDiner(key, null);
+        if (!diner) {
+            throw new AppError('Matrícula não encontrada no Protheus.', 404, {
+                code: 'DINER_NOT_FOUND',
+            });
+        }
+
+        if (diner.is_terminated) {
+            throw new AppError(
+                `${diner.employee_name} está desligado. Cadastro não realizado.`,
+                409,
+                { code: 'DINER_TERMINATED' },
+            );
+        }
+
+        const vectors = [];
+        let modelTag = null;
+
+        for (const image of images) {
+            const result = await this.face.embed(image);
+            vectors.push(Buffer.from(result.embedding, 'base64'));
+            modelTag = result.model_tag;
+        }
+
+        const now = new Date();
+
+        await this.repository.saveBiometric({
+            ...key,
+            embedding: this._averageVectors(vectors),
+            modelTag,
+            enrollVerifiedBy: VERIFIED_BY.IN_PERSON,
+            consentAt: now,
+            enrolledAt: now,
+            consentVersion:
+                input.consentVersion
+                || process.env.MEAL_CONSENT_VERSION
+                || 'refeitorio-facial-v1',
+            consentIp: input.ip ?? null,
+        });
+
+        return {
+            enrolled: true,
+            employee_name: diner.employee_name,
+            model_tag: modelTag,
+            captures_used: vectors.length,
+            enrolled_by_operator: actor?.userId ?? null,
         };
     }
 
@@ -445,6 +596,169 @@ class MealEnrollUseCases {
             model_tag: result.model_tag,
             det_score: result.det_score,
         };
+    }
+
+    /**
+     * Identifica a pessoa pelo rosto, sem crachá — 1:N dentro de uma loja.
+     *
+     * ⚠️ As duas travas que tornam isto defensável, e por que cada uma existe:
+     *
+     *   **1. Recorte por loja.** Comparar contra as 1.700 pessoas do grupo
+     *   multiplica a exposição: com 0,01% de erro por comparação, 1.700
+     *   comparações dão mais de 15% de chance de apontar a pessoa errada em cada
+     *   tentativa. Na maior loja são ~164 candidatos.
+     *
+     *   **2. Margem sobre o segundo colocado.** Passar do limiar não basta: o
+     *   primeiro tem que estar claramente à frente do segundo. Dois rostos
+     *   parecidos que empatam acima do corte são exatamente o caso em que o
+     *   sistema NÃO deve escolher — e escolher o maior por 0,001 é escolher no
+     *   ruído. Sem margem, irmãos e primos viram loteria.
+     *
+     * O erro que isto evita não é "não reconheceu": é o sistema **afirmar que
+     * alguém é outra pessoa** e lançar a refeição no centro de custo dela. Por
+     * isso ambiguidade devolve `ambiguous` e a tela pede o crachá, em vez de
+     * arriscar.
+     *
+     * A comparação roda aqui, em Node, e não no container: o `/embed` já devolveu
+     * o vetor da foto, e 164 produtos escalares de 512 números é trabalho
+     * desprezível. Mandar os 164 vetores guardados por HTTP para o Python seria
+     * tráfego e latência para o mesmo resultado.
+     */
+    async identifyByFace(siteCode, imageBase64) {
+        const site = trimOrNull(siteCode);
+        if (!site || !SITE_CODE_PATTERN.test(site)) {
+            throw new BadRequestError('Informe a loja com 4 dígitos (ex.: 0202).');
+        }
+
+        const probe = await this.face.embed(imageBase64);
+        const probeVector = this._toFloat32(Buffer.from(probe.embedding, 'base64'));
+
+        const candidates = await this.repository.findIdentifyCandidates(
+            site,
+            probe.model_tag,
+        );
+
+        if (candidates.length === 0) {
+            throw new AppError(
+                'Nenhum rosto cadastrado nesta loja ainda. Use o crachá.',
+                404,
+                { code: 'NO_CANDIDATES' },
+            );
+        }
+
+        const scored = candidates
+            .map(row => ({
+                company_code: row.company_code,
+                employee_id: row.employee_id,
+                branch_code: row.branch_code,
+                score: this._cosine(probeVector, this._toFloat32(Buffer.from(row.embedding))),
+            }))
+            .sort((a, b) => b.score - a.score);
+
+        const [first, second] = scored;
+        const margin = second ? first.score - second.score : Infinity;
+
+        const base = {
+            candidates_compared: scored.length,
+            threshold: MATCH_THRESHOLD,
+            required_margin: IDENTIFY_MARGIN,
+            threshold_is_provisional: !process.env.MEAL_FACE_THRESHOLD,
+            model_tag: probe.model_tag,
+            det_score: probe.det_score,
+            score: Number(first.score.toFixed(6)),
+            margin: Number.isFinite(margin) ? Number(margin.toFixed(6)) : null,
+        };
+
+        if (first.score < MATCH_THRESHOLD) {
+            return { ...base, status: 'no-match' };
+        }
+
+        if (margin < IDENTIFY_MARGIN) {
+            /* Dois rostos empatados acima do corte. Devolver o primeiro seria
+               escolher no ruído — e o segundo colocado vai junto na resposta só
+               como diagnóstico, nunca como sugestão para a tela usar. */
+            return {
+                ...base,
+                status: 'ambiguous',
+                runner_up_score: Number(second.score.toFixed(6)),
+            };
+        }
+
+        const diner = await this.repository.findDiner(
+            {
+                companyCode: first.company_code,
+                employeeId: first.employee_id,
+                branchCode: first.branch_code,
+            },
+            toCivilDate(new Date()),
+        );
+
+        if (!diner) {
+            /* Tem vetor e não tem cadastro no Protheus: saiu da base entre o
+               cadastro do rosto e agora. Não identifica — e a etapa 7 tem uma
+               consulta para caçar esses órfãos. */
+            return { ...base, status: 'no-match' };
+        }
+
+        return {
+            ...base,
+            status: 'matched',
+            diner: {
+                company_code: diner.company_code,
+                employee_id: diner.employee_id,
+                branch_code: diner.branch_code,
+                employee_name: diner.employee_name,
+                employee_full_name: diner.employee_full_name,
+                cost_center: diner.cost_center,
+                cost_center_description: diner.cost_center_description,
+                is_terminated: diner.is_terminated,
+                terminated_at: diner.terminated_at,
+                meals_today: Number(diner.meals_today ?? 0),
+            },
+            alerts: this._identifyAlerts(diner),
+        };
+    }
+
+    /** @private */
+    _toFloat32(buffer) {
+        if (buffer.length !== 512 * 4) {
+            throw new AppError('Vetor com tamanho inesperado.', 502, {
+                code: 'FACE_BAD_VECTOR',
+            });
+        }
+        return new Float32Array(buffer.buffer, buffer.byteOffset, 512);
+    }
+
+    /** @private Ambos os vetores são unitários, então o produto escalar é o cosseno. */
+    _cosine(a, b) {
+        let sum = 0;
+        for (let i = 0; i < 512; i += 1) sum += a[i] * b[i];
+        return sum;
+    }
+
+    /** @private */
+    _identifyAlerts(diner) {
+        const alerts = [];
+
+        if (diner.is_terminated) {
+            alerts.push({
+                code: 'DINER_TERMINATED',
+                severity: 'danger',
+                message: `${diner.employee_name} está DESLIGADO desde ${diner.terminated_at}. `
+                    + 'A refeição pode ser servida; o caso vai para o relatório do RH.',
+            });
+        }
+
+        const meals = Number(diner.meals_today ?? 0);
+        if (meals > 0) {
+            alerts.push({
+                code: 'DINER_REPEATED',
+                severity: 'warning',
+                message: `${meals + 1}ª refeição de ${diner.employee_name} hoje.`,
+            });
+        }
+
+        return alerts;
     }
 
     /** Revoga o cadastro facial. Direito do titular, sem justificar. */
@@ -522,7 +836,21 @@ class MealEnrollUseCases {
             throw new AppError('Link inválido.', 401, { code: 'INVITE_INVALID' });
         }
 
-        return payload;
+        /* Aceita as duas grafias da chave.
+
+           Tokens emitidos antes de 19/08/2026 sairam em camelCase por causa de
+           um spread de key — ver o comentario em issueInvite. Eles tem 7 dias de
+           validade, entao normalizar aqui e o que evita invalidar convites que ja
+           estao no celular de alguem por causa de uma correcao interna.
+
+           Pode sair depois de 26/08/2026, quando o ultimo token camelCase tiver
+           expirado. */
+        return {
+            ...payload,
+            company_code: payload.company_code ?? payload.companyCode,
+            employee_id: payload.employee_id ?? payload.employeeId,
+            branch_code: payload.branch_code ?? payload.branchCode,
+        };
     }
 
     /** @private */
@@ -599,6 +927,7 @@ class MealEnrollUseCases {
 module.exports = {
     MealEnrollUseCases,
     MATCH_THRESHOLD,
+    IDENTIFY_MARGIN,
     VERIFIED_BY,
     INVITE_TTL_DAYS,
     MAX_ATTEMPTS,

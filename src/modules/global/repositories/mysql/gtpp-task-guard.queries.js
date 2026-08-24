@@ -32,8 +32,8 @@ const SQL_COUNT_ITEM_STATS = `
     ) AS checked
   FROM gt_task_item
   WHERE task_id = ? AND status = 1
-    AND yes_no != -1
 `;
+// AND yes_no != -1
 
 module.exports = {
     SQL_GET_TASK_USER_ID,

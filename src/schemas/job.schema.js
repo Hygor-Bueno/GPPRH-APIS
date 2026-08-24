@@ -46,7 +46,7 @@ function blockUnknownJobFields(req, res, next) {
 function validateSalaryRange(req, res, next) {
     const { salary_min, salary_max } = req.body || {};
     if (salary_min != null && salary_max != null && salary_min > salary_max) {
-        return next(new BadRequestError("'salary_min' must be less than or equal to 'salary_max'"));
+        return next(new BadRequestError("'salary_min' deve ser menor ou igual a 'salary_max'."));
     }
     next();
 }

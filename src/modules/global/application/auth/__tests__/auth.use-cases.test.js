@@ -141,3 +141,19 @@ describe('AuthUseCases', () => {
         });
     });
 });
+
+describe('getPhotoFileId', () => {
+    it('repassa o id do usuário para a porta', async () => {
+        const repository = makeFakeRepository({ findPhotoFileId: jest.fn().mockResolvedValue(1842) });
+        const useCases = makeUseCases({ repository });
+
+        await expect(useCases.getPhotoFileId(397)).resolves.toBe(1842);
+        expect(repository.findPhotoFileId).toHaveBeenCalledWith(397);
+    });
+
+    it('devolve null quando não há foto ativa', async () => {
+        const repository = makeFakeRepository({ findPhotoFileId: jest.fn().mockResolvedValue(null) });
+
+        await expect(makeUseCases({ repository }).getPhotoFileId(397)).resolves.toBeNull();
+    });
+});

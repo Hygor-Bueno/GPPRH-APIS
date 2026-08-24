@@ -9,12 +9,12 @@ describe('loginSchema', () => {
 
     it('should fail when username is missing', () => {
         const errors = validateSchema({ password: 'secret' }, loginSchema);
-        expect(errors).toContain("'username' is required");
+        expect(errors).toContain("O campo 'username' é obrigatório.");
     });
 
     it('should fail when password is missing', () => {
         const errors = validateSchema({ username: 'john' }, loginSchema);
-        expect(errors).toContain("'password' is required");
+        expect(errors).toContain("O campo 'password' é obrigatório.");
     });
 
     it('should fail when both fields are missing', () => {
@@ -27,7 +27,7 @@ describe('loginSchema', () => {
             { username: 'a'.repeat(101), password: 'secret' },
             loginSchema
         );
-        expect(errors).toContain("'username' must be at most 100 characters");
+        expect(errors).toContain("O campo 'username' deve ter no máximo 100 caracteres.");
     });
 
     it('should fail when password exceeds maxLength', () => {
@@ -35,11 +35,11 @@ describe('loginSchema', () => {
             { username: 'john', password: 'x'.repeat(201) },
             loginSchema
         );
-        expect(errors).toContain("'password' must be at most 200 characters");
+        expect(errors).toContain("O campo 'password' deve ter no máximo 200 caracteres.");
     });
 
     it('should fail when username is not a string', () => {
         const errors = validateSchema({ username: 123, password: 'secret' }, loginSchema);
-        expect(errors).toContain("'username' must be a string");
+        expect(errors).toContain("O campo 'username' deve ser um texto.");
     });
 });

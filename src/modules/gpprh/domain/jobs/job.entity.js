@@ -39,13 +39,13 @@ class JobService {
 
   validateTypes() {
     if (!Object.values(JobStatus).includes(this.status)) {
-      throw new AppError(`Invalid job status: ${this.status}`, 422, { code: 'JOB_STATUS_INVALID' });
+      throw new AppError(`Status de vaga inválido: ${this.status}.`, 422, { code: 'JOB_STATUS_INVALID' });
     }
     if (
       (this.salary_min != null && Number.isNaN(Number(this.salary_min))) ||
       (this.salary_max != null && Number.isNaN(Number(this.salary_max)))
     ) {
-      throw new AppError('Salary must be a valid number', 422, { code: 'JOB_SALARY_INVALID' });
+      throw new AppError('O salário deve ser um número válido.', 422, { code: 'JOB_SALARY_INVALID' });
     }
   }
 
@@ -55,7 +55,7 @@ class JobService {
       this.salary_max != null &&
       Number(this.salary_max) < Number(this.salary_min)
     ) {
-      throw new AppError('Salary max cannot be lower than salary min', 422, { code: 'JOB_SALARY_RANGE_INVALID' });
+      throw new AppError('O salário máximo não pode ser menor que o salário mínimo.', 422, { code: 'JOB_SALARY_RANGE_INVALID' });
     }
   }
 
@@ -63,21 +63,21 @@ class JobService {
     const validStatuses = Object.values(JobStatus);
 
     if (!validStatuses.includes(originalStatus)) {
-      throw new AppError(`Invalid original job status: ${originalStatus}`, 422, {
+      throw new AppError(`Status de origem da vaga inválido: ${originalStatus}.`, 422, {
         code: 'JOB_STATUS_ORIGINAL_INVALID',
         details: { currentStatus: originalStatus }
       });
     }
 
     if (!validStatuses.includes(this.status)) {
-      throw new AppError(`Invalid target job status: ${this.status}`, 422, {
+      throw new AppError(`Status de destino da vaga inválido: ${this.status}.`, 422, {
         code: 'JOB_STATUS_TARGET_INVALID',
         details: { targetStatus: this.status }
       });
     }
 
     if (originalStatus === this.status) {
-      throw new AppError(`Job is already in status ${originalStatus}`, 409, {
+      throw new AppError(`A vaga já está no status ${originalStatus}.`, 409, {
         code: 'JOB_STATUS_NO_CHANGE',
         details: { currentStatus: originalStatus }
       });
@@ -85,7 +85,7 @@ class JobService {
 
     const allowed = ALLOWED_TRANSITIONS[originalStatus] ?? [];
     if (!allowed.includes(this.status)) {
-      throw new AppError(`Invalid status transition: ${originalStatus} → ${this.status}`, 409, {
+      throw new AppError(`Transição de status não permitida: ${originalStatus} → ${this.status}.`, 409, {
         code: 'JOB_STATUS_TRANSITION_NOT_ALLOWED',
         details: { from: originalStatus, to: this.status }
       });

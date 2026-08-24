@@ -26,6 +26,7 @@ const {
     postMealLogSchema,
     postDinerGroupSchema,
 } = require('../../schemas/meal.schema');
+const { faceUpload } = require('./infrastructure/face-upload.middleware');
 const mealController = require('./controllers/meal.controller');
 const enrollController = require('./controllers/meal-enroll.controller');
 
@@ -130,6 +131,19 @@ router.get('/reports/exceptions',
 //   Como a autenticação é o token e não a sessão, este bloco funciona igual
 //   montado no app público — mover é trocar o prefixo, não reescrever.
 
+/**
+ * Cadastro presencial, no aparelho do operador — sem link, sem navegador.
+ *
+ * A pessoa está na frente do balcão, o crachá já a identificou, e ela mesma
+ * aceita o termo na tela. Prova de identidade mais forte que a do link, por isso
+ * grava `enroll_verified_by = 2` em vez de 1.
+ */
+router.post('/enroll/direct',
+    authMiddleware,
+    canAny(CAN_SERVE),
+    faceUpload.array('images', 5),
+    asyncHandler(enrollController.postDirectEnroll));
+
 /** Emitir convite é ato do RH, e exige sessão. */
 router.post('/enroll/invites',
     authMiddleware,
@@ -142,11 +156,34 @@ router.get('/enroll/health',
     canAny(CAN_SERVE),
     asyncHandler(enrollController.getFaceHealth));
 
-/** Comparação 1:1. Não registra refeição — só confere o rosto. */
+/**
+ * Comparação 1:1. Não registra refeição — só confere o rosto.
+ *
+ * `upload.single` porque o app manda multipart: o `capture()` da camera-kit
+ * devolve URI de arquivo, e o `FormData` do React Native monta a parte sem ler o
+ * conteúdo para a memória do JS. O multer da casa usa `memoryStorage()`, então
+ * nada toca disco de nenhum dos dois lados. Base64 em JSON também é aceito, para
+ * o navegador.
+ */
 router.post('/enroll/verify',
     authMiddleware,
     canAny(CAN_SERVE),
+    faceUpload.single('image'),
     asyncHandler(enrollController.postVerify));
+
+/**
+ * Identificação 1:N — rosto sozinho, sem crachá.
+ *
+ * Duas travas fazem isto ser defensável: a busca é restrita à loja (~164 pessoas
+ * em vez de 1.700) e o primeiro colocado tem que estar à frente do segundo por uma
+ * margem. Empate devolve `ambiguous` e a tela pede o crachá — o erro a evitar não
+ * é "não reconheceu", é o sistema afirmar que alguém é outra pessoa.
+ */
+router.post('/enroll/identify',
+    authMiddleware,
+    canAny(CAN_SERVE),
+    faceUpload.single('image'),
+    asyncHandler(enrollController.postIdentify));
 
 router.get('/enroll/status/:company/:branch/:employee',
     authMiddleware,
@@ -166,8 +203,15 @@ router.delete('/enroll/status/:company/:branch/:employee',
 // `/enroll/verify` e `/enroll/complete` se viesse antes deles. Por isso TODA rota
 // de caminho literal fica acima das que têm `:token` — inclusive as sem sessão.
 
-/** O token de conferência vai no CORPO: URL vaza para log de acesso e histórico. */
+/**
+ * O token de conferência vai no CORPO: URL vaza para log de acesso e histórico.
+ *
+ * `faceUpload.array('images', 5)` — o limite bate com MAX_IMAGES do caso de uso. Se
+ * divergir, o multer descarta silenciosamente e o cadastro reclama de "envie de 3
+ * a 5 capturas" para quem enviou 5.
+ */
 router.post('/enroll/complete',
+    faceUpload.array('images', 5),
     asyncHandler(enrollController.postComplete));
 
 router.get('/enroll/:token',

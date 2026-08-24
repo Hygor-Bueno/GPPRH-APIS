@@ -22,7 +22,7 @@ class EmployeeUseCases {
     /** @throws {AppError} 404 se não houver foto */
     async getEmployeePhoto(employeeId) {
         const record = await this.repository.findPhotoRecord(employeeId);
-        if (!record) throw new AppError('Photo not found', 404);
+        if (!record) throw new AppError('Foto não encontrada.', 404);
         return record;
     }
 
@@ -32,7 +32,7 @@ class EmployeeUseCases {
      */
     async updateEmployeePhoto(employeeId, file, actingUserId) {
         const { affectedRows } = await this.repository.attachPhoto(employeeId, file, actingUserId);
-        if (affectedRows === 0) throw new AppError('Employee not found', 404);
+        if (affectedRows === 0) throw new AppError('Colaborador não encontrado.', 404);
     }
 
     /**

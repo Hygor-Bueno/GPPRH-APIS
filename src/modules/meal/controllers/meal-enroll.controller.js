@@ -24,6 +24,40 @@ function originIp(req) {
     return req.ip ?? req.socket?.remoteAddress ?? null;
 }
 
+/**
+ * Imagens da requisição, sempre em base64, vindas de qualquer um dos dois
+ * caminhos.
+ *
+ * **multipart** é o caminho do app. O `capture()` da camera-kit devolve URI de
+ * arquivo, e o `FormData` do React Native monta a parte multipart a partir dela
+ * sem ler o conteúdo para a memória do JS — o que importa quando são cinco fotos
+ * num telefone modesto. O multer da casa usa `memoryStorage()`, então o arquivo
+ * também não toca disco do lado do servidor: entra como Buffer, vira base64 aqui
+ * e segue para o container. É o que sustenta "as imagens são descartadas sem
+ * tocar disco" ponta a ponta.
+ *
+ * **base64 em JSON** é o caminho do navegador, no autocadastro por link: lá a
+ * imagem já está em memória como data URL, e montar multipart seria trabalho
+ * para desfazer depois.
+ *
+ * O prefixo `data:image/...;base64,` é removido: navegador manda com, e o
+ * container recusa base64 inválido.
+ */
+function imagesFrom(req) {
+    if (Array.isArray(req.files) && req.files.length > 0) {
+        return req.files.map(file => file.buffer.toString('base64'));
+    }
+
+    if (req.file?.buffer) {
+        return [req.file.buffer.toString('base64')];
+    }
+
+    const raw = req.body?.images ?? req.body?.image;
+    const list = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+
+    return list.map(value => String(value).replace(/^data:image\/[a-zA-Z+]+;base64,/, ''));
+}
+
 // ─── Emissão (RH, autenticado) ────────────────────────────────────────────────
 
 /** `POST /gipp/meal/enroll/invites` */
@@ -69,14 +103,41 @@ async function postConfirm(req, res) {
  * curta, e URL vaza para log de acesso do Apache e para histórico do navegador.
  */
 async function postComplete(req, res) {
-    const { confirmed_token, images, consent_accepted, consent_version } = req.body ?? {};
+    const { confirmed_token, consent_accepted, consent_version } = req.body ?? {};
 
     const data = await useCases.enroll(confirmed_token, {
-        images,
+        images: imagesFrom(req),
         consentAccepted: consent_accepted === true || consent_accepted === 'true',
         consentVersion: consent_version,
         ip: originIp(req),
     });
+
+    return respond.created(res, data);
+}
+
+/**
+ * `POST /gipp/meal/enroll/direct`
+ *
+ * Cadastro presencial, no aparelho do operador. Sem link, sem navegador.
+ *
+ * O consentimento continua sendo da pessoa: quem toca "concordo" é ela, na tela,
+ * depois de ler o termo — o operador passa o aparelho. O `consent_accepted` que
+ * chega aqui representa esse toque, não a opinião do operador.
+ */
+async function postDirectEnroll(req, res) {
+    const { company_code, employee_id, branch_code, consent_accepted, consent_version } =
+        req.body ?? {};
+
+    const data = await useCases.enrollDirect(
+        { companyCode: company_code, employeeId: employee_id, branchCode: branch_code },
+        {
+            images: imagesFrom(req),
+            consentAccepted: consent_accepted === true || consent_accepted === 'true',
+            consentVersion: consent_version,
+            ip: originIp(req),
+        },
+        { userId: req.user?.id ?? null },
+    );
 
     return respond.created(res, data);
 }
@@ -92,13 +153,39 @@ async function postComplete(req, res) {
  * recusado.
  */
 async function postVerify(req, res) {
-    const { company_code, employee_id, branch_code, image } = req.body ?? {};
+    const { company_code, employee_id, branch_code } = req.body ?? {};
+    const [image] = imagesFrom(req);
+
+    if (!image) {
+        return respond.ok(res, { match: false, error: 'Nenhuma imagem recebida.' });
+    }
 
     const data = await useCases.verifyFace(
         { companyCode: company_code, employeeId: employee_id, branchCode: branch_code },
         image,
     );
 
+    return respond.ok(res, data);
+}
+
+/**
+ * `POST /gipp/meal/enroll/identify`
+ *
+ * Rosto sozinho, sem crachá — 1:N dentro da loja.
+ *
+ * Devolve `status`: `matched`, `no-match` ou `ambiguous`. Sempre 200, porque
+ * nenhum dos três é erro de requisição — transformar "não reconheci" em 4xx faria
+ * o app tratar caso normal como falha.
+ */
+async function postIdentify(req, res) {
+    const { site_code } = req.body ?? {};
+    const [image] = imagesFrom(req);
+
+    if (!image) {
+        return respond.ok(res, { status: 'no-match', error: 'Nenhuma imagem recebida.' });
+    }
+
+    const data = await useCases.identifyByFace(site_code, image);
     return respond.ok(res, data);
 }
 
@@ -140,9 +227,11 @@ async function getFaceHealth(req, res) {
 
 module.exports = {
     postInvite,
+    postDirectEnroll,
     getInvite,
     postConfirm,
     postComplete,
+    postIdentify,
     postVerify,
     getStatus,
     deleteEnrollment,

@@ -53,7 +53,7 @@ const login = async (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
-    throw new BadRequestError('Username and password are required');
+    throw new BadRequestError('Informe usuário e senha.');
   }
 
   const payload = await useCases.loginViaAd(username, password);
@@ -64,7 +64,7 @@ const login = async (req, res) => {
 };
 
 const me = (req, res) => {
-  if (!req.user) throw new UnauthorizedError('Not authenticated');
+  if (!req.user) throw new UnauthorizedError('Não autenticado.');
   const user = new User(req.user);
   return respond.ok(res, {
     user_id: user.user_id,
@@ -78,25 +78,25 @@ const googleLogin = async (req, res) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
-    throw new BadRequestError('Authorization header not found');
+    throw new BadRequestError('Header Authorization não informado.');
   }
 
   const [, credential] = authHeader.split(' ');
 
   if (!credential) {
-    throw new BadRequestError('Google credential not found');
+    throw new BadRequestError('Credencial do Google não informada.');
   }
 
   const user = await useCases.loginViaGoogle(credential);
 
   await createSession(res, user);
 
-  return respond.message(res, 'Logged in successfully');
+  return respond.message(res, 'Login realizado com sucesso.');
 };
 const logout = (req, res) => {
   res.clearCookie('accessToken', cookieOpts());
   res.clearCookie('refreshToken', cookieOpts());
-  return respond.message(res, 'Logged out successfully');
+  return respond.message(res, 'Sessão encerrada com sucesso.');
 };
 
 module.exports = {

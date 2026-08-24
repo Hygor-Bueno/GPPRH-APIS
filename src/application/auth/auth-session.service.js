@@ -11,7 +11,7 @@ async function authenticateFromCookies(cookies) {
 
     // 1️⃣ Nenhum token
     if (!accessToken && !refreshToken) {
-        throw new Error("Authentication required");
+        throw new Error("Autenticação necessária.");
     }
 
     // 2️⃣ Access token válido
@@ -22,7 +22,7 @@ async function authenticateFromCookies(cookies) {
             return { user, newAccessToken: null };
         } catch (err) {
             if (err.name !== "TokenExpiredError") {
-                throw new Error("Invalid access token");
+                throw new Error("Token de acesso inválido.");
             }
             // expirou → tenta refresh
         }
@@ -30,7 +30,7 @@ async function authenticateFromCookies(cookies) {
 
     // 3️⃣ Refresh obrigatório
     if (!refreshToken) {
-        throw new Error("Session expired");
+        throw new Error("Sessão expirada. Faça login novamente.");
     }
 
     try {
@@ -55,7 +55,7 @@ async function authenticateFromCookies(cookies) {
         return { user: payload, newAccessToken };
 
     } catch {
-        throw new Error("Invalid or expired refresh token");
+        throw new Error("Sessão expirada. Faça login novamente.");
     }
 }
 

@@ -64,6 +64,59 @@ Nunca inferir nomes de parâmetros a partir de:
 ```
 O código tinha `.input('branch_code', ...)`. A correção foi feita sem ver a SP completa — apenas trocou `branch_code` por `user_branch` baseado na mensagem de erro, sem confirmar os demais parâmetros.
 
+### ⚠️ Rate limiting — a chave é o usuário, não o IP
+
+Duas camadas **mutuamente exclusivas** em `app.factory` (ver cabeçalho de
+`rate-limit.middleware.js`):
+
+| Camada | Quem conta | Chave | Cota / 15 min |
+|---|---|---|---|
+| `apiLimiter` | só quem **não** tem sessão | IP | 2000 |
+| `userLimiter` | só quem **tem** sessão | `_user.id` do token | 1000 |
+
+Não volte a chavear rota autenticada por IP: era isso que fazia o uso de uma
+pessoa devolver 429 para todas as outras atrás do mesmo endereço (NAT do app
+mobile, terminal compartilhado). O `trust proxy = 1` está **correto** — foi
+verificado com `X-Forwarded-For` forjado; não mexa.
+
+No login são duas camadas também: `loginLimiter` (IP + username, 10 falhas) e
+`loginIpLimiter` (IP, 50 falhas). Chavear login só por username permitiria
+trancar a conta de um colega de fora.
+
+O contador é **por processo** (store em memória, 2 instâncias no cluster), então
+o limite real fica entre 1x e 2x. Store compartilhado exigiria Redis.
+
+### ⚠️ Trilha de auditoria da jornada (GIPP) — SESSION_CONTEXT
+
+Toda escrita em `GIPP.dbo.cf_work_schedules` dispara
+`trg_cf_work_schedules_status_history`, que descobre o responsável lendo
+`SESSION_CONTEXT` — não recebe parâmetro. **Qualquer novo caminho que insira em
+`cf_work_schedules` ou mude `id_status_fk` precisa carimbar o contexto**, senão o
+evento nasce como `change_source = 'DIRECT_DATABASE'` com usuário nulo.
+
+Use `infra/sqlserver/session-context`:
+
+```js
+const request = pool.request().input(/* params da operação */);
+
+bindContext(request, actor, {
+    source: CHANGE_SOURCE.BACKEND,       // origem genérica é recusada
+    reason: CHANGE_REASON.APPROVED_BY_MANAGER,
+});
+
+await request.query(withAuditContext(query, { captureRowCount: true }));
+```
+
+- O `actor` sai **sempre** de `toAuditActor(req.user)` (`utils/audit-actor`) — nunca do body.
+- Contexto e operação vão no **mesmo batch**: é o que garante a mesma conexão física.
+- **Não** envolva `prc_insert_cf_time_records` nem `pcr_process_work_schedules` em
+  `sql.Transaction` — elas dão ROLLBACK interno e o COMMIT do Node estoura 3902.
+- Com `captureRowCount`, leia a contagem em `recordset[0].affected_rows`;
+  `rowsAffected[0]` passa a ser o do primeiro `sp_set_session_context` do batch.
+- Matrícula e filial são **VARCHAR com zeros à esquerda** (`'002351'`, `'0202'`) — nunca converter para número.
+
+Detalhes, rotas cobertas e roteiro de validação manual: [`docs/gipp-auditoria-jornada.md`](docs/gipp-auditoria-jornada.md).
+
 ---
 
 ## Módulos principais

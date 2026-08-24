@@ -52,7 +52,7 @@ async function globalLogin(req, res) {
   const { username, password } = req.body;
 
   if (!username || !password) {
-    throw new BadRequestError('Username and password are required');
+    throw new BadRequestError('Informe usuário e senha.');
   }
 
   // Remove espaços do início e fim — autocomplete mobile pode inserir espaços
@@ -62,17 +62,32 @@ async function globalLogin(req, res) {
 
   await createSession(res, user);
 
-  return respond.message(res, 'Logged in successfully');
+  return respond.message(res, 'Login realizado com sucesso.');
 };
 
 async function me(req, res) {
-  if (!req.user) throw new UnauthorizedError('Not authenticated');
+  if (!req.user) throw new UnauthorizedError('Não autenticado.');
 
   const u = req.user;
+
+  /* A foto é decoração: se a consulta falhar, o /me tem de responder de
+     qualquer forma. O front usa esta rota para inicializar a sessão, e deixar
+     o app sem abrir por causa de um avatar seria trocar um problema pequeno
+     por um grande. O erro vai para o log para não sumir em silêncio. */
+  let fileId = null;
+  try {
+    fileId = await useCases.getPhotoFileId(u.id);
+  } catch (err) {
+    console.error(`[auth] Failed to resolve user photo (userId=${u.id}):`, err.message);
+  }
+
   return respond.ok(res, {
     id:                       u.id,
     nickname:                 u.nickname,
     registration:             u.registration,
+    // `file_id` da foto em `_files`, ou null. O front monta a imagem com
+    // `GET /global/files/:file_id`, que responde com cache de 1 hora.
+    file_id:                  fileId,
     status:                   u.status,
     application_ids:          u.application_ids,
     // `application_ids` diz quais telas o usuário enxerga; `permissions` diz o

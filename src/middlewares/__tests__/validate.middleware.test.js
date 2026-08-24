@@ -6,17 +6,17 @@ describe('validateSchema', () => {
     describe('required', () => {
         it('should return error when required field is missing', () => {
             const errors = validateSchema({}, { name: { required: true } });
-            expect(errors).toContain("'name' is required");
+            expect(errors).toContain("O campo 'name' é obrigatório.");
         });
 
         it('should return error when required field is empty string', () => {
             const errors = validateSchema({ name: '' }, { name: { required: true } });
-            expect(errors).toContain("'name' is required");
+            expect(errors).toContain("O campo 'name' é obrigatório.");
         });
 
         it('should return error when required field is null', () => {
             const errors = validateSchema({ name: null }, { name: { required: true } });
-            expect(errors).toContain("'name' is required");
+            expect(errors).toContain("O campo 'name' é obrigatório.");
         });
 
         it('should pass when required field is present', () => {
@@ -33,7 +33,7 @@ describe('validateSchema', () => {
     describe('type: string', () => {
         it('should return error when value is not a string', () => {
             const errors = validateSchema({ name: 123 }, { name: { type: 'string' } });
-            expect(errors).toContain("'name' must be a string");
+            expect(errors).toContain("O campo 'name' deve ser um texto.");
         });
 
         it('should pass when value is a string', () => {
@@ -45,12 +45,12 @@ describe('validateSchema', () => {
     describe('type: number', () => {
         it('should return error when value is not a number', () => {
             const errors = validateSchema({ age: 'abc' }, { age: { type: 'number' } });
-            expect(errors).toContain("'age' must be a number");
+            expect(errors).toContain("O campo 'age' deve ser um número.");
         });
 
         it('should return error when value is NaN', () => {
             const errors = validateSchema({ age: NaN }, { age: { type: 'number' } });
-            expect(errors).toContain("'age' must be a number");
+            expect(errors).toContain("O campo 'age' deve ser um número.");
         });
 
         it('should pass when value is a valid number', () => {
@@ -62,7 +62,7 @@ describe('validateSchema', () => {
     describe('type: boolean', () => {
         it('should return error when value is not a boolean', () => {
             const errors = validateSchema({ active: 'true' }, { active: { type: 'boolean' } });
-            expect(errors).toContain("'active' must be a boolean");
+            expect(errors).toContain("O campo 'active' deve ser verdadeiro ou falso.");
         });
 
         it('should pass for true', () => {
@@ -79,12 +79,12 @@ describe('validateSchema', () => {
     describe('minLength / maxLength', () => {
         it('should return error when string is too short', () => {
             const errors = validateSchema({ name: 'ab' }, { name: { minLength: 3 } });
-            expect(errors).toContain("'name' must be at least 3 characters");
+            expect(errors).toContain("O campo 'name' deve ter no mínimo 3 caracteres.");
         });
 
         it('should return error when string is too long', () => {
             const errors = validateSchema({ name: 'toolong' }, { name: { maxLength: 5 } });
-            expect(errors).toContain("'name' must be at most 5 characters");
+            expect(errors).toContain("O campo 'name' deve ter no máximo 5 caracteres.");
         });
 
         it('should pass when within bounds', () => {
@@ -96,12 +96,12 @@ describe('validateSchema', () => {
     describe('min / max', () => {
         it('should return error when number is below min', () => {
             const errors = validateSchema({ value: -1 }, { value: { type: 'number', min: 0 } });
-            expect(errors).toContain("'value' must be at least 0");
+            expect(errors).toContain("O campo 'value' deve ser no mínimo 0.");
         });
 
         it('should return error when number is above max', () => {
             const errors = validateSchema({ value: 101 }, { value: { type: 'number', max: 100 } });
-            expect(errors).toContain("'value' must be at most 100");
+            expect(errors).toContain("O campo 'value' deve ser no máximo 100.");
         });
 
         it('should pass when within range', () => {
@@ -116,7 +116,7 @@ describe('validateSchema', () => {
                 { ref: 'ABCDEF' },
                 { ref: { pattern: /^\d{6}$/ } }
             );
-            expect(errors).toContain("'ref' has an invalid format");
+            expect(errors).toContain("O campo 'ref' está em formato inválido.");
         });
 
         it('should pass when pattern matches', () => {
@@ -134,7 +134,7 @@ describe('validateSchema', () => {
                 { status: 'INVALID' },
                 { status: { enum: ['OPEN', 'CLOSED'] } }
             );
-            expect(errors).toContain("'status' must be one of: OPEN, CLOSED");
+            expect(errors).toContain("O campo 'status' deve ser um destes valores: OPEN, CLOSED");
         });
 
         it('should pass when value is in enum', () => {
@@ -194,7 +194,7 @@ describe('validate middleware', () => {
         const err = next.mock.calls[0][0];
         expect(err).toBeDefined();
         expect(err.statusCode).toBe(400);
-        expect(err.message).toContain("'username' is required");
+        expect(err.message).toContain("O campo 'username' é obrigatório.");
     });
 
     it('should validate query params when source is "query"', () => {

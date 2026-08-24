@@ -97,7 +97,7 @@ class LDAPAuthenticator {
       if (err.code === 'LDAP_TIMEOUT') {
         throw new AppError('Active Directory indisponível ou muito lento para responder', 503, { code: 'AD_UNAVAILABLE' });
       }
-      throw new UnauthorizedError('Invalid username or password');
+      throw new UnauthorizedError('Usuário ou senha inválidos.');
     }
     
     const opts = {
@@ -169,7 +169,7 @@ class LDAPAuthenticator {
     searchClient.unbind();
 
     if (!user) {
-      throw new UnauthorizedError('User not found in Active Directory');
+      throw new UnauthorizedError('Usuário não encontrado no Active Directory.');
     }
 
     // O primeiro bind (DOMAIN\username) já validou as credenciais.
@@ -183,7 +183,7 @@ class LDAPAuthenticator {
     const isDisabled = user.userAccountControl & 2;
 
     if (isDisabled) {
-      throw new AppError('User account is disabled', 403);
+      throw new AppError('Conta de usuário desativada.', 403);
     }
 
     return {
