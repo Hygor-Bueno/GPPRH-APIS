@@ -30,9 +30,10 @@ change_reason             = NULL
 
 ¹ **As três colunas ainda não existem** e o trigger implantado não lê essas três
 chaves. O backend as envia de qualquer forma — o SQL Server ignora chave não
-lida, sem erro. Aplicando
-`src/modules/gipp/repositories/sqlserver/alter-status-history-actor-snapshots.sql`
-elas passam a ser preenchidas sem mudança de código.
+lida, sem erro. Aplicando `alter-status-history-actor-snapshots.sql` (na pasta de
+scripts do usuário) elas passam a ser preenchidas sem mudança de código. Esse
+script foi reescrito em 26/08/2026 para acompanhar a coluna `changed_at_local` —
+a versão anterior falharia.
 
 `req.user` vem do cookie HttpOnly e foi carimbado no login a partir de
 `sp_get_user_authorization` + Protheus. **Nada disso vem do corpo da
@@ -74,6 +75,51 @@ horas.
 
 `sql.Transaction` continua disponível em `withAuditTransaction`, para operações
 atômicas entre si que **não** chamem essas procedures.
+
+## Base de tempo do histórico: hora LOCAL
+
+**Aplicado em 26/08/2026.** A coluna de data da tabela de auditoria guarda **hora
+local**, a mesma base de `cf_time_records.created_at`. O nome é
+`changed_at_local` — a base de tempo fica declarada no nome de propósito, porque
+foi justamente uma coluna de data sem base explícita que gerou a confusão
+descrita abaixo. A coluna `changed_at_utc` **não existe mais**.
+
+Script: `converte-historico-para-hora-local.sql` (17.877 linhas convertidas,
+trigger trocado para `SYSDATETIME()`, tudo numa transação só). Ele tem guarda de
+idempotência: rodar de novo aborta, para não subtrair 3 horas duas vezes.
+
+Validado na aplicação: um UPDATE que reatribui o mesmo status executa sem erro e
+não gera evento — prova que o trigger compila com o nome novo e que a regra
+"update sem mudança de status não gera histórico" segue valendo.
+
+⚠️ **O que se perde, e foi aceito conscientemente:** se o horário de verão voltar,
+a hora da mudança acontece duas vezes e dois eventos distintos ficam com carimbo
+idêntico, sem ordem definida. E se o fuso do servidor mudar, os registros antigos
+passam a significar outro instante. Era o argumento a favor de UTC; a legibilidade
+no dia a dia pesou mais.
+
+### O histórico da confusão (só para contexto — não é mais o estado atual)
+
+Até 26/08/2026 a tabela guardava UTC na coluna `changed_at_utc`, enquanto
+`cf_time_records.created_at` guardava hora local (`GETDATE()`). Quem olhava as
+duas lado a lado via 3 horas de diferença e concluía que uma estava errada —
+quando as duas estavam certas e o intervalo real entre os registros era de 1 a 3
+MILISSEGUNDOS. Exemplo do mesmo evento: `created_at = 11:15:33.210` e
+`changed_at_utc = 14:15:33.213`.
+
+Foram tentados dois caminhos antes do atual: uma view de leitura
+(`view-status-history-local-time.sql`) e uma coluna computada
+(`fix-historico-hora-local-definitivo.sql`). Os dois resolviam a leitura mas
+mantinham a coluna UTC visível. **Os dois estão obsoletos** — não aplique
+nenhum deles.
+
+Se um dia for preciso converter entre fusos numa consulta, o caminho é
+`AT TIME ZONE` (que respeita o histórico de DST), nunca
+`DATEADD(HOUR, -3, ...)`, que erra em qualquer data anterior a 2019:
+
+```sql
+<coluna> AT TIME ZONE 'E. South America Standard Time' AT TIME ZONE 'UTC'
+```
 
 ## Rotas cobertas
 
@@ -217,7 +263,7 @@ Duas requisições de **usuários diferentes**, uma imediatamente após a outra
 B aprova a jornada Y.
 
 ```sql
-SELECT TOP (10) cod_work_schedule, changed_by_global_user_id, changed_at_utc
+SELECT TOP (10) cod_work_schedule, changed_by_global_user_id, changed_at_local
 FROM GIPP.dbo.cf_work_schedule_status_history
 ORDER BY id_status_history DESC;
 ```
@@ -247,7 +293,7 @@ Depois de exercitar todas as rotas:
 SELECT change_source, event_type, COUNT(*) AS qtd,
        SUM(CASE WHEN changed_by_global_user_id IS NULL THEN 1 ELSE 0 END) AS sem_usuario
 FROM GIPP.dbo.cf_work_schedule_status_history
-WHERE changed_at_utc >= '<data do deploy>'
+WHERE changed_at_local >= '<data do deploy>'
 GROUP BY change_source, event_type
 ORDER BY 3 DESC;
 ```

@@ -676,6 +676,38 @@ function sqlGetReceiptsByGroupIds(groupIds) {
     return { sql, params };
 }
 
+/**
+ * Jornadas vinculadas aos recibos dos grupos informados, com o status atual.
+ *
+ * `gipp_payment_receipt.work_schedule_id` guarda o `cod_work_schedule` (VarChar),
+ * não um id numérico — o join é direto. Recibo sem jornada (adiantamento) tem a
+ * coluna nula e fica de fora: não há o que fechar.
+ *
+ * @param {string[]} groupIds
+ * @returns {{sql: string, params: Record<string, string>}}
+ */
+function sqlGetWorkSchedulesByReceiptGroupIds(groupIds) {
+    const params = {};
+    const keys = groupIds.map((id, i) => {
+        params[`rg${i}`] = id;
+        return `@rg${i}`;
+    });
+
+    const sql = `
+        SELECT DISTINCT
+            ws.cod_work_schedule,
+            ws.id_status_fk
+        FROM GIPP.dbo.gipp_payment_receipt rec
+        INNER JOIN GIPP.dbo.cf_work_schedules ws
+            ON ws.cod_work_schedule = rec.work_schedule_id
+        WHERE rec.receipt_group_id IN (${keys.join(', ')})
+          AND rec.is_active = 1
+          AND rec.work_schedule_id IS NOT NULL;
+    `;
+
+    return { sql, params };
+}
+
 module.exports = {
     sqlEmployeesCompensations,
     sqlActiveBeneficiaries,
@@ -685,6 +717,7 @@ module.exports = {
     sqlGetBeneficiariesByEmployee,
     sqlGetReceipt,
     sqlGetReceiptsByGroupIds,
+    sqlGetWorkSchedulesByReceiptGroupIds,
     sqlGetEventCodes,
     sqlInsertPaymentReceipt,
     sqlGetPaymentReceipts,

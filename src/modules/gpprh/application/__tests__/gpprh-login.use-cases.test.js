@@ -68,7 +68,7 @@ describe('GpprhLoginUseCases', () => {
             const verify = jest.fn().mockResolvedValue({ name: 'Jane' });
             const useCases = buildUseCases({ googleTokenVerifier: { verify } });
 
-            await expect(useCases.loginViaGoogle('some-jwt')).rejects.toThrow('Invalid Google payload');
+            await expect(useCases.loginViaGoogle('some-jwt')).rejects.toThrow('Dados do Google inválidos.');
         });
     });
 });

@@ -28,6 +28,7 @@ const {
     sqlGetReceipt,
     sqlGetPaymentTypes,
     sqlGetReceiptsByGroupIds,
+    sqlGetWorkSchedulesByReceiptGroupIds,
 } = require('../../repositories/sqlserver/gipp-rh.queries');
 
 class SqlServerGippRhRepository extends GippRhRepositoryPort {
@@ -164,6 +165,19 @@ class SqlServerGippRhRepository extends GippRhRepositoryPort {
             const key = Object.keys(result.recordset[0])[0];
             return JSON.parse(result.recordset[0][key] || '[]');
         }, 'Error when fetching receipts by group ids');
+    }
+
+    async findWorkSchedulesByReceiptGroupIds(groupIds) {
+        return this._run(async () => {
+            const pool = await poolPromise;
+            const { sql: query, params } = sqlGetWorkSchedulesByReceiptGroupIds(groupIds);
+            const request = pool.request();
+            for (const [key, value] of Object.entries(params)) {
+                request.input(key, value);
+            }
+            const result = await request.query(query);
+            return result.recordset || [];
+        }, 'Não foi possível consultar as jornadas dos recibos informados.');
     }
 
     // ─── Códigos de evento / Tipos de pagamento ─────────────────────────────

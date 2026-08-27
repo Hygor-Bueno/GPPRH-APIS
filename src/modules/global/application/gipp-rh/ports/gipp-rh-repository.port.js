@@ -39,6 +39,17 @@ class GippRhRepositoryPort {
     /** @param {string[]} groupIds @returns {Promise<object[]>} */
     findReceiptsByGroupIds(groupIds) { throw new Error('Not implemented'); }
 
+    /**
+     * Jornadas vinculadas aos recibos dos grupos informados, com o status atual.
+     *
+     * Recibo sem jornada (adiantamento, por exemplo) fica de fora: `work_schedule_id`
+     * nulo não tem o que fechar.
+     *
+     * @param {string[]} groupIds
+     * @returns {Promise<Array<{cod_work_schedule: string, id_status_fk: number}>>}
+     */
+    findWorkSchedulesByReceiptGroupIds(groupIds) { throw new Error('Not implemented'); }
+
     // ─── Códigos de evento / Tipos de pagamento ────────────────────────────
     findEventCodes() { throw new Error('Not implemented'); }
     findPaymentTypes() { throw new Error('Not implemented'); }

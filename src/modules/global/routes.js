@@ -360,6 +360,11 @@ router.get('/gipp-rh/receipt/:branchCode',
  * Esta é a rota unificada para impressão de recibos independente do tipo de
  * pagamento (fechamento de jornada, compra de folga, etc.). O frontend deve
  * passar o `receipt_group_id` já conhecido na listagem de pagamentos.
+ *
+ * Depois de gerar o PDF, as jornadas dos recibos impressos que estavam em
+ * 6 (Pagando) são fechadas para 4 (Finalizado). Reimpressão não altera status.
+ * Contagens em `X-Work-Schedules-Confirmed` / `X-Work-Schedules-Skipped`.
+ * Envie `confirm: false` no body para só imprimir.
  * @access Requer `GIPPRH_DOWNLOAD_RECEIPT`
  */
 router.post('/gipp-rh/receipt-by-group',

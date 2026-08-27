@@ -85,7 +85,7 @@ describe('cadeia de rate limiting montada pelo app.factory', () => {
         const res = await request(app).get('/t/ping').set('Cookie', barrado);
 
         expect(res.status).toBe(429);
-        expect(res.body.message).toBe('Too many attempts. Please try again in a few minutes.');
+        expect(res.body.message).toBe('Muitas tentativas. Tente novamente em alguns minutos.');
         expect(res.body.code).toBe('RATE_LIMIT_USER');
         expect(res.body.retry_after_seconds).toBeGreaterThan(0);
         expect(Number.isNaN(res.body.retry_after_seconds)).toBe(false);

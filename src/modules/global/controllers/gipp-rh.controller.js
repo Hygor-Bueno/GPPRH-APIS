@@ -210,14 +210,23 @@ async function downloadReceipt(req, res, next) {
 }
 
 /**
- * Gera e retorna um PDF consolidado contendo todos os recibos dos grupos informados.
+ * Gera e retorna um PDF consolidado contendo todos os recibos dos grupos informados,
+ * e fecha as jornadas impressas que estavam em 6 (Pagando) → 4 (Finalizado).
  *
  * Aceita um array de `receipt_group_id` (UUIDs) no body. Cada UUID corresponde a
  * uma jornada fechada; todos os itens de cada grupo são agrupados no mesmo recibo.
+ *
+ * O fechamento roda **depois** de o PDF ser gerado: uma falha na geração aborta a
+ * requisição sem ter alterado status nenhum, e do 6 em diante a jornada não pode
+ * mais ser cancelada. Jornada que já estava fora do 6 (reimpressão) não muda —
+ * o UPDATE filtra pelo status de origem.
+ *
+ * Passe `confirm: false` no body para apenas imprimir, sem fechar.
+ *
  * @route POST /gipp-rh/receipt-by-group
  */
 async function downloadReceiptByGroup(req, res, next) {
-    const { receipt_group_ids } = req.body;
+    const { receipt_group_ids, confirm } = req.body;
 
     try {
         if (!receipt_group_ids?.length) {
@@ -234,9 +243,23 @@ async function downloadReceiptByGroup(req, res, next) {
         const yyyymm   = formatYYYYMM();
         const fileName = `receipts-${yyyymm}.pdf`;
 
+        // Só depois do PDF em mãos: ver o comentário do JSDoc acima.
+        const closure = confirm === false
+            ? { confirmed: [], skipped: [] }
+            : await useCases.confirmTreasuryPaymentByReceiptGroupIds(
+                receipt_group_ids,
+                toAuditActor(req.user)
+            );
+
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", `attachment; filename=${fileName}`);
-        res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+        // O corpo é binário, então o resultado do fechamento vai por header.
+        res.setHeader("X-Work-Schedules-Confirmed", String(closure.confirmed.length));
+        res.setHeader("X-Work-Schedules-Skipped", String(closure.skipped.length));
+        res.setHeader(
+            "Access-Control-Expose-Headers",
+            "Content-Disposition, X-Work-Schedules-Confirmed, X-Work-Schedules-Skipped"
+        );
         res.send(Buffer.from(pdf));
     } catch (err) {
         next(err);

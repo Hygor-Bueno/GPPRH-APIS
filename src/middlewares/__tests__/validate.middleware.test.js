@@ -60,8 +60,21 @@ describe('validateSchema', () => {
     });
 
     describe('type: boolean', () => {
-        it('should return error when value is not a boolean', () => {
-            const errors = validateSchema({ active: 'true' }, { active: { type: 'boolean' } });
+        it('should coerce the strings "true" and "false"', () => {
+            // Coerção deliberada do middleware: form e query string chegam como
+            // texto, e exigir boolean nativo obrigaria cada controller a
+            // converter na mão.
+            const data = { active: 'true' };
+            expect(validateSchema(data, { active: { type: 'boolean' } })).toEqual([]);
+            expect(data.active).toBe(true);
+
+            const outro = { active: 'false' };
+            expect(validateSchema(outro, { active: { type: 'boolean' } })).toEqual([]);
+            expect(outro.active).toBe(false);
+        });
+
+        it('should return error for a string that is not "true" nor "false"', () => {
+            const errors = validateSchema({ active: 'sim' }, { active: { type: 'boolean' } });
             expect(errors).toContain("O campo 'active' deve ser verdadeiro ou falso.");
         });
 
@@ -134,7 +147,7 @@ describe('validateSchema', () => {
                 { status: 'INVALID' },
                 { status: { enum: ['OPEN', 'CLOSED'] } }
             );
-            expect(errors).toContain("O campo 'status' deve ser um destes valores: OPEN, CLOSED");
+            expect(errors).toContain("O campo 'status' deve ser um destes valores: OPEN, CLOSED.");
         });
 
         it('should pass when value is in enum', () => {

@@ -39,8 +39,15 @@ describe('postCompensationSchema', () => {
         expect(errors).toContain("O campo 'description' deve ter no máximo 500 caracteres.");
     });
 
-    it('should fail when active is not a boolean', () => {
-        const errors = validateSchema({ ...valid, active: 'true' }, postCompensationSchema);
+    it('should accept "true" as a string and coerce it', () => {
+        // O middleware coage "true"/"false" — ver validate.middleware.
+        const data = { ...valid, active: 'true' };
+        expect(validateSchema(data, postCompensationSchema)).toEqual([]);
+        expect(data.active).toBe(true);
+    });
+
+    it('should fail when active is a string that is not boolean-like', () => {
+        const errors = validateSchema({ ...valid, active: 'sim' }, postCompensationSchema);
         expect(errors).toContain("O campo 'active' deve ser verdadeiro ou falso.");
     });
 });

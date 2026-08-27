@@ -40,7 +40,7 @@ describe('errorHandler middleware', () => {
 
         expect(res.status).toHaveBeenCalledWith(500);
         expect(res.json).toHaveBeenCalledWith(
-            expect.objectContaining({ error: true, message: 'Internal server error' })
+            expect.objectContaining({ error: true, message: 'Erro interno do servidor. Tente novamente mais tarde.' })
         );
     });
 
@@ -51,7 +51,7 @@ describe('errorHandler middleware', () => {
         errorHandler(err, req, res, next);
 
         const body = res.json.mock.calls[0][0];
-        expect(body.message).toBe('Internal server error'); // mensagem genérica
+        expect(body.message).toBe('Erro interno do servidor. Tente novamente mais tarde.'); // mensagem genérica
         expect(JSON.stringify(body)).not.toContain('secret123'); // sem vazar detalhes
     });
 

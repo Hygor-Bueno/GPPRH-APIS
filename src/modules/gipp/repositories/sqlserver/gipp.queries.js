@@ -296,7 +296,8 @@ function sqlGetTimeRecords() {
  * a fotografia histórica do usuário de `@id_global` no momento da marcação —
  * VARCHAR, com zeros à esquerda preservados (`'002351'`, `'0202'`). O INSERT
  * mora dentro da procedure, então preencher as colunas exigiu acrescentar os
- * dois parâmetros lá: ver `alter-prc-cf-time-records-snapshots.sql`.
+ * dois parâmetros lá: ver `alter-prc-cf-time-records-snapshots.sql`, na pasta
+ * de scripts SQL fora do repositório (ver docs/gipp-auditoria-jornada.md).
  *
  * @returns {string} Query SQL de EXEC
  */

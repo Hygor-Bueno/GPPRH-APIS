@@ -42,9 +42,16 @@ describe('createJobSchema', () => {
         expect(errors).toContain("O campo 'salary_min' deve ser no mínimo 0.");
     });
 
-    it('should fail when salary_min is not a number', () => {
+    it('should coerce a numeric string into a number', () => {
+        // Coerção deliberada do middleware: o formulário manda "3000".
+        const data = { ...validJob, salary_min: '3000' };
+        expect(validateSchema(data, createJobSchema)).toEqual([]);
+        expect(data.salary_min).toBe(3000);
+    });
+
+    it('should fail when salary_min is not numeric at all', () => {
         const errors = validateSchema(
-            { ...validJob, salary_min: '3000' },
+            { ...validJob, salary_min: 'três mil' },
             createJobSchema
         );
         expect(errors).toContain("O campo 'salary_min' deve ser um número.");

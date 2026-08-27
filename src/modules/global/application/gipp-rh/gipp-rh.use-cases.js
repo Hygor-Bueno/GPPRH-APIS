@@ -204,6 +204,43 @@ class GippRhUseCases {
 
         return { confirmed, skipped };
     }
+
+    /**
+     * Mesma transição 6 → 4, resolvida a partir dos grupos de recibo em vez das
+     * jornadas — é o que a impressão consolidada tem em mãos.
+     *
+     * Chame **depois** de gerar o PDF com sucesso: fechar antes deixaria a
+     * jornada finalizada sem ter sido impressa, e do 6 em diante ninguém
+     * cancela. O UPDATE filtra `id_status_fk = 6`, então reimprimir algo já
+     * finalizado não altera nada — a jornada volta em `skipped`.
+     *
+     * @param {string[]} groupIds
+     * @param {import('../../../../utils/audit-actor').AuditActor} [actor]
+     * @returns {Promise<{confirmed: string[], skipped: Array<{cod_work_schedule: string, status: number, reason: string}>}>}
+     */
+    async confirmTreasuryPaymentByReceiptGroupIds(groupIds, actor = null) {
+        const ids = [...new Set((groupIds || []).map(g => String(g).trim()).filter(Boolean))];
+        if (!ids.length) return { confirmed: [], skipped: [] };
+
+        const schedules = await this.repository.findWorkSchedulesByReceiptGroupIds(ids);
+
+        const confirmed = [];
+        const skipped = [];
+
+        for (const { cod_work_schedule, id_status_fk } of schedules) {
+            if (id_status_fk === WORK_SCHEDULE_STATUS.PAYING) {
+                confirmed.push(cod_work_schedule);
+            } else {
+                skipped.push({ cod_work_schedule, status: id_status_fk, reason: 'not_paying' });
+            }
+        }
+
+        if (confirmed.length) {
+            await this.repository.confirmTreasuryPayment(confirmed, actor);
+        }
+
+        return { confirmed, skipped };
+    }
 }
 
 module.exports = { GippRhUseCases };

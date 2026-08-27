@@ -26,6 +26,9 @@ function makeFakeRepository(overrides = {}) {
 
     repo.findReceipt = jest.fn().mockResolvedValue([{ id: 1 }]);
 
+    repo.findWorkSchedulesByReceiptGroupIds = jest.fn().mockResolvedValue([]);
+    repo.confirmTreasuryPayment = jest.fn().mockResolvedValue(1);
+
     return Object.assign(repo, overrides);
 }
 
@@ -97,6 +100,68 @@ describe('GippRhUseCases', () => {
             const useCases = makeUseCases({ repository });
             await useCases.getReceiptsByGroupIds(['abc']);
             expect(repository.findReceiptsByGroupIds).toHaveBeenCalledWith(['abc']);
+        });
+    });
+
+    describe('confirmTreasuryPaymentByReceiptGroupIds', () => {
+        it('should close only the schedules sitting at 6 (Paying)', async () => {
+            const repository = makeFakeRepository({
+                findWorkSchedulesByReceiptGroupIds: jest.fn().mockResolvedValue([
+                    { cod_work_schedule: 'WS-1', id_status_fk: 6 },
+                    { cod_work_schedule: 'WS-2', id_status_fk: 4 },
+                    { cod_work_schedule: 'WS-3', id_status_fk: 3 },
+                ]),
+            });
+            const useCases = makeUseCases({ repository });
+
+            const result = await useCases.confirmTreasuryPaymentByReceiptGroupIds(['grp-1']);
+
+            expect(result.confirmed).toEqual(['WS-1']);
+            expect(result.skipped).toEqual([
+                { cod_work_schedule: 'WS-2', status: 4, reason: 'not_paying' },
+                { cod_work_schedule: 'WS-3', status: 3, reason: 'not_paying' },
+            ]);
+            expect(repository.confirmTreasuryPayment).toHaveBeenCalledWith(['WS-1'], null);
+        });
+
+        it('should not touch the database when nothing is at 6', async () => {
+            const repository = makeFakeRepository({
+                findWorkSchedulesByReceiptGroupIds: jest.fn().mockResolvedValue([
+                    { cod_work_schedule: 'WS-1', id_status_fk: 4 },
+                ]),
+            });
+            const useCases = makeUseCases({ repository });
+
+            const result = await useCases.confirmTreasuryPaymentByReceiptGroupIds(['grp-1']);
+
+            expect(result.confirmed).toEqual([]);
+            expect(repository.confirmTreasuryPayment).not.toHaveBeenCalled();
+        });
+
+        it('should dedupe group ids and skip the query when the list is empty', async () => {
+            const repository = makeFakeRepository();
+            const useCases = makeUseCases({ repository });
+
+            await useCases.confirmTreasuryPaymentByReceiptGroupIds([' grp-1 ', 'grp-1', '']);
+            expect(repository.findWorkSchedulesByReceiptGroupIds).toHaveBeenCalledWith(['grp-1']);
+
+            const empty = await useCases.confirmTreasuryPaymentByReceiptGroupIds([]);
+            expect(empty).toEqual({ confirmed: [], skipped: [] });
+            expect(repository.findWorkSchedulesByReceiptGroupIds).toHaveBeenCalledTimes(1);
+        });
+
+        it('should forward the audit actor so the history trigger records who closed it', async () => {
+            const repository = makeFakeRepository({
+                findWorkSchedulesByReceiptGroupIds: jest.fn().mockResolvedValue([
+                    { cod_work_schedule: 'WS-1', id_status_fk: 6 },
+                ]),
+            });
+            const useCases = makeUseCases({ repository });
+            const actor = { registration: '12345' };
+
+            await useCases.confirmTreasuryPaymentByReceiptGroupIds(['grp-1'], actor);
+
+            expect(repository.confirmTreasuryPayment).toHaveBeenCalledWith(['WS-1'], actor);
         });
     });
 

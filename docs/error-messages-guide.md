@@ -83,3 +83,29 @@ console.warn('[auth] Invalid token attempt from IP:', req.ip);
 ```
 
 Padrão: `[modulo:acao]` em minúsculas.
+
+---
+
+## Estado da tradução (24/08/2026)
+
+Foi feita uma varredura completa do `src/`: **88 mensagens de usuário que estavam
+em inglês foram traduzidas** — validação de schema, autenticação, LDAP, Google,
+vagas, recibos, prestadores, fotos, rate limit, 404 de rota e as classes de erro
+base. Hoje **não há nenhuma mensagem de usuário em inglês** no backend.
+
+Identificadores seguem em inglês, por decisão: nomes de variável, de função, o
+campo `code` do `AppError` (`SCHEDULE_NOT_FOUND`, `RATE_LIMIT_USER`, …) e as
+chaves de payload. Só o texto destinado a gente foi traduzido.
+
+### O que deliberadamente NÃO foi traduzido
+
+| O que | Onde | Por quê |
+|---|---|---|
+| `throw new Error('Not implemented')` | ~306 ocorrências nas portas (`*.port.js`) | Marcador de contrato de arquitetura. Só dispara quando um adapter esquece de implementar um método da porta — nunca chega ao usuário, é lido por quem programa. |
+| `console.error` / `console.warn` | todo o `src/` | Regra deste guia: log em inglês, para `grep` e por ser padrão da indústria. |
+
+### ⚠️ Para o frontend
+
+O texto da mensagem **não é contrato**. Quem precisa decidir comportamento a
+partir de um erro deve usar o campo `code` do `AppError`, não comparar strings —
+esta varredura mudou 88 textos de uma vez, e a próxima pode mudar mais.
