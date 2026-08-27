@@ -145,8 +145,18 @@ describe('validateMealLog — dominios', () => {
     });
 
     it('recusa diner_type fora do dominio', () => {
-        const errors = validateMealLog(employeeMeal({ diner_type: 3 }));
+        // 3 deixou de servir como exemplo aqui: virou COUPON, que e valor valido
+        // do enum e tem recusa propria, no teste abaixo.
+        const errors = validateMealLog(employeeMeal({ diner_type: 7 }));
         expect(errors.join(' ')).toMatch(/diner_type inválido/);
+    });
+
+    it('manda a refeicao de cupom para a rota de cupom, em vez de recusar seco', () => {
+        // Cupom nao passa por /logs: debitar o saldo e gravar a refeicao sao
+        // indivisiveis, e /logs alimenta a fila offline, que e onde o mesmo
+        // cupom passaria duas vezes.
+        const errors = validateMealLog(employeeMeal({ diner_type: DINER_TYPE.COUPON }));
+        expect(errors.join(' ')).toMatch(/coupons\/redeem/);
     });
 
     it('recusa match_score quando nao foi o rosto que identificou', () => {

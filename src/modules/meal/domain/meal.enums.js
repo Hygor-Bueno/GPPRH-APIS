@@ -10,10 +10,19 @@
  * @module modules/meal/domain/meal.enums
  */
 
-/** Quem comeu: uma matrícula do Protheus ou um balde sem matrícula. */
+/**
+ * Quem comeu: uma matrícula do Protheus, um balde sem matrícula, ou alguém que
+ * pagou o almoço no caixa.
+ *
+ * `COUPON` é o prestador de serviço. Não tem matrícula, não tem centro de custo,
+ * e a refeição dele é RECEITA, não despesa. Por isso não cabe em `GROUP`, que
+ * existe para contar quem come por conta da casa — misturar os dois estragaria
+ * o rateio, que é justamente o que o relatório de centro de custo entrega.
+ */
 const DINER_TYPE = Object.freeze({
     EMPLOYEE: 1,
     GROUP: 2,
+    COUPON: 3,
 });
 
 /** Qual refeição. */
@@ -35,6 +44,7 @@ const IDENTIFIED_BY = Object.freeze({
     MANUAL: 2,
     FACIAL: 3,
     BUTTON: 4,
+    COUPON: 5,
 });
 
 const DINER_TYPES = Object.freeze(Object.values(DINER_TYPE));

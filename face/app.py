@@ -69,7 +69,20 @@ EMBEDDING_BYTES = EMBEDDING_DIM * 4
 
 # Confiança mínima do DETECTOR (não do reconhecimento). Descarta borrão e rosto
 # de fundo; não tem relação com o limiar de identidade.
+#
+# ⚠️ 0.55 está ACIMA do default do próprio insightface (0.50). É mais rígido de
+# propósito, mas se aparecer muito "nenhum rosto nítido" com score entre 0.50 e
+# 0.55 no log, é aqui que se afrouxa — e a mensagem de erro agora informa o
+# score exato justamente para essa decisão sair de medição, não de palpite.
 MIN_DET_SCORE = float(os.getenv("FACE_MIN_DET_SCORE", "0.55"))
+
+# Tentar 90/180/270 graus quando nada é encontrado na orientação original.
+#
+# Ligado por padrão porque o custo cai só no caminho que já ia falhar. Desligue
+# para diagnosticar: com isto em "0", uma imagem que só é reconhecida girada
+# volta a falhar, e o log de aviso some — é o teste que confirma se a origem do
+# problema é orientação no cliente.
+TRY_ROTATIONS = os.getenv("FACE_TRY_ROTATIONS", "1") not in ("0", "false", "False")
 
 # Teto do payload. Uma foto de rosto em JPEG cabe folgado em 4 MB; acima disso é
 # erro de cliente ou tentativa de esgotar memória.
@@ -196,6 +209,24 @@ def decode_image(image_b64: str) -> np.ndarray:
     return frame
 
 
+def _detect(frame: np.ndarray) -> tuple[list, float]:
+    """
+    Roda o detector e devolve (rostos utilizáveis, melhor score visto).
+
+    O melhor score sai junto mesmo quando ninguém passou do corte, e é o dado
+    que faltava: sem ele, "não achei rosto nenhum" e "achei um rosto a 0,41,
+    logo abaixo do corte de 0,55" produzem a MESMA mensagem, e são diagnósticos
+    opostos — o primeiro é imagem girada ou corrompida, o segundo é
+    enquadramento, distância ou luz.
+
+    @private
+    """
+    faces = analyzer().get(frame)
+    usable = [f for f in faces if float(f.det_score) >= MIN_DET_SCORE]
+    best = max((float(f.det_score) for f in faces), default=0.0)
+    return usable, best
+
+
 def single_face(frame: np.ndarray) -> Any:
     """
     Exige exatamente um rosto utilizável.
@@ -210,14 +241,55 @@ def single_face(frame: np.ndarray) -> Any:
     verificação, aceita a refeição de quem estava atrás na fila. Escolher por
     área funciona quase sempre, e "quase sempre" aqui significa gravar
     biometria de alguém que não consentiu.
+
+    ── A tentativa com a imagem girada ─────────────────────────────────────────
+
+    Quando NADA é encontrado na orientação original, tenta 90, 180 e 270 graus
+    antes de desistir. Isso existe por um sintoma concreto: cadastro feito num
+    aparelho funcionava, e o mesmo rosto no aparelho ao lado falhava com "nenhum
+    rosto nítido" — erro de DETECÇÃO, não de comparação, ou seja, o vetor
+    guardado nem chegava a ser usado.
+
+    A causa provável é orientação EXIF: parte dos aparelhos grava a rotação como
+    tag de metadado em vez de girar os pixels, e `cv2.imdecode` (diferente de
+    `cv2.imread`) trata EXIF de forma que varia com a versão do OpenCV. Com o
+    rosto deitado 90 graus o RetinaFace não acha nada — ele tolera uns 30 graus
+    de inclinação, não um quarto de volta.
+
+    Tentar as rotações resolve o sintoma sem depender de descobrir QUAL das
+    causas é, e sem dependência nova para ler EXIF. O custo cai inteiro no
+    caminho que já ia falhar: na orientação certa, o primeiro `_detect` acerta e
+    nenhuma rotação roda. As mesmas duas regras acima continuam valendo sobre a
+    imagem girada — girar não muda quem é a pessoa nem quantas pessoas há.
     """
-    faces = analyzer().get(frame)
-    usable = [f for f in faces if float(f.det_score) >= MIN_DET_SCORE]
+    usable, best = _detect(frame)
+    rotation = 0
+
+    if not usable and TRY_ROTATIONS:
+        for turns in (1, 2, 3):
+            rotated_usable, rotated_best = _detect(np.rot90(frame, turns).copy())
+            best = max(best, rotated_best)
+
+            if rotated_usable:
+                usable = rotated_usable
+                rotation = turns * 90
+                log.warning(
+                    "rosto so encontrado apos girar %d graus — provavel orientacao "
+                    "EXIF nao aplicada pelo aparelho de origem",
+                    rotation,
+                )
+                break
 
     if not usable:
+        # O score entra na mensagem: e a diferenca entre "nao ha rosto aqui" e
+        # "ha um rosto, so nao nitido o bastante".
+        log.info("sem rosto utilizavel best_det_score=%.3f corte=%.2f", best, MIN_DET_SCORE)
         raise HTTPException(
             status_code=422,
-            detail="Nenhum rosto nítido na imagem. Aproxime o rosto e melhore a luz.",
+            detail=(
+                f"Nenhum rosto nítido na imagem (melhor detecção: {best:.2f}, "
+                f"mínimo: {MIN_DET_SCORE:.2f}). Aproxime o rosto e melhore a luz."
+            ),
         )
 
     if len(usable) > 1:
