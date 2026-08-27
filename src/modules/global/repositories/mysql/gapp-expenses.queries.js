@@ -386,7 +386,7 @@ function buildExpenseFilters(filters = {}) {
     if (filters.date_start) { conditions.push('reg.date >= ?'); params.push(filters.date_start); }
     if (filters.date_end)   { conditions.push('reg.date <= ?'); params.push(filters.date_end); }
 
-    return { where: `WHERE ${conditions.join(' AND ')}`, params };
+    return { where: `WHERE status_expen = 1 AND ${conditions.join(' AND ')}`, params };
 }
 
 function sqlListExpenses(filters = {}) {
@@ -461,7 +461,7 @@ function buildVehicleExpenseFilters(filters = {}) {
     if (filters.date_start) { conditions.push('reg.date >= ?'); params.push(filters.date_start); }
     if (filters.date_end)   { conditions.push('reg.date <= ?'); params.push(filters.date_end); }
 
-    return { where: `WHERE ${conditions.join(' AND ')}`, params };
+    return { where: `WHERE status_expen = 1 AND ${conditions.join(' AND ')}`, params };
 }
 
 function sqlListVehicleExpenses(filters = {}) {
@@ -484,6 +484,7 @@ function sqlListVehicleExpenses(filters = {}) {
         ORDER BY reg.expen_id DESC
         LIMIT ? OFFSET ?
     `;
+    console.log(where)
     return { sql, params: [...params, limit, offset] };
 }
 
