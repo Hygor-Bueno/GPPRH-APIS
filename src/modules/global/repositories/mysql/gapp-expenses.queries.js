@@ -484,7 +484,6 @@ function sqlListVehicleExpenses(filters = {}) {
         ORDER BY reg.expen_id DESC
         LIMIT ? OFFSET ?
     `;
-    console.log(where)
     return { sql, params: [...params, limit, offset] };
 }
 
