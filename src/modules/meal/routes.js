@@ -25,10 +25,13 @@ const { validate } = require('../../middlewares/validate.middleware');
 const {
     postMealLogSchema,
     postDinerGroupSchema,
+    postCouponValidateSchema,
+    postCouponRedeemSchema,
 } = require('../../schemas/meal.schema');
 const { faceUpload } = require('./infrastructure/face-upload.middleware');
 const mealController = require('./controllers/meal.controller');
 const enrollController = require('./controllers/meal-enroll.controller');
+const couponController = require('./controllers/meal-coupon.controller');
 
 /** Quem serve a refeição. Também é quem lê a lista e os botões. */
 const CAN_SERVE = ['MEAL_SERVE', 'MEAL_MANAGE'];
@@ -219,6 +222,40 @@ router.get('/enroll/:token',
 
 router.post('/enroll/:token/confirm',
     asyncHandler(enrollController.postConfirm));
+
+// ─── Cupom fiscal: almoço vendido a prestador de serviço ──────────────────────
+//
+// O prestador compra o almoço no caixa e o cupom da compra libera a refeição no
+// balcão. Quatro travas, nesta ordem de custo: a chave confere consigo mesma
+// (dígito verificador, local), o CNPJ é de uma loja do grupo que vende almoço e
+// é ESTA loja, a venda existe no Consinco e é de hoje com o produto travado, e o
+// cupom ainda tem saldo.
+//
+// ⚠️ Este bloco NÃO funciona offline, e é o único do módulo que não funciona.
+//   Validar exige o Consinco e o saldo, e nenhum dos dois tem resposta local.
+//   Enfileirar significaria servir sem saber — e a fila é exatamente onde o
+//   mesmo cupom passa duas vezes. Quando a rede cai, o modo cupom some da tela,
+//   como o modo facial some quando o container de reconhecimento morre.
+
+/** Confere e mostra quantos almoços o cupom libera. Não consome. */
+router.post('/coupons/validate',
+    authMiddleware,
+    canAny(CAN_SERVE),
+    validate(postCouponValidateSchema),
+    asyncHandler(couponController.postValidateCoupon));
+
+/**
+ * Debita uma refeição do cupom e registra a refeição, numa transação só.
+ *
+ * Rota própria em vez de `/logs` com `diner_type = 3`: o resgate precisa de
+ * transação, e manter o cupom fora do `/logs` é o que impede, estruturalmente,
+ * que ele entre na fila de `/logs/sync`.
+ */
+router.post('/coupons/redeem',
+    authMiddleware,
+    canAny(CAN_SERVE),
+    validate(postCouponRedeemSchema),
+    asyncHandler(couponController.postRedeemCoupon));
 
 // ─── Registro de refeição ─────────────────────────────────────────────────────
 

@@ -35,9 +35,35 @@ const postDinerGroupSchema = {
 
 const patchDinerGroupSchema = {};
 
+// ─── Cupom fiscal (prestador de serviço) ──────────────────────────────────────
+
+// `diner_type` continua limitado a 1 e 2 no `postMealLogSchema` acima, e isso é
+// proposital: refeição de cupom NÃO passa por `/logs`. Ela tem rota própria
+// porque precisa de transação (debitar o saldo e gravar a refeição são
+// indivisíveis) e porque não pode entrar na fila de `/logs/sync` — a fila é
+// exatamente onde o mesmo cupom passaria duas vezes. O limite ali é o que torna
+// isso estrutural em vez de convenção.
+
+// O QR chega como URL completa da SEFAZ, como o valor de `p`, ou como a chave
+// nua de 44 dígitos. Aqui valida-se só a presença: o formato é problema do
+// domínio, em `nfce-key.js`, que tem a tabela de posições e o dígito verificador.
+const postCouponValidateSchema = {
+    qr:        { type: 'string', required: true, minLength: 1, maxLength: 512 },
+    site_code: { type: 'string', required: true, pattern: SITE_CODE },
+};
+
+const postCouponRedeemSchema = {
+    qr:          { type: 'string', required: true, minLength: 1, maxLength: 512 },
+    site_code:   { type: 'string', required: true, pattern: SITE_CODE },
+    client_uuid: { type: 'string', required: true, pattern: UUID },
+    meal_type:   { type: 'number', required: false, min: 1, max: 3 },
+};
+
 module.exports = {
     postMealLogSchema,
     postMealLogSyncSchema,
     postDinerGroupSchema,
     patchDinerGroupSchema,
+    postCouponValidateSchema,
+    postCouponRedeemSchema,
 };

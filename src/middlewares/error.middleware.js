@@ -10,6 +10,14 @@ function errorHandler(err, req, res, next) {
     return res.status(err.statusCode).json({
       error: true,
       message: err.message,
+      // Identificador estável da causa, para o cliente decidir o que fazer sem
+      // casar em texto — mensagem muda com revisão de copy, código não.
+      // Aditivo: quem já consumia `message` e `fields` não vê diferença.
+      //
+      // `err.details` NÃO sai daqui, de propósito: ele às vezes carrega o erro
+      // original inteiro (ver o 503 em face-recognition.client.js), e isso é
+      // estrutura interna que não pode atravessar a borda.
+      code: err.code,
       fields: err.fields
     });
   }

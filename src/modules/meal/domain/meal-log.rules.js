@@ -77,6 +77,16 @@ function validateMealLog(payload = {}) {
         errors.push(...validateEmployeeDiner(payload, identifiedBy));
     } else if (dinerType === DINER_TYPE.GROUP) {
         errors.push(...validateGroupDiner(payload, identifiedBy));
+    } else if (dinerType === DINER_TYPE.COUPON) {
+        /* Cupom não entra por aqui, e a recusa é estrutural, não esquecimento.
+           Debitar o saldo e gravar a refeição são indivisíveis, e esta rota não
+           tem transação; pior, ela alimenta a fila de `/logs/sync`, que é
+           exatamente onde o mesmo cupom passaria duas vezes. O caminho é
+           `POST /gipp/meal/coupons/redeem`. */
+        errors.push(
+            `diner_type ${DINER_TYPE.COUPON} (cupom fiscal) não é registrado por aqui: ` +
+            'use POST /gipp/meal/coupons/redeem, que debita o cupom na mesma transação.'
+        );
     } else {
         errors.push(
             `diner_type inválido: ${DINER_TYPE.EMPLOYEE} para colaborador, ` +
