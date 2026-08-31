@@ -63,7 +63,7 @@ function shapeExpenseDetail(row) {
         points: row.points,
         article_ctb: row.article_ctb,
         offending_driver_date: row.offending_driver_date,
-        offending_driver: row.offending_driver,
+        offending_driver_fk: row.offending_driver_fk,
         infraction_id_fk: row.infraction_id_fk,
         infraction_description: row.infraction_description
     } : null;

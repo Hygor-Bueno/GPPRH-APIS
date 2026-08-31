@@ -184,7 +184,7 @@ function sqlInsertFine() {
     return `
         INSERT INTO global.gapp_fines
             (infraction, ait, gravity, points, article_ctb,
-             offending_driver_date, offending_driver, expen_id_fk, infraction_id_fk)
+             offending_driver_date, offending_driver_fk, expen_id_fk, infraction_id_fk)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 }
@@ -197,7 +197,7 @@ function buildInsertFineParams(data, expenId) {
         data.points ?? null,
         data.article_ctb ?? null,
         data.offending_driver_date ?? null,
-        data.offending_driver ?? null,
+        data.offending_driver_fk ?? null,
         expenId,
         data.infraction_id_fk ?? null
     ];
@@ -341,7 +341,7 @@ function sqlUpdateFine() {
             points                 = ?,
             article_ctb            = ?,
             offending_driver_date  = ?,
-            offending_driver       = ?,
+            offending_driver_fk       = ?,
             infraction_id_fk       = ?
         WHERE expen_id_fk = ?
     `;
@@ -355,7 +355,7 @@ function buildUpdateFineParams(data, expenId) {
         data.points ?? null,
         data.article_ctb ?? null,
         data.offending_driver_date ?? null,
-        data.offending_driver ?? null,
+        data.offending_driver_fk ?? null,
         data.infraction_id_fk ?? null,
         expenId
     ];
@@ -535,7 +535,7 @@ function sqlGetExpenseById() {
 
             fine.fine_id, fine.infraction AS fine_infraction, fine.ait,
             fine.gravity, fine.points, fine.article_ctb,
-            fine.offending_driver_date, fine.offending_driver,
+            fine.offending_driver_date, fine.offending_driver_fk,
             fine.infraction_id_fk, inf.infraction AS infraction_description,
 
             ins.id_insurance, ins.risk_cep, ins.adjustment_factor, ins.deductible_type,
