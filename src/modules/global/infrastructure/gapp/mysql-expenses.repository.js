@@ -169,11 +169,6 @@ class MysqlExpensesRepository extends ExpensesRepositoryPort {
             throw new AppError("Despesa do tipo Seguro exige 'active_id_fk' (usado pra resolver o veículo)", 400);
         }
 
-        const [[vehicle]] = await conn.query(sqlGetVehicleIdByActiveId(), [activeId]);
-        if (!vehicle) {
-            throw new AppError('O ativo informado não é um veículo (sem registro em gapp_vehicle)', 400);
-        }
-
         let existingInsuranceId = null;
         if (isUpdate) {
             const [[existing]] = await conn.query(sqlGetInsuranceIdByExpenseId(), [expenId]);
@@ -184,10 +179,11 @@ class MysqlExpensesRepository extends ExpensesRepositoryPort {
             ...detail,
             id_insurance: existingInsuranceId,
             is_update: existingInsuranceId != null ? 1 : 0,
-            vehicle_id_fk: vehicle.vehicle_id
+            active_id_fk: activeId
         };
 
         try {
+            console.log(insurancePayload);
             await conn.execute(sqlSaveInsurance(), buildSaveInsuranceParams(insurancePayload));
         } catch (error) {
             // SQLSTATE 45000 = erro de negócio sinalizado pela procedure → 400.

@@ -403,9 +403,9 @@ function sqlListExpenses(filters = {}) {
             reg.user_id_fk, reg.status_expen, reg.coupon_number,
             reg.store_id_fk, reg.created_at, reg.updated_at
         FROM global.gapp_expenses_register reg
-        INNER JOIN global.gapp_active act ON reg.active_id_fk = act.active_id
-        LEFT JOIN global.gapp_expenses_type exp ON exp.exp_type_id = reg.exp_type_id_fk
-        ${where}
+            INNER JOIN global.gapp_active act ON reg.active_id_fk = act.active_id
+            LEFT JOIN global.gapp_expenses_type exp ON exp.exp_type_id = reg.exp_type_id_fk
+            ${where}
         ORDER BY reg.expen_id DESC
         LIMIT ? OFFSET ?
     `;
@@ -545,7 +545,7 @@ function sqlGetExpenseById() {
             ins.bodywork, ins.IOF_value AS iof_value, ins.insurance_value,
             ins.deductible_value, ins.form_payment, ins.franchise_list,
             ins.status_insurance, ins.ins_id_fk, ins.cov_id_fk, ins.util_id_fk,
-            ins.vehicle_id_fk
+            ins.active_id_fk
 
         FROM global.gapp_expenses_register reg
         INNER JOIN global.gapp_active act ON reg.active_id_fk = act.active_id

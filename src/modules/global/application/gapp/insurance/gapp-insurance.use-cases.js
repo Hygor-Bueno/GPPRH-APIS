@@ -33,6 +33,7 @@ class GappInsuranceUseCases {
     }
 
     /**
+     * TODO: corrigir
      * No create (`data.is_update` falso), valida que o veículo pertence ao
      * work_group do usuário. No update, valida que a apólice existente
      * pertence ao work_group do usuário — antes de gravar.
@@ -41,7 +42,7 @@ class GappInsuranceUseCases {
      */
     async _assertOwnership(data, workGroupFk) {
         if (!data.is_update) {
-            const vehicle = await this.repository.findVehicleWorkGroup(data.vehicle_id_fk);
+            const vehicle = await this.repository.findVehicleWorkGroup(data.active_id_fk);
             if (!vehicle || vehicle.work_group_fk !== workGroupFk) {
                 throw new AppError('Veículo não encontrado no seu grupo de trabalho', 404);
             }
@@ -63,6 +64,7 @@ class GappInsuranceUseCases {
     async list(filters, currentUser) {
         const gappUser = await this._resolveGappUser(currentUser);
         const scopedFilters = { ...filters, work_group_fk: gappUser.work_group_fk };
+        console.log(scopedFilters, filters)
         return this.repository.list(scopedFilters);
     }
 

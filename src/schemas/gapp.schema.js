@@ -44,21 +44,15 @@ const updateActiveSchema = {
 /**
  * Valida a coerência entre `is_vehicle` e os sub-objetos `vehicle`/`insurance`.
  * Não valida campo a campo dentro deles — isso fica a cargo da procedure.
+ * ! *** MANUTENÇÃO DA FUNÇÃO ***
  */
 function validateVehicleAndInsurancePayload(req, res, next) {
     const { is_vehicle, vehicle, insurance } = req.body || {};
     const isVehicle = Number(is_vehicle) === 1;
 
-    if (isVehicle && (vehicle == null || typeof vehicle !== 'object' || Array.isArray(vehicle))) {
-        return next(new BadRequestError("'vehicle' é obrigatório como objeto quando 'is_vehicle' = 1."));
-    }
-
     if (insurance != null) {
         if (typeof insurance !== 'object' || Array.isArray(insurance)) {
             return next(new BadRequestError("'insurance' deve ser um objeto."));
-        }
-        if (!isVehicle) {
-            return next(new BadRequestError("'insurance' só se aplica quando 'is_vehicle' = 1."));
         }
     }
 
@@ -92,7 +86,7 @@ const insuranceCommonSchema = {
 // Create = novo registro de seguro para um veículo (desativa o anterior, se houver)
 const createInsuranceSchema = {
     ...insuranceCommonSchema,
-    vehicle_id_fk: { type: 'number', required: true }
+    active_id_fk: { type: 'number', required: true }
 };
 
 // Update = edita um registro de seguro existente pelo id
@@ -141,7 +135,7 @@ const listVehicleQuerySchema = {
 
 const listInsuranceQuerySchema = {
     id_insurance:      { type: 'number' },
-    vehicle_id_fk:     { type: 'number' },
+    active_id_fk:      { type: 'number' },
     status_insurance:  { type: 'number' },
     ins_id_fk:         { type: 'number' },
     cov_id_fk:         { type: 'number' },

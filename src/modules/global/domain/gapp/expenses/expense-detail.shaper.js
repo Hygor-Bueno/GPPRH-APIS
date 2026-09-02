@@ -95,7 +95,7 @@ function shapeExpenseDetail(row) {
         ins_id_fk: row.ins_id_fk,
         cov_id_fk: row.cov_id_fk,
         util_id_fk: row.util_id_fk,
-        vehicle_id_fk: row.vehicle_id_fk
+        active_id_fk: row.active_id_fk
     } : null;
 
     return {

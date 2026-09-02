@@ -33,7 +33,7 @@ function buildSaveInsuranceParams(data) {
     return [
         data.id_insurance ?? null,
         data.is_update ?? 0,
-        data.vehicle_id_fk ?? null,
+        data.active_id_fk ?? null,
         data.risk_cep ?? null,
         data.adjustment_factor ?? null,
         data.deductible_type ?? null,
@@ -67,7 +67,7 @@ function buildSaveInsuranceParams(data) {
 
 const INSURANCE_FILTER_CLAUSES = {
     id_insurance: 'i.id_insurance = ?',
-    vehicle_id_fk: 'i.vehicle_id_fk = ?',
+    active_id_fk: 'i.active_id_fk = ?',
     status_insurance: 'i.status_insurance = ?',
     ins_id_fk: 'i.ins_id_fk = ?',
     cov_id_fk: 'i.cov_id_fk = ?',
@@ -90,9 +90,9 @@ function buildInsuranceFilters(filters = {}) {
     }
 
     if (filters.date_init_from) { conditions.push('i.date_init >= ?'); params.push(filters.date_init_from); }
-    if (filters.date_init_to)   { conditions.push('i.date_init <= ?'); params.push(filters.date_init_to); }
+    if (filters.date_init_to) { conditions.push('i.date_init <= ?'); params.push(filters.date_init_to); }
     if (filters.date_final_from) { conditions.push('i.date_final >= ?'); params.push(filters.date_final_from); }
-    if (filters.date_final_to)   { conditions.push('i.date_final <= ?'); params.push(filters.date_final_to); }
+    if (filters.date_final_to) { conditions.push('i.date_final <= ?'); params.push(filters.date_final_to); }
 
     return { where: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '', params };
 }
@@ -104,28 +104,27 @@ function sqlListInsurance(filters = {}) {
     const offset = (page - 1) * limit;
 
     const sql = `
-        SELECT i.id_insurance, i.vehicle_id_fk, i.ins_id_fk, i.cov_id_fk, i.util_id_fk,
+        SELECT i.id_insurance, v.active_id_fk, i.ins_id_fk, i.cov_id_fk, i.util_id_fk,
                i.status_insurance, i.risk_cep, i.policy_number, i.proposal_number,
                i.date_init, i.date_final, i.insurance_value, i.deductible_value, i.form_payment,
                v.license_plates
         FROM global.gapp_insurance i
-        LEFT JOIN global.gapp_vehicle v ON i.vehicle_id_fk = v.vehicle_id
+        LEFT JOIN global.gapp_vehicle v ON i.active_id_fk = v.active_id_fk
         LEFT JOIN global.gapp_active a ON v.active_id_fk = a.active_id
-        ${where}
-        ORDER BY i.id_insurance DESC
-        LIMIT ? OFFSET ?
+            ${where}
+        ORDER BY i.id_insurance DESC;
     `;
     return { sql, params: [...params, limit, offset] };
 }
 
+// TODO: Remover veiculos, agora a rota pode usar o Ativo diretamente
 function sqlCountInsurance(filters = {}) {
     const { where, params } = buildInsuranceFilters(filters);
     return {
         sql: `
             SELECT COUNT(*) AS total
             FROM global.gapp_insurance i
-            LEFT JOIN global.gapp_vehicle v ON i.vehicle_id_fk = v.vehicle_id
-            LEFT JOIN global.gapp_active a ON v.active_id_fk = a.active_id
+            LEFT JOIN global.gapp_active a ON i.active_id_fk = a.active_id
             ${where}
         `,
         params
@@ -136,28 +135,29 @@ function sqlCountInsurance(filters = {}) {
  * `work_group_fk` é obrigatório e vem sempre do usuário autenticado (nunca
  * do cliente) — garante que não dá pra buscar por ID um seguro de veículo
  * de outro grupo de trabalho.
+ * TODO: Alterar campo do seguro
  */
 function sqlGetInsuranceById() {
     return `
         SELECT
-            i.id_insurance, i.risk_cep, i.adjustment_factor, i.deductible_type,
-            i.shielding, i.property_damage, i.bodily_damages, i.moral_damages,
-            i.glasses, i.assist_24hrs, i.km_trailer, i.backup_car,
-            i.policy_number, i.proposal_number, i.date_init, i.date_final,
-            i.bodywork, i.IOF_value AS iof_value, i.insurance_value, i.deductible_value,
-            i.form_payment, i.franchise_list, i.status_insurance,
-            i.ins_id_fk, i.cov_id_fk, i.util_id_fk, i.vehicle_id_fk,
-            ic.ins_name, ic.ins_cnpj, ic.status_ins_comp,
-            tc.cov_name, tc.status_cov,
-            ut.util_name, ut.status_util,
-            v.license_plates, v.active_id_fk
-        FROM global.gapp_insurance i
+	i.id_insurance, i.risk_cep, i.adjustment_factor, i.deductible_type,
+	i.shielding, i.property_damage, i.bodily_damages, i.moral_damages,
+	i.glasses, i.assist_24hrs, i.km_trailer, i.backup_car,
+	i.policy_number, i.proposal_number, i.date_init, i.date_final,
+	i.bodywork, i.IOF_value AS iof_value, i.insurance_value, i.deductible_value,
+	i.form_payment, i.franchise_list, i.status_insurance,
+	i.ins_id_fk, i.cov_id_fk, i.util_id_fk, i.active_id_fk,
+	ic.ins_name, ic.ins_cnpj, ic.status_ins_comp,
+	tc.cov_name, tc.status_cov,
+	ut.util_name, ut.status_util,
+	v.license_plates, v.active_id_fk
+	FROM global.gapp_insurance i
         LEFT JOIN global.gapp_insurance_company ic ON i.ins_id_fk = ic.ins_id
         LEFT JOIN global.gapp_type_coverage tc ON i.cov_id_fk = tc.cov_id
         LEFT JOIN global.gapp_utilization ut ON i.util_id_fk = ut.util_id
-        LEFT JOIN global.gapp_vehicle v ON i.vehicle_id_fk = v.vehicle_id
+        LEFT JOIN global.gapp_vehicle v ON i.active_id_fk = v.active_id_fk
         LEFT JOIN global.gapp_active a ON v.active_id_fk = a.active_id
-        WHERE i.id_insurance = ? AND a.work_group_fk = ?
+        WHERE i.id_insurance = ? AND a.work_group_fk = ?;
     `;
 }
 
@@ -170,19 +170,20 @@ function sqlGetVehicleWorkGroupByVehicleId() {
         SELECT a.work_group_fk
         FROM global.gapp_vehicle v
         INNER JOIN global.gapp_active a ON v.active_id_fk = a.active_id
-        WHERE v.vehicle_id = ?
+        WHERE v.active_id_fk = ?
     `;
 }
 
 /**
  * Resolve o work_group_fk do veículo dono de uma apólice existente — usado
  * para validar ownership antes de ATUALIZAR uma apólice.
+ * TODO: Corrigir 
  */
 function sqlGetVehicleWorkGroupByInsuranceId() {
     return `
         SELECT a.work_group_fk
         FROM global.gapp_insurance i
-        INNER JOIN global.gapp_vehicle v ON i.vehicle_id_fk = v.vehicle_id
+        INNER JOIN global.gapp_vehicle v ON i.active_id_fk = v.active_id_fk
         INNER JOIN global.gapp_active a ON v.active_id_fk = a.active_id
         WHERE i.id_insurance = ?
     `;
@@ -194,8 +195,10 @@ function sqlGetVehicleWorkGroupByInsuranceId() {
  * Consolidada aqui: antes existia duplicada byte-a-byte em
  * `gapp-active.repository.js` e `gapp-vehicle.repository.js` — agora só
  * existe neste arquivo, único dono da lógica de negócio de seguro.
+ * TODO: Alterar para id do Ativo no lugar do veiculo
+ * !Alterar o nome
  */
-function sqlGetActiveInsuranceByVehicleId() {
+function sqlGetActiveInsuranceByActiveId() {
     return `
         SELECT
             id_insurance, risk_cep, adjustment_factor, deductible_type,
@@ -204,15 +207,15 @@ function sqlGetActiveInsuranceByVehicleId() {
             policy_number, proposal_number, date_init, date_final,
             bodywork, IOF_value AS iof_value, insurance_value, deductible_value,
             form_payment, franchise_list, status_insurance,
-            ins_id_fk, cov_id_fk, util_id_fk, vehicle_id_fk
+            ins_id_fk, cov_id_fk, util_id_fk, active_id_fk
         FROM global.gapp_insurance
-        WHERE vehicle_id_fk = ? AND status_insurance = 1
+        WHERE active_id_fk = ? AND status_insurance = 1
     `;
 }
 
 module.exports = {
     sqlSaveInsurance, sqlSelectInsuranceIdOut, buildSaveInsuranceParams,
     sqlListInsurance, sqlCountInsurance, sqlGetInsuranceById,
-    sqlGetActiveInsuranceByVehicleId,
+    sqlGetActiveInsuranceByActiveId,
     sqlGetVehicleWorkGroupByVehicleId, sqlGetVehicleWorkGroupByInsuranceId
 };
