@@ -33,7 +33,6 @@ class GappInsuranceUseCases {
     }
 
     /**
-     * TODO: corrigir
      * No create (`data.is_update` falso), valida que o veículo pertence ao
      * work_group do usuário. No update, valida que a apólice existente
      * pertence ao work_group do usuário — antes de gravar.
@@ -64,7 +63,6 @@ class GappInsuranceUseCases {
     async list(filters, currentUser) {
         const gappUser = await this._resolveGappUser(currentUser);
         const scopedFilters = { ...filters, work_group_fk: gappUser.work_group_fk };
-        console.log(scopedFilters, filters)
         return this.repository.list(scopedFilters);
     }
 

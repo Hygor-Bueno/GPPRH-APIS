@@ -79,13 +79,10 @@ class GappActiveUseCases {
         if (active.is_vehicle === 1) {
             const vehicle = await this.repository.findVehicleByActiveId(id);
             active.vehicle = vehicle || null;
-            if (active.vehicle) {
-                // ! Alterar nome da função (Nome deve fazer sentido com a query - atualmente usamos o id do ativo para encontrar);
-                console.log(await this.insuranceRepository.findActiveInsuranceByVehicleId(active.active_id));
-                active.insurance = await this.insuranceRepository.findActiveInsuranceByVehicleId(active.active_id) || null;
-            }
         }
-        console.log(active)
+
+        active.insurance = await this.insuranceRepository.findActiveInsuranceByActiveId(active.active_id) || null;
+
         return active;
     }
 }

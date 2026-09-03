@@ -1764,13 +1764,13 @@ router.put('/gapp/active',
 //
 // Migrado de Controller/GAPP/Insurance.php. Uso: editar/criar o seguro de um
 // veículo que já existe, sem recriar o ativo/veículo. Upsert por
-// `vehicle_id_fk` via `sp_gapp_save_insurance` (mesmos workers da rota acima).
+// `active_id_fk` via `sp_gapp_save_insurance` (mesmos workers da rota acima).
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * @route POST /gapp/insurance
- * @description Cria o seguro de um veículo (`vehicle_id_fk` obrigatório).
+ * @description Cria o seguro de um veículo (`active_id_fk` obrigatório).
  * @access Requer `GAPP_CREATE_INSURANCE`
  */
 router.post('/gapp/insurance',
@@ -1781,7 +1781,7 @@ router.post('/gapp/insurance',
 
 /**
  * @route PUT /gapp/insurance
- * @description Atualiza o seguro de um veículo (`vehicle_id_fk` obrigatório).
+ * @description Atualiza o seguro de um veículo (`active_id_fk` obrigatório).
  * @access Requer `GAPP_UPDATE_INSURANCE`
  */
 router.put('/gapp/insurance',
@@ -1839,7 +1839,7 @@ router.get('/gapp/vehicle/:id',
 /**
  * @route GET /gapp/insurance
  * @description Lista/filtra seguros — inclui registros desativados (histórico).
- * Use `vehicle_id_fk` para ver todo o histórico de apólices de um veículo.
+ * Use `active_id_fk` para ver todo o histórico de apólices de um veículo.
  * @access Requer `GAPP_VIEW_INSURANCE`
  */
 router.get('/gapp/insurance',

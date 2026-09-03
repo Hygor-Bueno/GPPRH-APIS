@@ -117,7 +117,7 @@ function sqlListInsurance(filters = {}) {
     return { sql, params: [...params, limit, offset] };
 }
 
-// TODO: Remover veiculos, agora a rota pode usar o Ativo diretamente
+
 function sqlCountInsurance(filters = {}) {
     const { where, params } = buildInsuranceFilters(filters);
     return {
@@ -135,7 +135,6 @@ function sqlCountInsurance(filters = {}) {
  * `work_group_fk` é obrigatório e vem sempre do usuário autenticado (nunca
  * do cliente) — garante que não dá pra buscar por ID um seguro de veículo
  * de outro grupo de trabalho.
- * TODO: Alterar campo do seguro
  */
 function sqlGetInsuranceById() {
     return `
@@ -177,7 +176,6 @@ function sqlGetVehicleWorkGroupByVehicleId() {
 /**
  * Resolve o work_group_fk do veículo dono de uma apólice existente — usado
  * para validar ownership antes de ATUALIZAR uma apólice.
- * TODO: Corrigir 
  */
 function sqlGetVehicleWorkGroupByInsuranceId() {
     return `
@@ -190,13 +188,11 @@ function sqlGetVehicleWorkGroupByInsuranceId() {
 }
 
 /**
- * Retorna o seguro ativo (status_insurance = 1) de um veículo.
+ * Retorna o seguro ativo (status_insurance = 1) de um ativo.
  *
  * Consolidada aqui: antes existia duplicada byte-a-byte em
  * `gapp-active.repository.js` e `gapp-vehicle.repository.js` — agora só
  * existe neste arquivo, único dono da lógica de negócio de seguro.
- * TODO: Alterar para id do Ativo no lugar do veiculo
- * !Alterar o nome
  */
 function sqlGetActiveInsuranceByActiveId() {
     return `

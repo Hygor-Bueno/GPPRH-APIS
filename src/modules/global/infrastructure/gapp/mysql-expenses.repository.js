@@ -17,7 +17,7 @@ const { ExpenseType } = require('../../domain/gapp/expenses/expense-type.enum');
 const {
     sqlInsertExpense, buildInsertExpenseParams,
     sqlUpdateExpense, buildUpdateExpenseParams,
-    sqlGetActiveWorkGroup, sqlGetVehicleIdByActiveId, sqlGetExpenseType,
+    sqlGetActiveWorkGroup, sqlGetExpenseType,
     sqlInsertFuel, buildInsertFuelParams,
     sqlUpdateFuel, buildUpdateFuelParams,
     sqlInsertMaintenance, buildInsertMaintenanceParams,
@@ -157,8 +157,7 @@ class MysqlExpensesRepository extends ExpensesRepositoryPort {
      * Cria/atualiza a apólice de seguro vinculada à despesa, reaproveitando
      * a mesma `sp_gapp_save_insurance` usada nativamente por /gapp/insurance
      * — ela já desativa a apólice ativa anterior do veículo antes de criar
-     * uma nova. `vehicle_id_fk` é resolvido do `active_id_fk` da despesa,
-     * nunca do cliente. No update, a apólice já vinculada (se houver) é
+     * uma nova. No update, a apólice já vinculada (se houver) é
      * atualizada in-place — nunca recriada, porque um sinistro pode
      * referenciá-la.
      * @private

@@ -88,14 +88,7 @@ function sqlGetActiveWorkGroup() {
     return 'SELECT work_group_fk FROM global.gapp_active WHERE active_id = ?';
 }
 
-/**
- * Resolve o vehicle_id do veículo vinculado a um ativo — usado pra despesa
- * do tipo Seguro, que precisa do vehicle_id_fk de gapp_insurance mas só
- * recebe o active_id_fk da despesa (mesmo padrão de sp_gapp_save_active_v2).
- */
-function sqlGetVehicleIdByActiveId() {
-    return 'SELECT vehicle_id FROM global.gapp_vehicle WHERE active_id_fk = ?';
-}
+
 
 // ─── Escrita — especificações por tipo de despesa ──────────────────────────
 //
@@ -565,7 +558,7 @@ function sqlGetExpenseById() {
 module.exports = {
     sqlInsertExpense, buildInsertExpenseParams,
     sqlUpdateExpense, buildUpdateExpenseParams,
-    sqlGetActiveWorkGroup, sqlGetVehicleIdByActiveId, sqlGetExpenseType,
+    sqlGetActiveWorkGroup, sqlGetExpenseType,
     sqlInsertFuel, buildInsertFuelParams,
     sqlUpdateFuel, buildUpdateFuelParams,
     sqlInsertMaintenance, buildInsertMaintenanceParams,

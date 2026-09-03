@@ -2,7 +2,7 @@
  * @fileoverview Porta (contrato) de persistência MySQL para seguro GAPP.
  *
  * Compartilhada: consumida nativamente pela feature Insurance, e por Active/
- * Vehicle (`getById`) só para `findActiveInsuranceByVehicleId`.
+ * Vehicle (`getById`) só para `findActiveInsuranceByActiveId`.
  *
  * @module modules/global/application/gapp/ports/gapp-insurance-repository.port
  */
@@ -23,8 +23,8 @@ class GappInsuranceRepositoryPort {
     /** @param {number} idInsurance @returns {Promise<{work_group_fk: number}|null>} */
     findInsuranceWorkGroup(idInsurance) { throw new Error('Not implemented'); }
 
-    /** @param {number} vehicleId @returns {Promise<object|null>} Seguro ativo do veículo. */
-    findActiveInsuranceByVehicleId(vehicleId) { throw new Error('Not implemented'); }
+    /** @param {number} activeId @returns {Promise<object|null>} Seguro ativo do veículo. */
+    findActiveInsuranceByActiveId(activeId) { throw new Error('Not implemented'); }
 }
 
 module.exports = { GappInsuranceRepositoryPort };

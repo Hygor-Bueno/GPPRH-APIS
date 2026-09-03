@@ -71,7 +71,7 @@ class MysqlGappInsuranceRepository extends GappInsuranceRepositoryPort {
         return rows[0] ?? null;
     }
 
-    async findActiveInsuranceByVehicleId(vehicleId) {
+    async findActiveInsuranceByActiveId(vehicleId) {
         const [rows] = await this._query(sqlGetActiveInsuranceByActiveId(), [vehicleId]);
         return rows[0] ?? null;
     }
