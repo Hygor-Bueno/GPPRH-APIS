@@ -183,13 +183,14 @@ const listExpensesQuerySchema = {
     expen_id:       { type: 'number' },
     hour:           { type: 'string' },
     active_id_fk:   { type: 'number' },
+    is_vehicle:     { type: 'number' },
     exp_type_id_fk: { type: 'number' },
     description:    { type: 'string' },
     status_expen:   { type: 'number', enum: [0, 1] },
-    date_start:      { type: 'string' },
-    date_end:        { type: 'string' },
-    page:            { type: 'number', min: 1 },
-    limit:           { type: 'number', min: 1, max: 100 },
+    date_start:     { type: 'string' },
+    date_end:       { type: 'string' },
+    page:           { type: 'number', min: 1 },
+    limit:          { type: 'number', min: 1, max: 100 },
 };
 
 // Baseada na pcr_select_filtered_expenses (legado) — mesmos filtros +

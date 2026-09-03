@@ -377,7 +377,7 @@ function buildExpenseFilters(filters = {}) {
     }
 
     if (filters.date_start) { conditions.push('reg.date >= ?'); params.push(filters.date_start); }
-    if (filters.date_end)   { conditions.push('reg.date <= ?'); params.push(filters.date_end); }
+    if (filters.date_end) { conditions.push('reg.date <= ?'); params.push(filters.date_end); }
 
     return { where: `WHERE status_expen = 1 AND ${conditions.join(' AND ')}`, params };
 }
@@ -452,7 +452,7 @@ function buildVehicleExpenseFilters(filters = {}) {
     }
 
     if (filters.date_start) { conditions.push('reg.date >= ?'); params.push(filters.date_start); }
-    if (filters.date_end)   { conditions.push('reg.date <= ?'); params.push(filters.date_end); }
+    if (filters.date_end) { conditions.push('reg.date <= ?'); params.push(filters.date_end); }
 
     return { where: `WHERE status_expen = 1 AND ${conditions.join(' AND ')}`, params };
 }
@@ -507,9 +507,9 @@ function sqlGetExpenseById() {
         SELECT
             reg.expen_id, reg.date, reg.hour, reg.local, reg.description,
             reg.total_value, reg.discount, reg.provider, reg.exp_type_id_fk,
-            expt.description_type, reg.driver_id_fk, reg.active_id_fk,
+            expt.description_type, reg.driver_id_fk, reg.active_id_fk, act.is_vehicle,
             reg.user_id_fk, reg.status_expen, reg.coupon_number,
-            reg.store_id_fk, reg.created_at, reg.updated_at,
+            reg.store_id_fk, reg.created_at, reg.updated_at, 
 
             fuel.fuel_id, fuel.liter_value, fuel.coupon_number AS fuel_coupon_number,
             fuel.km_day AS fuel_km_day, fuel.liter_qtd, fuel.fuel_type_id_fk,
@@ -537,8 +537,7 @@ function sqlGetExpenseById() {
             ins.policy_number, ins.proposal_number, ins.date_init, ins.date_final,
             ins.bodywork, ins.IOF_value AS iof_value, ins.insurance_value,
             ins.deductible_value, ins.form_payment, ins.franchise_list,
-            ins.status_insurance, ins.ins_id_fk, ins.cov_id_fk, ins.util_id_fk,
-            ins.active_id_fk
+            ins.status_insurance, ins.ins_id_fk, ins.cov_id_fk, ins.util_id_fk
 
         FROM global.gapp_expenses_register reg
         INNER JOIN global.gapp_active act ON reg.active_id_fk = act.active_id

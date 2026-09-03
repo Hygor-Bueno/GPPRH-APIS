@@ -111,6 +111,7 @@ function shapeExpenseDetail(row) {
         description_type: row.description_type,
         driver_id_fk: row.driver_id_fk,
         active_id_fk: row.active_id_fk,
+        is_vehicle: row.is_vehicle,
         user_id_fk: row.user_id_fk,
         status_expen: row.status_expen,
         coupon_number: row.coupon_number,
