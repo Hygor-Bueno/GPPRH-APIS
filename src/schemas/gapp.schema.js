@@ -261,6 +261,35 @@ const listStoreQuerySchema = {
     limit:        { type: 'number' },
 };
 
+const nfFieldSchema = {
+    number_nf:         { type: 'string', maxLength: 30 },
+    dt_issue:          { type: 'string' },
+    dt_delivery:       { type: 'string' },
+    hr_exit:           { type: 'string' },
+    expen_id_fk:       { type: 'number' },
+    user_id_fk:        { type: 'number' },
+    nf_key:            { type: 'string', maxLength: 100 },
+}
+
+const listNfQuerySchema = {
+    nf_id:        { type: 'number' },
+    number_nf:    { type: 'string', maxLength: 30 },
+    dt_issue:     { type: 'string' },
+    dt_delivery:  { type: 'string' },
+    hr_exit:      { type: 'string' },
+    expen_id_fk:  { type: 'number' },
+    user_id_fk:   { type: 'number' },
+    nf_key:       { type: 'string', maxLength: 100 },
+    page:         { type: 'number' },
+    limit:        { type: 'number' },
+}
+
+const createNfSchema = {...nfFieldSchema}
+const updateNfSchema = {
+    ...nfFieldSchema,
+    nf_id:        { type: 'number' },
+}
+
 module.exports = {
     createActiveSchema,
     updateActiveSchema,
@@ -277,5 +306,9 @@ module.exports = {
     validateExpenseTypePayload,
     createStoreSchema,
     updateStoreSchema,
-    listStoreQuerySchema
+    listStoreQuerySchema,
+    nfFieldSchema,
+    listNfQuerySchema,
+    createNfSchema,
+    updateNfSchema
 };
