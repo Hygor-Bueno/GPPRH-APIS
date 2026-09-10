@@ -22,15 +22,24 @@ class GappNfUseCases {
         return gappUser;
     }
 
+    // 
     async list(filters) {
         const res = this.repository.listNf(filters);
         return res
     }
 
-    async listByid(filters) {
-        const res = this.repository.listByid(filters)
+    // 
+    async listByid(id) {
+        const res = this.repository.listNFById(id)
+        return res
     }
 
+    // 
+    async listCoupon() {
+        return this.repository.listCoupon()
+    }
+
+    // 
     async createNf(data, userId) {
         const gappUser = await this._resolveGappUser(userId);
         const payload = { ...data, user_id_fk: gappUser.user_id };
@@ -38,18 +47,19 @@ class GappNfUseCases {
         return this.repository.createNf(payload);
     }
 
+    // 
     async updateNf(id, data, user) {
         const gappUser = await this._resolveGappUser(user);
 
-        // const current = await this.repository.findExpenseType(id); // adicionar validação
-        // if (!current) throw new AppError('Despesa não encontrada', 404);
-        // if (Number(current.exp_type_id_fk) !== Number(data.exp_type_id_fk)) {
-        //     throw new AppError("Não é possível alterar o tipo de uma despesa já registrada ('exp_type_id_fk')", 400);
-        // }
+        //  * Adicionar validação Se a nota existe (findNFByID)
 
-        const payload = { ...data };
-
+        const payload = { ...data, user_id_fk: gappUser.user_id };
         return this.repository.updateNf(id, payload);
+    }
+
+    // 
+    async deleteNF(id) {
+        return this.repository.deleteNF(id)
     }
 }
 

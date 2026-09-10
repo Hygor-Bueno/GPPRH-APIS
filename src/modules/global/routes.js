@@ -1991,7 +1991,18 @@ router.put('/gapp/expenses/:id',
 router.get('/gapp/nf',
     authMiddleware,
     asyncHandler(gappNfController.listNf)
-)
+);
+
+router.get('/gapp/nf/:id',
+    authMiddleware,
+    asyncHandler(gappNfController.listNfById)
+);
+
+router.get('/gapp/nf-coupon',
+    authMiddleware,
+    asyncHandler(gappNfController.listCoupon)
+);
+
 router.post('/gapp/nf',
     authMiddleware,
     validate(createNfSchema),
@@ -2002,9 +2013,10 @@ router.put('/gapp/nf/:id',
     validate(updateNfSchema),
     asyncHandler(gappNfController.updateNf)
 )
-// router.delete('/gapp/nf',
-//     authMiddleware,
-// )
+router.delete('/gapp/nf/:id',
+    authMiddleware,
+    asyncHandler(gappNfController.deleteNF)
+)
 
 
 // ─── GAPP — Tabelas de apoio (lookup, para dropdowns/filtros) ──────────────────

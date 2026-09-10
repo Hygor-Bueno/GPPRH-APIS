@@ -25,7 +25,17 @@ async function listNf(req, res) {
 }
 
 async function listNfById(req, res) {
-
+    const result = await useCases.listByid(Number(req.params.id), req.body, req.user);
+    return respond.ok(res, result);
 }
 
-module.exports = { createNf, updateNf, listNf, listNfById }
+async function listCoupon(req, res) {
+    const result = await useCases.listCoupon(req.query, req.user);
+    return respond.ok(res, result);
+}
+
+async function deleteNF(req, res) {
+    const result = await useCases.deleteNF(Number(req.params.id), req.body, req.user);
+    return respond.ok(res, result);
+}
+module.exports = { createNf, updateNf, listNf, listNfById, listCoupon, deleteNF }
