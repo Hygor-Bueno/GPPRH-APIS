@@ -20,6 +20,7 @@ const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const { apiLimiter, userLimiter } = require('./middlewares/rate-limit.middleware');
+const { cleanupUploads } = require('./middlewares/cleanup-uploads.middleware');
 const { errorHandler } = require('./middlewares/error.middleware');
 
 /**
@@ -102,6 +103,10 @@ function createApp({ allowedOrigins, routes, serveUploads = false }) {
     // __dirname aqui = .../api/src → sobe 1 nível para .../api/uploads
     app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
   }
+
+  // Remove os temporários do multer ao fim de CADA requisição — inclusive as
+  // que falharam. Antes do roteamento para valer também para rota que estoura.
+  app.use(cleanupUploads);
 
   for (const { prefix, router } of routes) {
     app.use(prefix, router);

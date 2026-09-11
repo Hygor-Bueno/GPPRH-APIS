@@ -852,7 +852,7 @@ router.post('/chat/messages',
  * @route POST /chat/messages/file
  * @description Envia um arquivo (imagem ou documento) como mensagem (multipart/form-data).
  * Campo obrigatório: `file`. Campo `to_user_id` no body.
- * Limite: 10 MB. Arquivos executáveis são bloqueados.
+ * Limite: 50 MB por arquivo. Arquivos executáveis são bloqueados.
  * @access Requer `USE_CHAT`
  */
 router.post('/chat/messages/file',
@@ -1064,14 +1064,22 @@ router.get('/gtpp/items/:itemId/responses',
 
 /**
  * @route POST /gtpp/items/:itemId/responses
- * @description Adiciona uma resposta/evidência a um item. Campo `file` opcional.
- * Body: { comment, last_state_id?, new_state_id? }
+ * @description Adiciona uma resposta/evidência a um item, com 0..N anexos.
+ * Body: { comment, file_names?, last_state_id?, new_state_id? }
+ * `comment` é obrigatório APENAS quando não vem anexo — texto, anexo, ou os
+ * dois; só é recusado o comentário sem conteúdo nenhum. Sem texto, a coluna
+ * `comment` fica NULL.
+ * Arquivos: campo `files` (múltiplo). O campo `file` (único) continua aceito
+ * — formato antigo, remover quando o front migrar.
  * @access Requer `GTPP_USE`
  */
 router.post('/gtpp/items/:itemId/responses',
     authMiddleware,
     canAny(['GTPP_USE']),
-    fileUpload.single('file'),
+    fileUpload.fields([
+        { name: 'files', maxCount: gtppResponseController.MAX_RESPONSE_FILES },
+        { name: 'file',  maxCount: 1 },   // @deprecated campo antigo, um anexo só
+    ]),
     asyncHandler(gtppResponseController.createItemResponse));
 
 /**
@@ -1095,6 +1103,18 @@ router.delete('/gtpp/items/:itemId/responses/:id',
     authMiddleware,
     canAny(['GTPP_USE']),
     asyncHandler(gtppResponseController.deleteItemResponse));
+
+/**
+ * @route DELETE /gtpp/items/:itemId/responses/:id/files/:attachmentId
+ * @description Soft-delete (status = 0) de UM anexo do comentário, sem afetar
+ * os demais. `:attachmentId` é o `files[].id` devolvido no GET
+ * (`gt_task_item_response_files.id`), não o `file_id` de `_files`.
+ * @access Requer `GTPP_USE`
+ */
+router.delete('/gtpp/items/:itemId/responses/:id/files/:attachmentId',
+    authMiddleware,
+    canAny(['GTPP_USE']),
+    asyncHandler(gtppResponseController.deleteItemResponseFile));
 
 // ─── GTPP — Escopo da Tarefa ──────────────────────────────────────────────────
 

@@ -1,0 +1,41 @@
+# Imagem do worker de transcodificação de vídeo.
+#
+# Separada do `Dockerfile.internal` de propósito: aquela imagem é compartilhada
+# pela API e pelo WebSocket, e embutir ffmpeg (~150 MB, com dezenas de libs de
+# codec) nos dois só para um worker de fila é peso e superfície de ataque sem
+# contrapartida. Mesmo critério que já isolou o serviço `face`.
+#
+# Não roda PM2: é um processo único de propósito. O cluster do PM2 executaria o
+# laço da fila duas vezes e o mesmo vídeo seria convertido em duplicidade.
+# Reinício é responsabilidade do `restart: unless-stopped` do compose.
+
+FROM node:22-bookworm-slim
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# ffmpeg do Debian (build padrão, com libx264 e AAC — que é tudo que usamos).
+# `--no-install-recommends` evita arrastar a cadeia de X11 e áudio de desktop.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY package.json package-lock.json ./
+
+# Só as dependências de runtime que o worker toca: mysql2 (fila e _files), axios
+# (evento WS) e dotenv. Sem `npm ci` completo — o worker não usa oracledb, mssql,
+# puppeteer nem sharp, e compilar esses nativos aqui triplicaria o build.
+RUN npm install --omit=dev --no-audit --no-fund mysql2 axios dotenv \
+ && npm cache clean --force
+
+COPY src ./src
+
+# `storage/` é bind mount do host, igual ao backend interno — é lá que estão os
+# arquivos a converter. Criado com o dono certo caso o mount ainda não exista.
+RUN mkdir -p storage \
+ && chown -R node:node storage
+
+USER node
+
+CMD ["node", "src/workers/video-transcoder.js"]

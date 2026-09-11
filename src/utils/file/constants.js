@@ -9,6 +9,46 @@
 /** Tamanho máximo permitido por arquivo: 50 MB. @constant {number} */
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
+/**
+ * Teto por arquivo de VÍDEO, mais alto que o geral porque a conversão vai
+ * encolhê-lo depois: recusar 60 MB que virariam 15 MB anularia o ganho. Só é
+ * seguro por causa do `diskStorage` — vídeo grande nunca passa por RAM.
+ * @constant {number}
+ */
+const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
+
+/**
+ * Teto AGREGADO por requisição, somando todos os arquivos.
+ *
+ * Com `diskStorage` o gargalo deixou de ser RAM e passou a ser disco: os
+ * arquivos chegam em temporários e o `FileService` processa um por vez, então
+ * o pico de memória é o de UM arquivo, não a soma. Este limite agora protege o
+ * disco do servidor (31 GB), não o worker.
+ * @constant {number}
+ */
+const MAX_REQUEST_BYTES = 300 * 1024 * 1024;
+
+/**
+ * Abaixo deste tamanho o arquivo é lido para um Buffer e segue pelo fluxo
+ * original — o mesmo de sempre, já validado para imagem, PDF, OOXML e texto.
+ * Acima, só vídeo é aceito, e por streaming.
+ *
+ * O corte existe para não reescrever em streaming todo o pipeline de scans
+ * (zip bomb, código em texto, dimensão de imagem), que trabalha sobre Buffer e
+ * funciona bem para os tamanhos em que esses formatos existem na prática.
+ * @constant {number}
+ */
+const BUFFER_THRESHOLD_BYTES = 50 * 1024 * 1024;
+
+/**
+ * Onde o multer grava os temporários. Fica dentro de `storage/` de propósito:
+ * é o bind mount do host, então o temporário e o destino final estão no MESMO
+ * sistema de arquivos e o `rename` é instantâneo. Em `/tmp` seria outro
+ * dispositivo, e cada upload viraria uma cópia de 200 MB.
+ * @constant {string}
+ */
+const UPLOAD_TEMP_DIR = process.env.UPLOAD_TEMP_DIR || 'storage/tmp';
+
 /** Limite de leitura para scans anti-DoS: 5 MB. @constant {number} */
 const MAX_SCAN_BYTES = 5 * 1024 * 1024;
 
@@ -46,7 +86,18 @@ const MIME_TO_EXT = {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.template':              'xltx',
     'application/xml':                                                                   'xml',
     'text/xml':                                                                          'xml',
+    'video/mp4':                                                                         'mp4',
+    'video/quicktime':                                                                   'mov',
+    'video/webm':                                                                        'webm',
 };
+
+/**
+ * MIMEs de vídeo. Recebem tratamento próprio no FileService: pulam o scan de
+ * ameaças binárias (ver o comentário em file.service.js) e não passam por
+ * conversão nenhuma — o que sobe é o que fica.
+ * @type {Set<string>}
+ */
+const VIDEO_MIMES = new Set(['video/mp4', 'video/quicktime', 'video/webm']);
 
 /**
  * Mapa de extensão → MIME types aceitos (verificação bidirecional).
@@ -61,6 +112,9 @@ const EXT_TO_EXPECTED_MIME = {
     webp: ['image/webp'],
     doc:  ['application/msword'],
     xls:  ['application/msword', 'application/vnd.ms-excel'],
+    // Sem exceção para o formato legado: quando nome e conteúdo divergem, o
+    // `reconcileExtension` corrige a extensão do nome em vez de recusar — e
+    // isso vale igual para .xlsx que é .xls e para .png que é WebP.
     docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
     xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
     ppt:  ['application/vnd.ms-powerpoint'],
@@ -72,6 +126,11 @@ const EXT_TO_EXPECTED_MIME = {
     xml:  ['application/xml', 'text/xml'],
     txt:  ['text/plain'],
     csv:  ['text/plain', 'text/csv'],
+    // .mp4 e .mov são trocados um pelo outro o tempo todo (o iPhone grava um
+    // container QuickTime, apps renomeiam para .mp4) — os dois se aceitam.
+    mp4:  ['video/mp4', 'video/quicktime'],
+    mov:  ['video/quicktime', 'video/mp4'],
+    webm: ['video/webm'],
 };
 
 /** Formato válido para nome de módulo: somente letras maiúsculas, 2–8 chars. */
@@ -203,6 +262,11 @@ const PDF_DANGEROUS_KEYS = [
 
 module.exports = {
     MAX_FILE_BYTES,
+    MAX_REQUEST_BYTES,
+    MAX_VIDEO_BYTES,
+    BUFFER_THRESHOLD_BYTES,
+    UPLOAD_TEMP_DIR,
+    VIDEO_MIMES,
     MAX_SCAN_BYTES,
     MAX_IMAGE_DIMENSION,
     MAX_UNCOMPRESSED_BYTES,
