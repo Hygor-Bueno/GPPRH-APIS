@@ -34,7 +34,7 @@ class MysqlTaskUserRepository extends TaskUserRepositoryPort {
     }
 
     async findTaskUsers(taskId) {
-        const [rows] = await this._query(SQL_GET_TASK_USERS, [taskId, taskId, taskId]);
+        const [rows] = await this._query(SQL_GET_TASK_USERS, [taskId, taskId]);
         return rows.map(r => ({ ...r, check: Boolean(r.check) }));
     }
 

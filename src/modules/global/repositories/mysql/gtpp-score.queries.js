@@ -52,7 +52,7 @@ const SQL_GET_ALL_USERS_WITH_ACCESS = `
   FROM _user u
   INNER JOIN _employee e ON e.id = u.id
   INNER JOIN _application_access aa ON aa.user_id = u.id
-  WHERE u.status = 1 AND aa.application_id IN (2, 3)
+  WHERE u.ad_status = 'active' AND aa.application_id IN (2, 3)
   ORDER BY e.name ASC
 `;
 

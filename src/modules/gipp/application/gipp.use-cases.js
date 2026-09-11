@@ -332,22 +332,66 @@ class GippUseCases {
 
         await this.repository.processWorkSchedules(scheduleString, actor);
 
-        const payments = await this.repository.findPaymentsForReplication(scheduleList);
-        if (!payments.length) {
-            throw new AppError(
-                'Nenhum valor de pagamento foi encontrado após o processamento das jornadas.',
-                404,
-                { code: 'NO_PAYMENT_DATA' },
-            );
-        }
+        // Daqui em diante o 3 → 6 da procedure já commitou. `closeWorkSchedules`
+        // tem rede própria por jornada, mas os dois passos abaixo não tinham: uma
+        // falha neles deixava a jornada em 6 **sem recibo**, e o 6 não volta pela
+        // interface — o conserto virava reprocessamento manual no banco. Devolver
+        // o lote para a fila do RH mantém a jornada recuperável.
+        let payments;
+        const replicationSkipped = [];
 
-        for (const payment of payments) {
-            await this.replicationRepository.replicatePayment(payment);
+        try {
+            payments = await this.repository.findPaymentsForReplication(scheduleList);
+            if (!payments.length) {
+                throw new AppError(
+                    'Nenhum valor de pagamento foi encontrado após o processamento das jornadas.',
+                    404,
+                    { code: 'NO_PAYMENT_DATA' },
+                );
+            }
+
+            for (const payment of payments) {
+                try {
+                    await this.replicationRepository.replicatePayment(payment);
+                } catch (error) {
+                    // Colaborador sem cadastro ativo no MySQL não bloqueia mais o
+                    // lote: uma pessoa com cadastro pendente travava o fechamento
+                    // de todas as outras da mesma leva.
+                    //
+                    // A distinção pelo código é o que torna isso seguro. MySQL
+                    // fora do ar cai no `throw` e aborta tudo — pular ali geraria
+                    // recibo sem contrapartida, e a divergência passaria em
+                    // silêncio justamente quando é mais grave.
+                    if (error.code !== 'MYSQL_EMPLOYEE_NOT_FOUND') throw error;
+
+                    replicationSkipped.push({
+                        cod_work_schedule: payment.cod_work_schedule ?? null,
+                        cpf: payment.cpf,
+                        reason: 'employee_not_found_in_mysql',
+                    });
+                }
+            }
+        } catch (error) {
+            const reverted = await this._revertFailedProcessing(scheduleList, actor);
+
+            // Erro novo em vez de mutar o original: o cliente precisa saber se a
+            // jornada voltou para a fila (pode tentar de novo) ou se ficou presa
+            // em 6 (precisa de intervenção).
+            throw new AppError(error.message, error.statusCode ?? 500, {
+                code: error.code ?? 'PROCESSING_FAILED',
+                details: {
+                    ...(error.details ?? {}),
+                    reverted_to_payroll_queue: reverted,
+                },
+            });
         }
 
         const closing = await this.closeWorkSchedules(scheduleList, userId, userBranchCode, actor);
 
-        return { payments, closing, rejected };
+        // Vai no retorno, e não só no log, porque é a única pista de que aquele
+        // recibo existe no GIPP sem par no MySQL — quem fechou precisa ver isso
+        // na hora para mandar corrigir o cadastro.
+        return { payments, closing, rejected, replication_skipped: replicationSkipped };
     }
 
     // ─── Fechamento de Jornada ──────────────────────────────────────────────
@@ -389,6 +433,25 @@ class GippUseCases {
         }
 
         return results;
+    }
+
+    /**
+     * Devolve o lote inteiro para a fila do RH quando a geração falha depois de
+     * a procedure já ter marcado 6 (Pagando).
+     *
+     * Melhor-esforço, jornada por jornada: uma reversão que falhe não pode
+     * impedir as outras de voltarem. A revisão 6 → 3 só afeta quem está em 6,
+     * então jornada já fechada com recibo não é tocada.
+     *
+     * @returns {Promise<string[]>} Códigos que voltaram para a fila.
+     * @private
+     */
+    async _revertFailedProcessing(scheduleList, actor = null) {
+        const reverted = [];
+        for (const code of scheduleList) {
+            if (await this._revertFailedClose(code, actor)) reverted.push(code);
+        }
+        return reverted;
     }
 
     /**

@@ -135,15 +135,30 @@ router.get('/reports/exceptions',
 //   montado no app público — mover é trocar o prefixo, não reescrever.
 
 /**
- * Cadastro presencial, no aparelho do operador — sem link, sem navegador.
+ * Cadastro presencial, sem link e sem navegador.
  *
  * A pessoa está na frente do balcão, o crachá já a identificou, e ela mesma
  * aceita o termo na tela. Prova de identidade mais forte que a do link, por isso
  * grava `enroll_verified_by = 2` em vez de 1.
+ *
+ * ⚠️ **Exige `MEAL_MANAGE`, e é a ÚNICA rota de `CAN_SERVE` que foi estreitada.**
+ *   Servir refeição e capturar biometria não são o mesmo tipo de ato: o primeiro
+ *   se desfaz com um estorno, o segundo grava dado sensível de uma pessoa sob
+ *   consentimento que ela deu naquele instante, para aquele operador. Quem
+ *   responde por esse consentimento é quem administra o refeitório, não quem
+ *   está no turno.
+ *
+ *   Consequência operacional: o operador comum não cadastra mais. Ou alguém com
+ *   `MEAL_MANAGE` está presente, ou o caminho é o convite por link — que existe
+ *   exatamente para o cadastro acontecer sem depender do balcão.
+ *
+ *   A lista tem um item só de propósito, e não deve virar constante compartilhada:
+ *   `CAN_SERVE` e `CAN_MANAGE_GROUPS` existem porque agrupam rotas que mudam
+ *   juntas. Esta não muda com nenhuma outra.
  */
 router.post('/enroll/direct',
     authMiddleware,
-    canAny(CAN_SERVE),
+    canAny(['MEAL_MANAGE']),
     faceUpload.array('images', 5),
     asyncHandler(enrollController.postDirectEnroll));
 

@@ -2,6 +2,11 @@ const { GippRhUseCases } = require('../gipp-rh.use-cases');
 const { GippRhRepositoryPort } = require('../ports/gipp-rh-repository.port');
 const { AppError } = require('../../../../../errors/app.error');
 
+// `receipt_group_id` é UNIQUEIDENTIFIER: os ids dos testes precisam ser GUIDs
+// reais, senão o SQL Server derruba o lote inteiro na conversão.
+const GROUP_A = '2BB99F2C-11BA-441C-A346-5E4FB10D6310';
+const GROUP_B = '4A316C60-7E1F-4FBF-AC38-39E5CF26BE2A';
+
 function makeFakeRepository(overrides = {}) {
     const repo = new GippRhRepositoryPort();
     repo.findActiveCompensations = jest.fn().mockResolvedValue([{ id: 1, name: 'Vale Transporte' }]);
@@ -28,6 +33,7 @@ function makeFakeRepository(overrides = {}) {
 
     repo.findWorkSchedulesByReceiptGroupIds = jest.fn().mockResolvedValue([]);
     repo.confirmTreasuryPayment = jest.fn().mockResolvedValue(1);
+    repo.revertTreasuryPayment = jest.fn().mockResolvedValue(1);
 
     return Object.assign(repo, overrides);
 }
@@ -87,19 +93,49 @@ describe('GippRhUseCases', () => {
     });
 
     describe('getReceiptsByGroupIds', () => {
-        it('should return an empty array without querying when no group ids are given', async () => {
+        it('should reject an empty list without querying', async () => {
             const repository = makeFakeRepository();
             const useCases = makeUseCases({ repository });
-            const result = await useCases.getReceiptsByGroupIds([]);
-            expect(result).toEqual([]);
+            await expect(useCases.getReceiptsByGroupIds([])).rejects.toThrow(AppError);
             expect(repository.findReceiptsByGroupIds).not.toHaveBeenCalled();
         });
 
         it('should query when group ids are given', async () => {
             const repository = makeFakeRepository();
             const useCases = makeUseCases({ repository });
-            await useCases.getReceiptsByGroupIds(['abc']);
-            expect(repository.findReceiptsByGroupIds).toHaveBeenCalledWith(['abc']);
+            await useCases.getReceiptsByGroupIds([GROUP_A]);
+            expect(repository.findReceiptsByGroupIds).toHaveBeenCalledWith([GROUP_A]);
+        });
+
+        // O motivo de existir a validação: um id ruim no meio do lote fazia o
+        // SQL Server abortar a consulta toda, e o erro voltava como 500 opaco.
+        it('should reject the whole batch when one id is not a GUID, before touching the database', async () => {
+            const repository = makeFakeRepository();
+            const useCases = makeUseCases({ repository });
+
+            for (const ruim of ['abc', '', '   ', null, undefined]) {
+                await expect(useCases.getReceiptsByGroupIds([GROUP_A, ruim])).rejects.toThrow(AppError);
+            }
+            expect(repository.findReceiptsByGroupIds).not.toHaveBeenCalled();
+        });
+
+        it('should name the offending ids in the error', async () => {
+            const useCases = makeUseCases();
+            await expect(useCases.getReceiptsByGroupIds([GROUP_A, 'abc'])).rejects.toThrow(/abc/);
+        });
+
+        it('should reject a non-array payload', async () => {
+            const repository = makeFakeRepository();
+            const useCases = makeUseCases({ repository });
+            await expect(useCases.getReceiptsByGroupIds(GROUP_A)).rejects.toThrow(AppError);
+            expect(repository.findReceiptsByGroupIds).not.toHaveBeenCalled();
+        });
+
+        it('should trim, upper-case and dedupe before querying', async () => {
+            const repository = makeFakeRepository();
+            const useCases = makeUseCases({ repository });
+            await useCases.getReceiptsByGroupIds([` ${GROUP_A.toLowerCase()} `, GROUP_A, GROUP_B]);
+            expect(repository.findReceiptsByGroupIds).toHaveBeenCalledWith([GROUP_A, GROUP_B]);
         });
     });
 
@@ -114,7 +150,7 @@ describe('GippRhUseCases', () => {
             });
             const useCases = makeUseCases({ repository });
 
-            const result = await useCases.confirmTreasuryPaymentByReceiptGroupIds(['grp-1']);
+            const result = await useCases.confirmTreasuryPaymentByReceiptGroupIds([GROUP_A]);
 
             expect(result.confirmed).toEqual(['WS-1']);
             expect(result.skipped).toEqual([
@@ -132,21 +168,20 @@ describe('GippRhUseCases', () => {
             });
             const useCases = makeUseCases({ repository });
 
-            const result = await useCases.confirmTreasuryPaymentByReceiptGroupIds(['grp-1']);
+            const result = await useCases.confirmTreasuryPaymentByReceiptGroupIds([GROUP_A]);
 
             expect(result.confirmed).toEqual([]);
             expect(repository.confirmTreasuryPayment).not.toHaveBeenCalled();
         });
 
-        it('should dedupe group ids and skip the query when the list is empty', async () => {
+        it('should dedupe group ids and reject an empty list', async () => {
             const repository = makeFakeRepository();
             const useCases = makeUseCases({ repository });
 
-            await useCases.confirmTreasuryPaymentByReceiptGroupIds([' grp-1 ', 'grp-1', '']);
-            expect(repository.findWorkSchedulesByReceiptGroupIds).toHaveBeenCalledWith(['grp-1']);
+            await useCases.confirmTreasuryPaymentByReceiptGroupIds([` ${GROUP_A} `, GROUP_A.toLowerCase()]);
+            expect(repository.findWorkSchedulesByReceiptGroupIds).toHaveBeenCalledWith([GROUP_A]);
 
-            const empty = await useCases.confirmTreasuryPaymentByReceiptGroupIds([]);
-            expect(empty).toEqual({ confirmed: [], skipped: [] });
+            await expect(useCases.confirmTreasuryPaymentByReceiptGroupIds([])).rejects.toThrow(AppError);
             expect(repository.findWorkSchedulesByReceiptGroupIds).toHaveBeenCalledTimes(1);
         });
 
@@ -159,9 +194,30 @@ describe('GippRhUseCases', () => {
             const useCases = makeUseCases({ repository });
             const actor = { registration: '12345' };
 
-            await useCases.confirmTreasuryPaymentByReceiptGroupIds(['grp-1'], actor);
+            await useCases.confirmTreasuryPaymentByReceiptGroupIds([GROUP_A], actor);
 
             expect(repository.confirmTreasuryPayment).toHaveBeenCalledWith(['WS-1'], actor);
+        });
+    });
+
+    describe('revertTreasuryPayment', () => {
+        it('should revert the given schedules', async () => {
+            const repository = makeFakeRepository();
+            const useCases = makeUseCases({ repository });
+            const actor = { registration: '12345' };
+
+            await useCases.revertTreasuryPayment(['WS-1', 'WS-2'], actor);
+
+            expect(repository.revertTreasuryPayment).toHaveBeenCalledWith(['WS-1', 'WS-2'], actor);
+        });
+
+        it('should not hit the database when there is nothing to revert', async () => {
+            const repository = makeFakeRepository();
+            const useCases = makeUseCases({ repository });
+
+            expect(await useCases.revertTreasuryPayment([])).toBe(0);
+            expect(await useCases.revertTreasuryPayment(null)).toBe(0);
+            expect(repository.revertTreasuryPayment).not.toHaveBeenCalled();
         });
     });
 

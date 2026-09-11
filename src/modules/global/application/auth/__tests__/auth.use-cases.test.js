@@ -136,8 +136,24 @@ describe('AuthUseCases', () => {
 
             const result = await useCases.login('fulano', 'senha123');
 
-            expect(protheusRepository.findUserOrganization).toHaveBeenCalledWith('123');
+            expect(protheusRepository.findUserOrganization).toHaveBeenCalledWith('123', '0101');
             expect(result.company_name).toBe('Acme');
+        });
+
+        // A matrícula não é única entre empresas — 86 delas aparecem em mais de
+        // uma filial. Como a busca no Protheus usa só a primeira linha, sem a
+        // filial a sessão pode herdar empresa e centro de custo de outra pessoa.
+        it('should pass the branch along so the Protheus lookup is unambiguous', async () => {
+            const protheusRepository = makeFakeProtheusRepository({
+                findUserOrganization: jest.fn().mockResolvedValue({}),
+            });
+            const useCases = makeUseCases({ protheusRepository });
+
+            await useCases.login('fulano', 'senha123');
+
+            const [registration, branchCode] = protheusRepository.findUserOrganization.mock.calls[0];
+            expect(registration).toBe('123');
+            expect(branchCode).toBe('0101');
         });
     });
 });

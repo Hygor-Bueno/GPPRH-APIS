@@ -22,7 +22,10 @@ class SqlServerPayeeRepository extends PayeeRepositoryPort {
             return await fn();
         } catch (error) {
             if (error instanceof AppError) throw error;
-            throw new AppError(error.message || fallbackMessage, 500, error.code || 'SQLSERVER_ERROR', error);
+            throw new AppError(error.message || fallbackMessage, 500, {
+                code: error.code || 'SQLSERVER_ERROR',
+                details: error,
+            });
         }
     }
 

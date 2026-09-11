@@ -21,6 +21,66 @@ const PRINTABLE_STATUSES = Object.freeze([
     WORK_SCHEDULE_STATUS.FINISHED,
 ]);
 
+/** Formato de `gipp_payment_receipt.receipt_group_id` — UNIQUEIDENTIFIER no banco. */
+const RECEIPT_GROUP_ID_PATTERN =
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+/**
+ * Normaliza e valida a lista de grupos de recibo.
+ *
+ * A coluna é UNIQUEIDENTIFIER, então um único item malformado no array aborta a
+ * query **inteira** com "Conversion failed when converting from a character
+ * string to uniqueidentifier" — o lote todo cai por causa de um id ruim, e o
+ * cliente recebe um 500 que não diz qual. Barrar aqui troca isso por um 400 que
+ * nomeia os culpados.
+ *
+ * Verificado no banco: `''`, `'abc'` e `'   '` derrubam a consulta.
+ *
+ * @param {string[]} groupIds
+ * @returns {string[]} Ids em caixa alta, sem espaços, sem repetição.
+ * @throws {AppError} 400 se não for lista, se ficar vazia ou se houver id inválido.
+ */
+function normalizeReceiptGroupIds(groupIds) {
+    if (!Array.isArray(groupIds)) {
+        throw new AppError("'receipt_group_ids' deve ser uma lista.", 400, {
+            code: 'INVALID_RECEIPT_GROUP_IDS',
+        });
+    }
+
+    const seen = new Set();
+    const valid = [];
+    const invalid = [];
+
+    for (const raw of groupIds) {
+        const id = String(raw ?? '').trim();
+        if (!id) { invalid.push(String(raw)); continue; }
+        if (!RECEIPT_GROUP_ID_PATTERN.test(id)) { invalid.push(id); continue; }
+
+        // O banco devolve o GUID em caixa alta; normalizar evita que o mesmo
+        // grupo entre duas vezes só por diferença de caixa.
+        const key = id.toUpperCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        valid.push(key);
+    }
+
+    if (invalid.length) {
+        throw new AppError(
+            `Grupo de recibo inválido: ${invalid.join(', ')}.`,
+            400,
+            { code: 'INVALID_RECEIPT_GROUP_IDS', details: { invalid } },
+        );
+    }
+
+    if (!valid.length) {
+        throw new AppError("Informe ao menos um 'receipt_group_id'.", 400, {
+            code: 'EMPTY_RECEIPT_GROUP_IDS',
+        });
+    }
+
+    return valid;
+}
+
 class GippRhUseCases {
     /** @param {{repository: import('./ports/gipp-rh-repository.port').GippRhRepositoryPort}} deps */
     constructor({ repository }) {
@@ -68,8 +128,7 @@ class GippRhUseCases {
     }
 
     async getReceiptsByGroupIds(groupIds) {
-        if (!groupIds?.length) return [];
-        return this.repository.findReceiptsByGroupIds(groupIds);
+        return this.repository.findReceiptsByGroupIds(normalizeReceiptGroupIds(groupIds));
     }
 
     // ─── Códigos de evento / Tipos de pagamento ─────────────────────────────
@@ -219,9 +278,7 @@ class GippRhUseCases {
      * @returns {Promise<{confirmed: string[], skipped: Array<{cod_work_schedule: string, status: number, reason: string}>}>}
      */
     async confirmTreasuryPaymentByReceiptGroupIds(groupIds, actor = null) {
-        const ids = [...new Set((groupIds || []).map(g => String(g).trim()).filter(Boolean))];
-        if (!ids.length) return { confirmed: [], skipped: [] };
-
+        const ids = normalizeReceiptGroupIds(groupIds);
         const schedules = await this.repository.findWorkSchedulesByReceiptGroupIds(ids);
 
         const confirmed = [];
@@ -240,6 +297,24 @@ class GippRhUseCases {
         }
 
         return { confirmed, skipped };
+    }
+
+    /**
+     * Desfaz o fechamento automático da impressão consolidada: 4 → 6.
+     *
+     * Compensação, não transação: o UPDATE que fechou já commitou quando isto
+     * roda. Passe **apenas** os códigos que a própria requisição fechou — o
+     * repositório filtra `id_status_fk = 4`, mas reenviar jornada que já estava
+     * finalizada antes da impressão a reabriria indevidamente.
+     *
+     * @param {string[]} codWorkSchedules
+     * @param {import('../../../../utils/audit-actor').AuditActor} [actor]
+     * @returns {Promise<number>} Jornadas revertidas.
+     */
+    async revertTreasuryPayment(codWorkSchedules, actor = null) {
+        const codes = [...new Set((codWorkSchedules || []).map(c => String(c).trim()).filter(Boolean))];
+        if (!codes.length) return 0;
+        return this.repository.revertTreasuryPayment(codes, actor);
     }
 }
 

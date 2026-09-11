@@ -69,6 +69,15 @@ const MAX_IMAGES = 5;
  * Erra para o lado de recusar rosto legítimo, e recusar cai no QR — que é
  * incômodo. O erro na outra direção é o sistema afirmar identidade errada sobre
  * uma pessoa, e esse não tem desfazer.
+ *
+ * ⚠️ **Durante o piloto, este número é a ÚNICA proteção efetiva do 1:N.**
+ *   A segunda trava — a margem sobre o segundo colocado — praticamente não
+ *   dispara com galeria pequena: com cinco rostos cadastrados não existe segundo
+ *   colocado perto o bastante para gerar `ambiguous`. Das duas travas
+ *   anunciadas, só uma está de fato operando agora. Isso torna a calibração
+ *   deste corte mais urgente, não menos — e é mais uma razão para o piloto
+ *   registrar o score real de cada tentativa, que é para isso que
+ *   `threshold_is_provisional` sai na resposta.
  */
 const MATCH_THRESHOLD = Number(process.env.MEAL_FACE_THRESHOLD || 0.5);
 
@@ -88,6 +97,28 @@ const MATCH_THRESHOLD = Number(process.env.MEAL_FACE_THRESHOLD || 0.5);
  *   a distância entre o primeiro e o segundo colocado, nas comparações reais.
  */
 const IDENTIFY_MARGIN = Number(process.env.MEAL_FACE_MARGIN || 0.06);
+
+/**
+ * Abrangência da busca 1:N — `site` ou `global`.
+ *
+ * `site` é o padrão do CÓDIGO de propósito, e não porque seja o modo em uso
+ * agora. Subir esta API em outro ambiente sem configurar nada não pode abrir a
+ * busca para a base inteira por acidente: o modo arriscado exige ato explícito.
+ *
+ * O piloto liga `MEAL_FACE_IDENTIFY_SCOPE=global` porque a galeria tem cinco
+ * rostos, e com cinco o recorte por loja só atrapalha — ver o comentário em
+ * `sqlFindIdentifyCandidates`, que tem a conta de quando ele volta a valer.
+ *
+ * Valor desconhecido cai em `site`. Errar para o lado restritivo é o certo aqui:
+ * um typo na variável de ambiente não deve alargar silenciosamente o conjunto de
+ * busca de reconhecimento facial.
+ */
+const IDENTIFY_SCOPE = Object.freeze({ SITE: 'site', GLOBAL: 'global' });
+
+const CONFIGURED_IDENTIFY_SCOPE =
+    String(process.env.MEAL_FACE_IDENTIFY_SCOPE ?? '').trim().toLowerCase() === IDENTIFY_SCOPE.GLOBAL
+        ? IDENTIFY_SCOPE.GLOBAL
+        : IDENTIFY_SCOPE.SITE;
 
 /** Como a identidade foi provada. Espelha CK_meal_biometric_verified_by. */
 const VERIFIED_BY = Object.freeze({
@@ -200,11 +231,13 @@ class MealEnrollUseCases {
      * @param {{
      *   repository: object,
      *   faceClient: typeof import('../infrastructure/face-recognition.client'),
+     *   identifyScope?: string,
      * }} deps
      */
-    constructor({ repository, faceClient }) {
+    constructor({ repository, faceClient, identifyScope = CONFIGURED_IDENTIFY_SCOPE }) {
         this.repository = repository;
         this.face = faceClient;
+        this.identifyScope = identifyScope;
     }
 
     // ─── Emissão (RH, app interno) ──────────────────────────────────────────
@@ -625,10 +658,17 @@ class MealEnrollUseCases {
      * tráfego e latência para o mesmo resultado.
      */
     async identifyByFace(siteCode, imageBase64) {
+        /* A loja continua obrigatória mesmo no escopo `global`, onde não filtra
+           nada. Dois motivos: o contrato da rota não muda quando o modo muda, e
+           a validação tem que continuar de pé para o dia em que `site` voltar —
+           afrouxar agora seria descobrir o buraco na volta. */
         const site = trimOrNull(siteCode);
         if (!site || !SITE_CODE_PATTERN.test(site)) {
             throw new BadRequestError('Informe a loja com 4 dígitos (ex.: 0202).');
         }
+
+        const scope = this.identifyScope;
+        const isGlobal = scope === IDENTIFY_SCOPE.GLOBAL;
 
         const probe = await this.face.embed(imageBase64);
         const probeVector = this._toFloat32(Buffer.from(probe.embedding, 'base64'));
@@ -636,11 +676,14 @@ class MealEnrollUseCases {
         const candidates = await this.repository.findIdentifyCandidates(
             site,
             probe.model_tag,
+            scope,
         );
 
         if (candidates.length === 0) {
             throw new AppError(
-                'Nenhum rosto cadastrado nesta loja ainda. Use o crachá.',
+                isGlobal
+                    ? 'Nenhum rosto cadastrado ainda. Use o crachá.'
+                    : 'Nenhum rosto cadastrado nesta loja ainda. Use o crachá.',
                 404,
                 { code: 'NO_CANDIDATES' },
             );
@@ -659,7 +702,12 @@ class MealEnrollUseCases {
         const margin = second ? first.score - second.score : Infinity;
 
         const base = {
+            /* Tamanho REAL do conjunto comparado, nos dois modos. É o número que
+               mostra quando a conta do recorte por loja passa a valer de novo —
+               ver `sqlFindIdentifyCandidates`. Some junto o modo que produziu
+               esse número, senão o valor sozinho não diz o que aconteceu. */
             candidates_compared: scored.length,
+            identify_scope: scope,
             threshold: MATCH_THRESHOLD,
             required_margin: IDENTIFY_MARGIN,
             threshold_is_provisional: !process.env.MEAL_FACE_THRESHOLD,
@@ -928,6 +976,8 @@ module.exports = {
     MealEnrollUseCases,
     MATCH_THRESHOLD,
     IDENTIFY_MARGIN,
+    IDENTIFY_SCOPE,
+    CONFIGURED_IDENTIFY_SCOPE,
     VERIFIED_BY,
     INVITE_TTL_DAYS,
     MAX_ATTEMPTS,

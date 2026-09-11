@@ -17,7 +17,7 @@
  */
 function sqlFindByHash() {
     return `
-        SELECT id, file_path, file_name, file_extension, file_type, file_size, file_hash, status
+        SELECT id, file_path, file_name, file_extension, file_type, file_size, file_hash, video_codec, status
         FROM _files
         WHERE file_hash = ? AND status = 1
         LIMIT 1
@@ -33,7 +33,7 @@ function sqlFindByHash() {
  */
 function sqlFindById() {
     return `
-        SELECT id, file_path, file_name, file_extension, file_type, file_size, file_hash, status
+        SELECT id, file_path, file_name, file_extension, file_type, file_size, file_hash, video_codec, status
         FROM _files
         WHERE id = ? AND status = 1
         LIMIT 1
@@ -43,15 +43,15 @@ function sqlFindById() {
 /**
  * Insere um novo registro de arquivo.
  *
- * Parâmetros: `[file_path, file_name, file_extension, file_type, file_size, file_hash, created_by_fk, updated_by_fk]`
+ * Parâmetros: `[file_path, file_name, file_extension, file_type, file_size, file_hash, video_codec, created_by_fk, updated_by_fk]`
  *
  * @returns {string}
  */
 function sqlInsertFile() {
     return `
         INSERT INTO _files
-            (file_path, file_name, file_extension, file_type, file_size, file_hash, created_by_fk, updated_by_fk)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (file_path, file_name, file_extension, file_type, file_size, file_hash, video_codec, created_by_fk, updated_by_fk)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 }
 

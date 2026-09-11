@@ -35,6 +35,23 @@ module.exports = {
       // encaminha o stdout/stderr dos workers para o stdout do container.
       // Redirecionar também para /dev/stdout duplica cada linha de log.
 
+      // Gravar também em arquivo, em cima do bind mount `./logs:/app/logs` do
+      // compose: sem isto o único caminho até um erro de produção é
+      // `docker logs` na máquina do Docker, e quem depura pelo compartilhamento
+      // de rede fica sem nada. Não conflita com o aviso acima — o destino aqui
+      // é arquivo, não /dev/stdout, então `docker logs` continua igual.
+      //
+      // `merge_logs` junta as duas instâncias do cluster num arquivo só: com
+      // ele desligado o PM2 sufixa o nome com o id do worker e a mesma
+      // requisição pode cair em qualquer um dos dois arquivos.
+      error_file: "/app/logs/api-gipp-enterprises-error.log",
+      out_file: "/app/logs/api-gipp-enterprises-out.log",
+      merge_logs: true,
+
+      // Sem isto as linhas de `console.error` entram no arquivo sem hora, o que
+      // inviabiliza cruzar o erro com o histórico de status do banco.
+      log_date_format: "YYYY-MM-DD HH:mm:ss",
+
       env: {
         NODE_ENV: "production"
       }

@@ -5,6 +5,21 @@ function errorHandler(err, req, res, next) {
   // AppError operacionais não precisam de stack trace no log
   if (!(err instanceof AppError)) console.error('[server] Unhandled error caught by middleware:', err);
 
+  // 4xx é erro de uso e continua fora do log. 5xx é falha nossa: o cliente só
+  // recebe `message` e `code` — `details` não atravessa a borda de propósito —,
+  // então sem esta linha a causa real (timeout, deadlock, pool esgotado) não
+  // fica registrada em lugar nenhum e o incidente vira irreproduzível.
+  if (err instanceof AppError && err.statusCode >= 500) {
+    console.error('[server] AppError 5xx:', {
+      method: req.method,
+      path: req.originalUrl,
+      status: err.statusCode,
+      code: err.code,
+      message: err.message,
+      cause: err.details?.message ?? err.details?.originalError?.message ?? null,
+    });
+  }
+
   // Erros operacionais conhecidos
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({
@@ -25,8 +40,9 @@ function errorHandler(err, req, res, next) {
   // Erros do multer (upload de arquivo)
   if (err instanceof multer.MulterError) {
     const MSG = {
-      LIMIT_FILE_SIZE: 'Arquivo muito grande. Tamanho máximo permitido: 10 MB.',
-      LIMIT_UNEXPECTED_FILE: 'Campo de arquivo inesperado. Use o campo "file".',
+      LIMIT_FILE_SIZE: 'Arquivo muito grande. Tamanho máximo permitido: 50 MB.',
+      LIMIT_FILE_COUNT: 'Arquivos demais em uma única requisição.',
+      LIMIT_UNEXPECTED_FILE: 'Campo de arquivo inesperado. Use o campo "files" (ou "file").',
     };
     return res.status(400).json({
       error: true,

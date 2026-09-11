@@ -13,7 +13,7 @@
  */
 function sqlActiveBeneficiaries() {
     return `SELECT
-                rh.RA_NOME as name,
+                rh.EmployeeName as name,
                 comp.M0_FULNAME as comapany_name,
                 comp.M0_FILIAL as branch_name,
                 ec.*,
@@ -24,9 +24,14 @@ function sqlActiveBeneficiaries() {
                 INNER JOIN GIPP.dbo.gipp_rh_compensation c
                 ON c.id = ec.compensation_id
 
-                INNER JOIN TMPPRD12.dbo.SRA020 rh
-                ON rh.RA_MAT = ec.employee_id
-                AND rh.RA_FILIAL = ec.branch_code
+                -- view_employee_with_company_info já unifica as 7 tabelas do
+                -- Protheus (SRA010..SRA090) e aplica o filtro de exclusão. Antes
+                -- daqui havia SRA020 fixo, que é só a empresa 02 — e por ser
+                -- INNER JOIN o beneficiário das outras empresas não aparecia
+                -- errado, desaparecia da listagem.
+                INNER JOIN GIPP.dbo.view_employee_with_company_info rh
+                ON rh.EmployeeID = ec.employee_id
+                AND rh.BranchCode = ec.branch_code
 
                 INNER JOIN TMPPRD12.dbo.SYS_COMPANY comp
                 ON comp.M0_CODFIL = ec.branch_code
@@ -155,7 +160,7 @@ function sqlGetBeneficiariesByEmployee(employeeCode, branchCode, referenceInit, 
                 LTRIM(RTRIM(comp.M0_ESTENT)) + ' - CEP: ' +
                 LTRIM(RTRIM(comp.M0_CEPENT)) AS endereco,
 
-                cc.CTT_DESC01 AS funcao
+                emp.CostCenterDescription AS funcao
 
             FROM GIPP.dbo.gipp_payment_receipt rec
 
@@ -163,16 +168,21 @@ function sqlGetBeneficiariesByEmployee(employeeCode, branchCode, referenceInit, 
                 ON comp.M0_CODFIL = rec.branch_code
                 AND comp.D_E_L_E_T_ != '*'
 
-            -- Colaborador CLT (opcional — prestadores não têm vínculo em SRA020)
-            LEFT JOIN TMPPRD12.dbo.SRA020 emp
-                ON emp.RA_MAT = rec.employee_code
-                AND emp.D_E_L_E_T_ != '*'
-                AND emp.RA_DEMISSA = ''
-
-            -- Centro de custo para obter função/cargo
-            LEFT JOIN TMPPRD12.dbo.CTT020 cc
-                ON cc.CTT_CUSTO = emp.RA_CC
-                AND cc.D_E_L_E_T_ != '*'
+            -- Colaborador CLT (opcional — prestador não tem vínculo no Protheus).
+            -- A view unifica as 7 tabelas do Protheus e já traz o centro de custo,
+            -- o que dispensa o join em CTT. Antes daqui havia SRA020 + CTT020
+            -- fixos, que são só da empresa 02: colaborador de outra empresa não
+            -- era encontrado e o recibo saía sem nome e com função "Prestador de
+            -- Serviço" mesmo sendo CLT.
+            --
+            -- RA_FILIAL no join não é redundante: sem ele a mesma matrícula em
+            -- outra filial casa e o recibo pode trazer o nome de outra pessoa.
+            -- BranchCode no join não é redundante: sem ele a mesma matrícula em
+            -- outra filial casa e o recibo pode trazer o nome de outra pessoa.
+            LEFT JOIN GIPP.dbo.view_employee_with_company_info emp
+                ON emp.EmployeeID    = rec.employee_code
+                AND emp.BranchCode   = rec.branch_code
+                AND emp.EmployeeDemiss = ''
 
             -- Aplica filtros dinâmicos + garante que apenas recibos ativos apareçam no PDF
             ${whereClause}${whereClause ? ' AND' : 'WHERE'} rec.is_active = 1
@@ -593,7 +603,7 @@ function sqlGetReceiptsByGroupIds(groupIds) {
                 LTRIM(RTRIM(comp.M0_CEPENT))      AS endereco,
 
                 -- Função/cargo via centro de custo (apenas colaboradores CLT)
-                cc.CTT_DESC01                      AS funcao
+                emp.CostCenterDescription          AS funcao
 
             FROM GIPP.dbo.gipp_payment_receipt rec
 
@@ -601,25 +611,18 @@ function sqlGetReceiptsByGroupIds(groupIds) {
                 ON comp.M0_CODFIL   = rec.branch_code
                AND comp.D_E_L_E_T_ != '*'
 
-            -- Colaboradores CLT (prestadores não possuem vínculo em SRA020)
-            -- RA_FILIAL filtra pela filial do recibo: evita produto cartesiano quando
-            -- o mesmo RA_MAT existe em mais de uma filial ativa no SRA020.
-            LEFT JOIN TMPPRD12.dbo.SRA020 emp
-                ON emp.RA_MAT      = rec.employee_code
-               AND emp.RA_FILIAL   = rec.branch_code
-               AND emp.D_E_L_E_T_ != '*'
-               AND emp.RA_DEMISSA  = ''
-
-            -- OUTER APPLY garante no máximo 1 linha por centro de custo,
-            -- evitando produto cartesiano quando CTT020 tem a mesma CTT_CUSTO
-            -- cadastrada em múltiplas filiais/empresas (comportamento padrão do Protheus).
-            OUTER APPLY (
-                SELECT TOP 1 CTT_DESC01
-                FROM TMPPRD12.dbo.CTT020
-                WHERE CTT_CUSTO   = emp.RA_CC
-                  AND D_E_L_E_T_ != '*'
-                ORDER BY CTT_FILIAL
-            ) cc
+            -- Colaboradores CLT (prestadores não possuem vínculo no Protheus).
+            -- BranchCode filtra pela filial do recibo: evita produto cartesiano
+            -- quando a mesma matrícula existe em mais de uma filial ativa.
+            --
+            -- A view unifica as 7 tabelas do Protheus (SRA010..SRA090) e já traz
+            -- o centro de custo. Antes havia SRA020 + CTT020 fixos, que são só da
+            -- empresa 02: a 0601 (empresa 06) imprimia recibo sem nome e com
+            -- função "Prestador de Serviço" para colaborador CLT.
+            LEFT JOIN GIPP.dbo.view_employee_with_company_info emp
+                ON emp.EmployeeID      = rec.employee_code
+               AND emp.BranchCode      = rec.branch_code
+               AND emp.EmployeeDemiss  = ''
 
             WHERE rec.receipt_group_id IN (${keys.join(', ')})
               AND rec.is_active = 1

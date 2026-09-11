@@ -31,9 +31,15 @@ class SqlServerProtheusEmployeeRepository extends ProtheusEmployeeRepositoryPort
         }
     }
 
-    async findUserOrganization(registration) {
+    /**
+     * @param {string} registration
+     * @param {?string} [branchCode] Filial do usuário. Informe sempre que conhecida:
+     *   a matrícula não é única entre empresas, e sem a filial esta busca pode
+     *   devolver o vínculo de outra pessoa (só a primeira linha é usada).
+     */
+    async findUserOrganization(registration, branchCode = null) {
         const pool = await poolPromise;
-        const { sql: query, params } = sqlMapUserWithOrganization(registration);
+        const { sql: query, params } = sqlMapUserWithOrganization(registration, branchCode);
         const request = pool.request();
         for (const [key, value] of Object.entries(params)) {
             request.input(key, value);

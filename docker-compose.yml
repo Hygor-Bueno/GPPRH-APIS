@@ -152,6 +152,52 @@ services:
     command: ["node", "src/websocket/websocketServer.js"]
 
   # ===========================================================================
+  # Transcodificação de vídeo — converte anexos para H.264/MP4
+  # ===========================================================================
+  #
+  # Imagem própria (Dockerfile.transcoder) porque carrega ffmpeg. Não entra no
+  # Dockerfile.internal, que é compartilhado com o WebSocket.
+  #
+  # ⚠️ UMA instância, sempre. O worker reserva job com FOR UPDATE SKIP LOCKED, o
+  #    que já suportaria concorrência, mas antes de subir réplica é preciso medir
+  #    a CPU do servidor — não há aceleração por hardware aqui, e dois ffmpeg
+  #    simultâneos disputam os mesmos núcleos que a API usa.
+  #
+  # Sem porta publicada: não atende requisição, só consome a fila do MySQL.
+  transcoder:
+    build:
+      context: .
+      dockerfile: Dockerfile.transcoder
+    image: video-transcoder:local
+    container_name: video-transcoder
+    restart: unless-stopped
+    depends_on: [api-gipp-enterprises]
+
+    env_file: [.env]
+    environment:
+      NODE_ENV: production
+      MYSQL_HOST: host.docker.internal
+      # Precisa apontar para o container do WS pelo nome na rede do compose —
+      # `localhost` aqui seria o próprio transcoder.
+      WS_EMIT_URL: http://ws-gipp-enterprises:4001/ws/emit-event
+      # Qualidade alvo. 26/1280 ≈ 10-15 MB por minuto; use CRF 23 se for preciso
+      # ler etiqueta de produto no vídeo (arquivo ~2x maior).
+      VIDEO_TARGET_CRF: "26"
+      VIDEO_TARGET_WIDTH: "1280"
+
+    volumes:
+      # Mesmo bind mount do backend interno: é onde os vídeos a converter estão.
+      # Precisa ser leitura E escrita — o worker grava a saída e apaga o original.
+      - ./storage:/app/storage
+
+    # Um ffmpeg em 720p cabe folgado nisto. O limite existe para o worker não
+    # competir por memória com os 2 workers da API no mesmo host.
+    mem_limit: 1g
+
+    extra_hosts: *extra-hosts
+    logging: *logging
+
+  # ===========================================================================
   # Backend público — site de vagas (candidatos)
   # ===========================================================================
   api-gpprh:
