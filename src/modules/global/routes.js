@@ -1081,7 +1081,7 @@ router.post('/gtpp/items/:itemId/responses',
     canAny(['GTPP_USE']),
     fileUpload.fields([
         { name: 'files', maxCount: gtppResponseController.MAX_RESPONSE_FILES },
-        { name: 'file',  maxCount: 1 },   // @deprecated campo antigo, um anexo só
+        { name: 'file', maxCount: 1 },   // @deprecated campo antigo, um anexo só
     ]),
     asyncHandler(gtppResponseController.createItemResponse));
 
@@ -2010,32 +2010,38 @@ router.put('/gapp/expenses/:id',
 // ─── GAPP — NF de despesas de ativo ───────────────────────────────────────────────
 router.get('/gapp/nf',
     authMiddleware,
+    canAll(['GAPP_VIEW_NF']),
     asyncHandler(gappNfController.listNf)
 );
 
 router.get('/gapp/nf/:id',
     authMiddleware,
+    canAll(['GAPP_VIEW_NF']),
     asyncHandler(gappNfController.listNfById)
 );
 
 router.get('/gapp/nf-coupon',
     authMiddleware,
+    canAll(['GAPP_VIEW_NF']),
     asyncHandler(gappNfController.listCoupon)
 );
 
 router.post('/gapp/nf',
     authMiddleware,
+    canAll(['GAPP_CREATE_NF']),
     validate(createNfSchema),
     asyncHandler(gappNfController.createNf)
 )
 router.put('/gapp/nf/:id',
     authMiddleware,
+    canAll(['GAPP_UPDATE_NF']),
     validate(updateNfSchema),
     asyncHandler(gappNfController.updateNf)
 )
 // Utiliza a o ID da despesa vinculada a nota fiscal e NÃO o ID da nota fiscal
 router.delete('/gapp/nf/:id',
     authMiddleware,
+    canAll(['GAPP_DELETE_NF']),
     asyncHandler(gappNfController.deleteNF)
 )
 
