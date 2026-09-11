@@ -2013,6 +2013,7 @@ router.put('/gapp/nf/:id',
     validate(updateNfSchema),
     asyncHandler(gappNfController.updateNf)
 )
+// Utiliza a o ID da despesa vinculada a nota fiscal e NÃO o ID da nota fiscal
 router.delete('/gapp/nf/:id',
     authMiddleware,
     asyncHandler(gappNfController.deleteNF)

@@ -21,43 +21,35 @@ class GappNfUseCases {
         }
         return gappUser;
     }
-
-    // 
+ 
     async list(filters) {
         const res = this.repository.listNf(filters);
         return res
     }
-
-    // 
+ 
     async listByid(id) {
         const res = this.repository.listNFById(id)
         return res
     }
-
-    // 
+ 
     async listCoupon() {
         return this.repository.listCoupon()
     }
-
-    // 
+ 
     async createNf(data, userId) {
         const gappUser = await this._resolveGappUser(userId);
         const payload = { ...data, user_id_fk: gappUser.user_id };
 
         return this.repository.createNf(payload);
     }
-
-    // 
+ 
     async updateNf(id, data, user) {
         const gappUser = await this._resolveGappUser(user);
-
-        //  * Adicionar validação Se a nota existe (findNFByID)
-
         const payload = { ...data, user_id_fk: gappUser.user_id };
+        
         return this.repository.updateNf(id, payload);
     }
-
-    // 
+ 
     async deleteNF(id) {
         return this.repository.deleteNF(id)
     }

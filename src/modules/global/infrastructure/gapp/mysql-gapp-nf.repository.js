@@ -51,10 +51,9 @@ class MysqlNfRepository {
         try {
             await conn.beginTransaction();
 
-            await conn.execute(sqlUpdateNF(), buildUpdateNfParams({ ...payload, nf_id: id }));
+            await conn.execute(sqlUpdateNF(), buildUpdateNfParams(payload));
 
             await conn.commit();
-            return { nf_id: id };
         } catch (err) {
             try { await conn.rollback(); } catch { /* conexão já pode ter caído */ }
             if (err instanceof AppError) throw err;
@@ -76,8 +75,12 @@ class MysqlNfRepository {
     async listNFById(id) {
         const sql = sqlListNFById(id);
         const [rows] = await this._query(sql);
-        const cupons = await this._resolveCupons(rows[0].nf_key)
-        return { ...rows[0], coupons: cupons }
+        const coupons = await this._resolveCupons(rows[0].nf_key)
+        let total = 0;
+        coupons.forEach(item => {
+            total = total + Number(item.total_value);
+        });
+        return { ...rows[0], coupons: coupons, total: total }
     }
 
     async _resolveCupons(nf_key) {
@@ -93,17 +96,16 @@ class MysqlNfRepository {
         return rows
     }
 
-    async deleteNF(nf_id) {
+    async deleteNF(id) {
         const conn = await poolGlobal.getConnection();
         try {
             await conn.beginTransaction();
 
-            await conn.execute(sqlDeleteNFById(nf_id));
+            await conn.execute(sqlDeleteNFById(id));
 
             await conn.commit();
-            return { nf_id: nf_id };
         } catch (err) {
-            try { await conn.rollback(); } catch { /* conexão já pode ter caído */ }
+            try { await conn.rollback(); } catch { }
             if (err instanceof AppError) throw err;
             throw new AppError(err.message, 500);
         } finally {

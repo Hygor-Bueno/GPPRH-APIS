@@ -18,7 +18,7 @@ function sqlUpdateNF() {
     return `
     UPDATE global.gapp_nf 
 	    SET number_nf = ?, dt_issue = ?, dt_delivery = ?, hr_exit = ?, nf_key = ?, expen_id_fk = ?, user_id_fk = ?
-    WHERE nf_id = ?;
+    WHERE expen_id_fk = ?;
     `
 }
 
@@ -31,7 +31,7 @@ function buildUpdateNfParams(data) {
         data.nf_key ?? null,
         data.expen_id_fk ?? null,
         data.user_id_fk ?? null,
-        data.nf_id ?? null
+        data.expen_id_fk ?? null,
     ]
 }
 
@@ -42,15 +42,22 @@ function sqlListNF(filters = {}) {
 
     const sql = `
         WITH gapp_nf AS (
-        SELECT 
-            *,
-            ROW_NUMBER() OVER(PARTITION BY number_nf ORDER BY nf_id DESC) as num_nf
-        FROM global.gapp_nf
-    )
-        SELECT nf_id, number_nf, dt_issue, dt_delivery, hr_exit, nf_key, expen_id_fk  
-            FROM gapp_nf 
-        WHERE num_nf = 1 
-        ORDER BY nf_id DESC LIMIT ? OFFSET ?
+            SELECT 
+                *,
+                ROW_NUMBER() OVER(PARTITION BY number_nf ORDER BY nf_id DESC) as num_nf
+            FROM global.gapp_nf
+        )
+            SELECT number_nf, dt_issue, dt_delivery, hr_exit, nf_key, expen_id_fk, (
+                SELECT SUM(ex.total_value) 
+                FROM global.gapp_nf nf2 
+                    JOIN global.gapp_expenses_register ex 
+                        ON nf2.expen_id_fk = ex.expen_id 
+                    WHERE nf2.nf_key = nf.nf_key
+            ) as total  
+                FROM gapp_nf nf
+            WHERE num_nf = 1 
+                ORDER BY nf_id DESC 
+            LIMIT ? OFFSET ?
     `
     return { sql, params: [limit, offset] };
 }
@@ -81,7 +88,7 @@ function sqlListCouponsDisassociated() {
 }
 
 function sqlListNFById(id) {
-    return `select number_nf, dt_issue, dt_delivery, hr_exit, nf_key, expen_id_fk from global.gapp_nf where nf_id = ${id}`
+    return `select number_nf, dt_issue, dt_delivery, hr_exit, nf_key, expen_id_fk from global.gapp_nf where number_nf = ${id}`
 }
 
 function sqlListCuponsAssociated(nf_key) {
@@ -94,8 +101,8 @@ function sqlListCuponsAssociated(nf_key) {
     `
 }
 
-function sqlDeleteNFById(nf_id) {
-    return `DELETE FROM global.gapp_nf where nf_id = ${nf_id};`
+function sqlDeleteNFById(id) {
+    return `DELETE FROM global.gapp_nf where expen_id_fk = ${id}`
 }
 
 module.exports = {
