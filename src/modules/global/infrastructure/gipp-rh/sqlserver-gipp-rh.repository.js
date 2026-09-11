@@ -38,7 +38,10 @@ class SqlServerGippRhRepository extends GippRhRepositoryPort {
             return await fn();
         } catch (error) {
             if (error instanceof AppError) throw error;
-            throw new AppError(error.message || fallbackMessage, 500, error.code || 'SQLSERVER_ERROR', error);
+            throw new AppError(error.message || fallbackMessage, 500, {
+                code: error.code || 'SQLSERVER_ERROR',
+                details: error,
+            });
         }
     }
 
@@ -232,7 +235,10 @@ class SqlServerGippRhRepository extends GippRhRepositoryPort {
                     409
                 );
             }
-            throw new AppError(error.message || 'Não foi possível inserir o recibo de pagamento.', 500, error.code || 'SQLSERVER_ERROR', error);
+            throw new AppError(error.message || 'Não foi possível inserir o recibo de pagamento.', 500, {
+                code: error.code || 'SQLSERVER_ERROR',
+                details: error,
+            });
         }
     }
 
@@ -347,6 +353,40 @@ class SqlServerGippRhRepository extends GippRhRepositoryPort {
             // `sp_set_session_context` do batch, não o do UPDATE.
             return result.recordset?.[0]?.affected_rows ?? 0;
         }, 'Não foi possível confirmar o pagamento das jornadas.');
+    }
+
+    /**
+     * Desfaz o fechamento da tesouraria: 4 (Finalizado) → 6 (Pagando).
+     *
+     * Única transição que sai do 4, e existe só para a rede de segurança da
+     * impressão consolidada: se o PDF não chegou ao cliente, a jornada não pode
+     * ficar finalizada sem recibo entregue. O filtro `id_status_fk = 4` garante
+     * que só volta o que de fato está fechado — se outro processo já mexeu no
+     * status, esta reversão não passa por cima.
+     */
+    async revertTreasuryPayment(scheduleList, actor = null) {
+        return this._run(async () => {
+            const pool = await poolPromise;
+            const placeholders = scheduleList.map((_, i) => `@ws${i}`);
+            const request = pool.request()
+                .input('from_status', sql.Int, 4)
+                .input('to_status', sql.Int, 6);
+            scheduleList.forEach((code, i) => request.input(`ws${i}`, sql.VarChar(50), code));
+
+            bindContext(request, actor, {
+                source: CHANGE_SOURCE.BACKEND,
+                reason: CHANGE_REASON.PAYMENT_REVERTED,
+            });
+
+            const result = await request.query(withAuditContext(`
+                UPDATE GIPP.dbo.cf_work_schedules
+                SET id_status_fk = @to_status
+                WHERE cod_work_schedule IN (${placeholders.join(', ')})
+                  AND id_status_fk = @from_status;
+            `, { captureRowCount: true }));
+
+            return result.recordset?.[0]?.affected_rows ?? 0;
+        }, 'Não foi possível reverter o fechamento das jornadas.');
     }
 
     /**

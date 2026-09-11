@@ -543,6 +543,11 @@ function sqlGetPayments(scheduleList) {
             FROM BusinessLayer B
         )
         SELECT
+            -- Não vai para a procedure do MySQL (que recebe 12 parâmetros fixos):
+            -- serve para saber a qual jornada cada pagamento pertence, e assim
+            -- poder pular só a jornada cujo colaborador não existe no MySQL, em
+            -- vez de abortar o lote inteiro.
+            F.cod_work_schedule                                                   AS cod_work_schedule,
             F.RA_CIC                                                              AS cpf,
             CONVERT(VARCHAR(10), StartTime, 103)                                  AS data,
             'Serviços Prestados'                                                  AS descricao,

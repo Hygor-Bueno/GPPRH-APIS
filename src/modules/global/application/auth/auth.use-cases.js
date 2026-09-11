@@ -212,7 +212,13 @@ class AuthUseCases {
     /** @private */
     async _buildSessionUser(identifier) {
         const userData = await this.repository.findUserAuthorization(identifier);
-        const orgData = await this.protheusRepository.findUserOrganization(userData.registration);
+        // A filial vai junto porque a matrícula não é única entre empresas: sem
+        // ela a busca no Protheus pode devolver o vínculo de outra pessoa, e a
+        // sessão herdaria empresa e centro de custo errados.
+        const orgData = await this.protheusRepository.findUserOrganization(
+            userData.registration,
+            userData.branch_code,
+        );
         return mapUserWithOrganization(userData, orgData);
     }
 }

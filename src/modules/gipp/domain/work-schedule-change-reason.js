@@ -37,6 +37,14 @@ const CHANGE_REASON = Object.freeze({
     /** 6 → 3, devolução à fila do RH quando o recibo não pôde ser gerado. */
     REVERTED_TO_PAYROLL: 'Cálculo financeiro revertido — recibo não gerado',
 
+    /**
+     * 4 → 6, desfazendo o fechamento automático da impressão consolidada quando
+     * o PDF não chegou ao cliente. É a única transição que sai do 4: existe para
+     * que uma entrega interrompida não deixe a jornada finalizada sem recibo
+     * impresso, o que a interface não tem como corrigir.
+     */
+    PAYMENT_REVERTED: 'Pagamento revertido — recibo não entregue',
+
     /** → 5, desconsiderada pelo encarregado, gerente ou RH. */
     CANCELLED: 'Compra de folga cancelada',
 });

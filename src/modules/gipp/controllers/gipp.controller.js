@@ -197,7 +197,23 @@ async function postPayments(req, res) {
         branchCode: user.branch_code,
     });
 
-    return respond.ok(res, { message: 'Marcações finalizadas com sucesso.', data });
+    // Colaborador sem cadastro ativo no MySQL deixa de bloquear o lote, mas o
+    // recibo dele fica só no GIPP. Sem dizer isso na mensagem, a divergência
+    // passaria como "sucesso" e ninguém mandaria corrigir o cadastro.
+    const pulados = data.replication_skipped ?? [];
+    if (pulados.length) {
+        console.warn(
+            `[gipp] payments: ${pulados.length} jornada(s) sem replicação no MySQL`,
+            `(colaborador sem cadastro ativo) — CPFs: ${pulados.map(p => p.cpf).join(', ')}`
+        );
+    }
+
+    const message = pulados.length
+        ? `Marcações finalizadas. ${pulados.length} colaborador(es) sem cadastro ativo no MySQL — `
+          + `o recibo foi gerado, mas não replicado. Regularize o cadastro.`
+        : 'Marcações finalizadas com sucesso.';
+
+    return respond.ok(res, { message, data });
 }
 
 async function postPaymentsClose(req, res) {

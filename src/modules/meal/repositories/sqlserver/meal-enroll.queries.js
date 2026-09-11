@@ -233,14 +233,31 @@ function sqlFindBiometricForVerify() {
     `;
 }
 
+/** Abrangência da busca 1:N. Ver `sqlFindIdentifyCandidates`. */
+const IDENTIFY_SCOPE = Object.freeze({
+    /** Só quem é da loja ou comeu nela nos últimos 30 dias. Padrão. */
+    SITE: 'site',
+    /** Todos os cadastrados não revogados. Para galeria pequena. */
+    GLOBAL: 'global',
+});
+
 /**
- * Candidatos para identificação 1:N numa loja.
+ * Candidatos para identificação 1:N.
  *
  * ⚠️ O recorte por loja é a primeira das duas travas do 1:N, e é o que torna a
- *   coisa defensável. Comparar contra as 1.700 pessoas do grupo multiplica a
- *   chance de erro: se cada comparação erra 0,01%, em 1.700 comparações a chance
- *   de apontar a pessoa errada passa de 15% por tentativa. Na maior loja são ~164
- *   pessoas — dez vezes menos exposição.
+ *   coisa defensável EM ESCALA. Comparar contra as 1.700 pessoas do grupo
+ *   multiplica a chance de erro: se cada comparação erra 0,01%, em 1.700
+ *   comparações a chance de apontar a pessoa errada passa de 15% por tentativa.
+ *   Na maior loja são ~164 pessoas — dez vezes menos exposição.
+ *
+ *   Essa conta continua verdadeira, e é por isso que o recorte virou MODO em vez
+ *   de sair do código. Ela só ainda não chegou: no piloto a galeria tem CINCO
+ *   rostos, e com cinco o recorte não reduz risco nenhum — ele só impede de achar
+ *   quem ainda não comeu naquela loja, que no piloto é todo mundo. Quando a
+ *   galeria crescer, `site` volta a ser o modo certo, e a conta acima é o
+ *   critério para decidir quando.
+ *
+ * ── Modo `site` ─────────────────────────────────────────────────────────────
  *
  * O conjunto é a UNIÃO de dois critérios, porque nenhum sozinho basta:
  *
@@ -253,19 +270,20 @@ function sqlFindBiometricForVerify() {
  * Isso é o desenho: um visitante eventual não deve estar no conjunto de busca de
  * uma loja onde nunca apareceu.
  *
- * `revoked_at IS NULL` fica no WHERE, não em quem chama: identificar por rosto
- * alguém que revogou seria ignorar a revogação.
+ * ── Modo `global` ───────────────────────────────────────────────────────────
+ *
+ * Cai só o recorte de loja. `revoked_at IS NULL` e o filtro por `model_tag`
+ * continuam nos dois modos, e não são negociáveis: identificar quem revogou
+ * seria ignorar a revogação, e comparar vetor de outro modelo produz um número
+ * sem significado que ainda assim elegeria alguém.
+ *
+ * @param {string} [scope] - `IDENTIFY_SCOPE.SITE` (padrão) ou `.GLOBAL`.
  */
-function sqlFindIdentifyCandidates() {
-    return `
-        SELECT b.company_code,
-               b.employee_id,
-               b.branch_code,
-               b.embedding,
-               b.model_tag
-        FROM GIPP.dbo.meal_biometric b
-        WHERE b.revoked_at IS NULL
-          AND b.model_tag = @model_tag
+function sqlFindIdentifyCandidates(scope = IDENTIFY_SCOPE.SITE) {
+    /* Em `global` o predicado de loja não é montado, e `@site_code` deixa de ser
+       enviado pelo repositório — parâmetro declarado e não usado é legal em
+       T-SQL, mas some junto para a query dizer exatamente o que faz. */
+    const siteFilter = scope === IDENTIFY_SCOPE.GLOBAL ? '' : `
           AND (
                 b.branch_code = @site_code
              OR EXISTS (
@@ -277,7 +295,17 @@ function sqlFindIdentifyCandidates() {
                       AND ml.branch_code  = b.branch_code
                       AND ml.service_date >= DATEADD(DAY, -30, CAST(GETDATE() AS DATE))
                 )
-              );
+              )`;
+
+    return `
+        SELECT b.company_code,
+               b.employee_id,
+               b.branch_code,
+               b.embedding,
+               b.model_tag
+        FROM GIPP.dbo.meal_biometric b
+        WHERE b.revoked_at IS NULL
+          AND b.model_tag = @model_tag${siteFilter};
     `;
 }
 
@@ -335,4 +363,5 @@ module.exports = {
     sqlFindIdentifyCandidates,
     sqlRevokeBiometric,
     sqlFindBiometricStatus,
+    IDENTIFY_SCOPE,
 };

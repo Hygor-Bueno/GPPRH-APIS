@@ -260,8 +260,43 @@ async function downloadReceiptByGroup(req, res, next) {
             "Access-Control-Expose-Headers",
             "Content-Disposition, X-Work-Schedules-Confirmed, X-Work-Schedules-Skipped"
         );
+
+        // Rede de segurança da entrega. O fechamento já commitou neste ponto, e
+        // do 4 a interface não volta — então se a resposta não completar (cliente
+        // desconecta, proxy corta, rede da loja cai), desfazemos o 6 → 4 para que
+        // a jornada continue reimprimível em vez de ficar finalizada sem recibo.
+        if (closure.confirmed.length) {
+            let delivered = false;
+            res.once('finish', () => { delivered = true; });
+            res.once('close', () => {
+                if (delivered) return;
+                useCases.revertTreasuryPayment(closure.confirmed, toAuditActor(req.user))
+                    .then(reverted => console.warn(
+                        `[gipp-rh] receipt-by-group: entrega interrompida, ${reverted} jornada(s) revertidas 4 → 6:`,
+                        closure.confirmed.join(', ')
+                    ))
+                    // Aqui não há resposta para carregar o erro: a conexão já caiu.
+                    // O log é o único aviso de que ficou jornada fechada sem recibo.
+                    .catch(revertErr => console.error(
+                        '[gipp-rh] receipt-by-group: FALHA AO REVERTER. Jornadas finalizadas sem recibo entregue,',
+                        'exigem correção manual:', closure.confirmed.join(', '), revertErr
+                    ));
+            });
+        }
+
         res.send(Buffer.from(pdf));
     } catch (err) {
+        // `_run` embrulha o erro do SQL Server em AppError, e o errorHandler não
+        // loga AppError nem devolve `details` ao cliente — sem isto a causa real
+        // (deadlock, timeout, pool esgotado) não aparece em lugar nenhum.
+        console.error('[gipp-rh] receipt-by-group falhou:', {
+            receipt_group_ids,
+            user: req.user?.registration ?? null,
+            status: err.statusCode ?? null,
+            code: err.code ?? null,
+            message: err.message,
+            cause: err.details?.message ?? err.details?.originalError?.message ?? null,
+        });
         next(err);
     }
 }

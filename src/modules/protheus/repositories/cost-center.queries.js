@@ -1,4 +1,57 @@
 // repositório que apenas retorna SQL (padrão que você usa)
+
+/**
+ * Empresas do Protheus e as tabelas de cada uma.
+ *
+ * No Protheus a tabela é por empresa: `SRA020` são os colaboradores da 02,
+ * `SRA060` os da 06, e o centro de custo segue o mesmo sufixo. Não há 04 nem 05
+ * nesta base.
+ */
+const COMPANY_TABLES = Object.freeze([
+    { company: '01', employees: 'SRA010', costCenters: 'CTT010' },
+    { company: '02', employees: 'SRA020', costCenters: 'CTT020' },
+    { company: '03', employees: 'SRA030', costCenters: 'CTT030' },
+    { company: '06', employees: 'SRA060', costCenters: 'CTT060' },
+    { company: '07', employees: 'SRA070', costCenters: 'CTT070' },
+    { company: '08', employees: 'SRA080', costCenters: 'CTT080' },
+    { company: '09', employees: 'SRA090', costCenters: 'CTT090' },
+]);
+
+/**
+ * Colaboradores de TODAS as empresas, já com o centro de custo resolvido.
+ *
+ * O resto do backend usa `GIPP.dbo.view_employee_with_company_info`, que faz
+ * exatamente isto. Aqui não dá: as queries deste arquivo rodam no pool
+ * `config/protheus` (usuário do Protheus), que **não tem permissão no banco
+ * GIPP** — usar a view devolve "The server principal is not able to access the
+ * database GIPP". Então o UNION reproduz a view dentro de TMPPRD12.
+ *
+ * Antes desta função havia `SRA020` e `CTT020` fixos, ou seja, só a empresa 02.
+ * Como os JOIN eram INNER, colaborador das outras seis não vinha incompleto:
+ * desaparecia do resultado, e quem chama lê isso como "não encontrado no
+ * Protheus".
+ *
+ * OUTER APPLY com TOP 1 no centro de custo porque a mesma `CTT_CUSTO` existe em
+ * várias filiais — um JOIN simples multiplicaria as linhas do colaborador.
+ */
+const EMPLOYEES_ALL_COMPANIES = COMPANY_TABLES.map(({ company, employees, costCenters }) => `
+            SELECT
+                '${company}'   AS company_code,
+                RH.RA_MAT,
+                RH.RA_FILIAL,
+                RH.RA_DEMISSA,
+                CC.CTT_CUSTO,
+                CC.CTT_DESC01
+            FROM TMPPRD12.dbo.${employees} RH
+            OUTER APPLY (
+                SELECT TOP 1 CTT_CUSTO, CTT_DESC01
+                FROM TMPPRD12.dbo.${costCenters}
+                WHERE CTT_CUSTO   = RH.RA_CC
+                  AND D_E_L_E_T_ <> '*'
+                ORDER BY CTT_FILIAL
+            ) CC
+            WHERE RH.D_E_L_E_T_ <> '*'`).join('\n            UNION ALL');
+
 function sqlCostCenter(company_code) {
     if (!/^\d+$/.test(String(company_code))) {
         throw new Error('company_code inválido: deve ser numérico.');
@@ -33,28 +86,49 @@ function sqlCompany() {
               WHERE  CP.D_E_L_E_T_ <> '*'
           ) company ORDER BY company_name;`;
 }
-function sqlMapUserWithOrganization(registration) {
+/**
+ * Empresa, filial e centro de custo de um colaborador — usada para montar a
+ * sessão no login.
+ *
+ * `branch_code` não é opcional por gosto: a matrícula **não** é única entre
+ * empresas nem entre filiais (a 000003 existe na 0601 e na 0901). Quem chama usa
+ * a primeira linha, então sem a filial a sessão pode receber a empresa de outra
+ * pessoa. Quando a filial vem, o resultado é uma linha determinística; quando não
+ * vem, o ORDER BY ao menos torna a escolha estável entre execuções.
+ *
+ * @param {string} registration - Matrícula (aceita padrão de LIKE).
+ * @param {?string} [branchCode] - Filial de 4 dígitos, quando conhecida.
+ */
+function sqlMapUserWithOrganization(registration, branchCode = null) {
+    const params = { registration };
+    let filtroFilial = '';
+
+    if (branchCode) {
+        params.branch_code = branchCode;
+        filtroFilial = 'AND RH.RA_FILIAL = @branch_code';
+    }
+
     return {
         sql: `SELECT
-                LTRIM(RTRIM(CC.CTT_CUSTO)) AS CTT_CUSTO,
-                LTRIM(RTRIM(CC.CTT_DESC01)) AS CTT_DESC01,
+                LTRIM(RTRIM(RH.CTT_CUSTO)) AS CTT_CUSTO,
+                LTRIM(RTRIM(RH.CTT_DESC01)) AS CTT_DESC01,
                 M0_CODIGO,
                 M0_NOMECOM,
                 M0_CODFIL,
                 M0_FILIAL
 
-            FROM TMPPRD12.dbo.SRA020 RH
-
-                INNER JOIN TMPPRD12.dbo.CTT020 CC
-                ON RH.RA_CC = CC.CTT_CUSTO
+            FROM (${EMPLOYEES_ALL_COMPANIES}
+            ) RH
 
                 INNER JOIN TMPPRD12.dbo.SYS_COMPANY COMP
                 ON RH.RA_FILIAL = COMP.M0_CODFIL
+                AND COMP.D_E_L_E_T_ <> '*'
 
             WHERE RH.RA_MAT LIKE @registration AND
-                    RH.D_E_L_E_T_ <> '*' AND
-                    RH.RA_DEMISSA = '';`,
-        params: { registration }
+                    RH.RA_DEMISSA = ''
+                    ${filtroFilial}
+            ORDER BY RH.RA_FILIAL;`,
+        params
     };
 }
 
@@ -189,20 +263,24 @@ function sqlGetUserOrganizationBatch(count) {
         SELECT
             LTRIM(RTRIM(RH.RA_MAT))       AS registration,
             LTRIM(RTRIM(RH.RA_DEMISSA))   AS ra_demissa,
-            LTRIM(RTRIM(CC.CTT_CUSTO))    AS cost_center_code,
-            LTRIM(RTRIM(CC.CTT_DESC01))   AS cost_center_description,
+            LTRIM(RTRIM(RH.CTT_CUSTO))    AS cost_center_code,
+            LTRIM(RTRIM(RH.CTT_DESC01))   AS cost_center_description,
             LTRIM(RTRIM(COMP.M0_CODIGO))  AS company_code,
             LTRIM(RTRIM(COMP.M0_NOMECOM)) AS company_name,
             LTRIM(RTRIM(COMP.M0_CODFIL))  AS branch_code,
             LTRIM(RTRIM(COMP.M0_FILIAL))  AS branch_name,
             LTRIM(RTRIM(COMP.M0_CGC))     AS cnpj
-        FROM TMPPRD12.dbo.SRA020 RH
-            INNER JOIN TMPPRD12.dbo.CTT020 CC
-                ON CC.CTT_CUSTO = RH.RA_CC AND CC.D_E_L_E_T_ <> '*'
+        -- Todas as empresas: antes havia SRA020 + CTT020 fixos, e colaborador
+        -- fora da empresa 02 simplesmente não vinha nesta lista — quem chama lê
+        -- a ausência como "não encontrado no Protheus".
+        --
+        -- Segue sem filtrar demissão de propósito: ra_demissa vai no resultado
+        -- para quem chama decidir.
+        FROM (${EMPLOYEES_ALL_COMPANIES}
+        ) RH
             INNER JOIN TMPPRD12.dbo.SYS_COMPANY COMP
                 ON COMP.M0_CODFIL = RH.RA_FILIAL AND COMP.D_E_L_E_T_ <> '*'
         WHERE (${conditions})
-          AND RH.D_E_L_E_T_ <> '*'
     `;
 }
 

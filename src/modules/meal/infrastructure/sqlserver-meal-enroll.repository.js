@@ -23,6 +23,7 @@ const {
     sqlFindIdentifyCandidates,
     sqlRevokeBiometric,
     sqlFindBiometricStatus,
+    IDENTIFY_SCOPE,
 } = require('../repositories/sqlserver/meal-enroll.queries');
 
 const UNIQUE_VIOLATION = new Set([2601, 2627]);
@@ -236,21 +237,32 @@ class SqlServerMealEnrollRepository extends SqlServerMealRepository {
     }
 
     /**
-     * Vetores candidatos de uma loja, para identificação 1:N.
+     * Vetores candidatos para identificação 1:N.
      *
      * Filtra por `model_tag` na própria query: vetor de outro modelo não compara,
      * e deixar essa checagem para o código que percorre a lista significaria
      * calcular scores sem significado e possivelmente eleger um deles.
+     *
+     * @param {string} siteCode - Loja da sessão. Ignorado no escopo `global`.
+     * @param {string} modelTag
+     * @param {string} [scope]  - `site` (padrão) ou `global`. Ver a query.
      */
-    async findIdentifyCandidates(siteCode, modelTag) {
+    async findIdentifyCandidates(siteCode, modelTag, scope = IDENTIFY_SCOPE.SITE) {
         return this._run(async () => {
             const pool = await poolPromise;
-            const result = await pool.request()
-                .input('site_code', sql.VarChar(10), siteCode)
-                .input('model_tag', sql.VarChar(40), modelTag)
-                .query(sqlFindIdentifyCandidates());
+            const request = pool.request().input('model_tag', sql.VarChar(40), modelTag);
+
+            /* Só entra quando a query realmente usa. No escopo global o
+               predicado de loja nem é montado. */
+            if (scope !== IDENTIFY_SCOPE.GLOBAL) {
+                request.input('site_code', sql.VarChar(10), siteCode);
+            }
+
+            const result = await request.query(sqlFindIdentifyCandidates(scope));
             return result.recordset;
-        }, 'Não foi possível carregar os rostos cadastrados desta loja.');
+        }, scope === IDENTIFY_SCOPE.GLOBAL
+            ? 'Não foi possível carregar os rostos cadastrados.'
+            : 'Não foi possível carregar os rostos cadastrados desta loja.');
     }
 
     async revokeBiometric(key) {

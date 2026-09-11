@@ -591,6 +591,120 @@ describe('GippUseCases', () => {
             await expect(useCases.processWorkSchedules(['WS1'], '068', '0209')).rejects.toThrow(AppError);
         });
 
+        // A procedure já commitou o 3 → 6 quando estes passos rodam. Sem a
+        // reversão a jornada ficava em 6 sem recibo, estado que a interface não
+        // corrige — era o que obrigava a reprocessar recibo direto no banco.
+        it('should send the batch back to the payroll queue when there is no payment data', async () => {
+            const repository = makeFakeRepository({
+                findPaymentsForReplication: jest.fn().mockResolvedValue([]),
+            });
+            const useCases = makeUseCases({ repository });
+
+            await expect(useCases.processWorkSchedules(['WS1', 'WS2'], '068', '0209')).rejects.toMatchObject({
+                statusCode: 404,
+                code: 'NO_PAYMENT_DATA',
+                details: { reverted_to_payroll_queue: ['WS1', 'WS2'] },
+            });
+
+            expect(repository.revertToPayrollQueue).toHaveBeenCalledWith('WS1', null);
+            expect(repository.revertToPayrollQueue).toHaveBeenCalledWith('WS2', null);
+        });
+
+        it('should send the batch back to the payroll queue when replication fails', async () => {
+            const repository = makeFakeRepository();
+            const replicationRepository = makeFakeReplicationRepository({
+                replicatePayment: jest.fn().mockRejectedValue(new Error('replicacao fora do ar')),
+            });
+            const useCases = makeUseCases({ repository, replicationRepository });
+
+            await expect(useCases.processWorkSchedules(['WS1'], '068', '0209'))
+                .rejects.toMatchObject({ details: { reverted_to_payroll_queue: ['WS1'] } });
+
+            expect(repository.revertToPayrollQueue).toHaveBeenCalledWith('WS1', null);
+        });
+
+        it('should report the schedule as stuck when the revert itself fails', async () => {
+            const repository = makeFakeRepository({
+                findPaymentsForReplication: jest.fn().mockResolvedValue([]),
+                revertToPayrollQueue: jest.fn().mockRejectedValue(new Error('banco fora')),
+            });
+            const useCases = makeUseCases({ repository });
+
+            await expect(useCases.processWorkSchedules(['WS1'], '068', '0209'))
+                .rejects.toMatchObject({ details: { reverted_to_payroll_queue: [] } });
+        });
+
+        // Uma pessoa com cadastro pendente no MySQL travava o fechamento de todas
+        // as outras da mesma leva. Agora ela é pulada e o lote segue.
+        it('should skip the person missing from MySQL instead of failing the batch', async () => {
+            const repository = makeFakeRepository({
+                findPaymentsForReplication: jest.fn().mockResolvedValue([
+                    { cod_work_schedule: 'WS1', cpf: '111' },
+                    { cod_work_schedule: 'WS2', cpf: '222' },
+                ]),
+            });
+            const naoEncontrado = new AppError('CPF sem contrato ativo.', 422, {
+                code: 'MYSQL_EMPLOYEE_NOT_FOUND',
+            });
+            const replicationRepository = makeFakeReplicationRepository({
+                replicatePayment: jest.fn()
+                    .mockRejectedValueOnce(naoEncontrado)
+                    .mockResolvedValueOnce(undefined),
+            });
+            const useCases = makeUseCases({ repository, replicationRepository });
+
+            const result = await useCases.processWorkSchedules(['WS1', 'WS2'], '068', '0209');
+
+            expect(result.replication_skipped).toEqual([
+                { cod_work_schedule: 'WS1', cpf: '111', reason: 'employee_not_found_in_mysql' },
+            ]);
+            // A segunda continuou, e nada foi devolvido para a fila do RH.
+            expect(replicationRepository.replicatePayment).toHaveBeenCalledTimes(2);
+            expect(repository.revertToPayrollQueue).not.toHaveBeenCalled();
+            expect(result.closing).toBeDefined();
+        });
+
+        // Pular aqui geraria recibo sem contrapartida no MySQL, e a divergência
+        // passaria em silêncio justamente no caso mais grave.
+        it('should still abort the batch when MySQL itself fails', async () => {
+            const repository = makeFakeRepository({
+                findPaymentsForReplication: jest.fn().mockResolvedValue([
+                    { cod_work_schedule: 'WS1', cpf: '111' },
+                    { cod_work_schedule: 'WS2', cpf: '222' },
+                ]),
+            });
+            const replicationRepository = makeFakeReplicationRepository({
+                replicatePayment: jest.fn().mockRejectedValue(
+                    new AppError('MySQL fora do ar.', 500, { code: 'MYSQL_GIPP_ERROR' })
+                ),
+            });
+            const useCases = makeUseCases({ repository, replicationRepository });
+
+            await expect(useCases.processWorkSchedules(['WS1', 'WS2'], '068', '0209'))
+                .rejects.toMatchObject({
+                    code: 'MYSQL_GIPP_ERROR',
+                    details: { reverted_to_payroll_queue: ['WS1', 'WS2'] },
+                });
+
+            // Parou no primeiro: não insiste com o banco fora do ar.
+            expect(replicationRepository.replicatePayment).toHaveBeenCalledTimes(1);
+        });
+
+        it('should report an empty skip list when everything replicates', async () => {
+            const useCases = makeUseCases();
+            const result = await useCases.processWorkSchedules(['WS1'], '068', '0209');
+            expect(result.replication_skipped).toEqual([]);
+        });
+
+        it('should not revert anything when processing succeeds', async () => {
+            const repository = makeFakeRepository();
+            const useCases = makeUseCases({ repository });
+
+            await useCases.processWorkSchedules(['WS1'], '068', '0209');
+
+            expect(repository.revertToPayrollQueue).not.toHaveBeenCalled();
+        });
+
         it('should replicate each payment and then close the schedules', async () => {
             const repository = makeFakeRepository();
             const replicationRepository = makeFakeReplicationRepository();

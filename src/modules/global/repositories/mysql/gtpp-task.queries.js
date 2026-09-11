@@ -240,7 +240,7 @@ const SQL_GET_TASK_DETAIL_USERS = `
   SELECT
     gtu.task_id,
     gtu.user_id,
-    IF(_u.status = 1, true, false) AS status,
+    IF(_u.ad_status = 'active', true, false) AS status,
     gtu.theme_id_fk,
     e.name,
     _u.file_id,

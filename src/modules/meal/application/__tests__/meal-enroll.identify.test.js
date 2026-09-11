@@ -12,8 +12,14 @@ const { MealEnrollUseCases } = require('../meal-enroll.use-cases');
  * chamado em teste nenhum é código que só roda em produção.
  */
 
-/** Stubs mínimos: nenhum teste aqui toca banco nem container. */
-function build({ candidates = [], embed, diner = null } = {}) {
+/**
+ * Stubs minimos: nenhum teste aqui toca banco nem container.
+ *
+ * `identifyScope` e sempre EXPLICITO, nunca herdado do padrao do modulo. O
+ * padrao le MEAL_FACE_IDENTIFY_SCOPE do ambiente, e teste que depende de env
+ * passa ou falha conforme a maquina — pior que nao existir.
+ */
+function build({ candidates = [], embed, diner = null, scope = 'site' } = {}) {
     const repository = {
         findIdentifyCandidates: jest.fn().mockResolvedValue(candidates),
         findDiner: jest.fn().mockResolvedValue(diner),
@@ -30,7 +36,11 @@ function build({ candidates = [], embed, diner = null } = {}) {
             }),
     };
 
-    return { useCases: new MealEnrollUseCases({ repository, faceClient }), repository, faceClient };
+    return {
+        useCases: new MealEnrollUseCases({ repository, faceClient, identifyScope: scope }),
+        repository,
+        faceClient,
+    };
 }
 
 /** Vetor unitário sintético: 1 na posição `index`, 0 no resto. */
@@ -72,7 +82,104 @@ describe('identifyByFace — validacao de argumento', () => {
         expect(repository.findIdentifyCandidates).toHaveBeenCalledWith(
             '0202',
             'insightface-buffalo_l-w600k_r50',
+            'site',
         );
+    });
+});
+
+/**
+ * O recorte por loja virou MODO, e o padrao do codigo continua sendo `site`.
+ * Subir a API em outro ambiente sem configurar nada nao pode abrir a busca para
+ * a base inteira por acidente — o modo arriscado exige ato explicito.
+ */
+describe('identifyByFace — abrangencia da busca', () => {
+    const DA_LOJA = {
+        company_code: '02', employee_id: '000123', branch_code: '0202',
+        embedding: unitVector(0), model_tag: 'insightface-buffalo_l-w600k_r50',
+    };
+
+    const DE_OUTRA_LOJA = {
+        company_code: '02', employee_id: '000999', branch_code: '0301',
+        embedding: unitVector(0), model_tag: 'insightface-buffalo_l-w600k_r50',
+    };
+
+    const DINER = {
+        employee_name: 'MARIA', employee_full_name: 'MARIA DA SILVA',
+        cost_center: '1001', cost_center_description: 'LOJA',
+        is_terminated: 0, terminated_at: null, meals_today: 0,
+    };
+
+    it('site: pede o recorte ao repositorio, como sempre fez', async () => {
+        const { useCases, repository } = build({
+            scope: 'site',
+            embed: embedReturning(unitVector(0)),
+            candidates: [DA_LOJA],
+            diner: { ...DA_LOJA, ...DINER },
+        });
+
+        const result = await useCases.identifyByFace('0202', 'abc');
+
+        expect(repository.findIdentifyCandidates)
+            .toHaveBeenCalledWith('0202', 'insightface-buffalo_l-w600k_r50', 'site');
+        expect(result.status).toBe('matched');
+        expect(result.identify_scope).toBe('site');
+    });
+
+    it('global: identifica alguem de outra loja', async () => {
+        // No piloto sao cinco rostos, e quem ainda nao comeu naquela loja seria
+        // invisivel no recorte — que no piloto e todo mundo.
+        const { useCases, repository } = build({
+            scope: 'global',
+            embed: embedReturning(unitVector(0)),
+            candidates: [DE_OUTRA_LOJA],
+            diner: { ...DE_OUTRA_LOJA, ...DINER },
+        });
+
+        const result = await useCases.identifyByFace('0202', 'abc');
+
+        expect(repository.findIdentifyCandidates)
+            .toHaveBeenCalledWith('0202', 'insightface-buffalo_l-w600k_r50', 'global');
+        expect(result.status).toBe('matched');
+        expect(result.diner.branch_code).toBe('0301');
+        expect(result.identify_scope).toBe('global');
+    });
+
+    it('candidates_compared reflete o tamanho real nos dois modos', async () => {
+        // E o numero que mostra quando a conta do recorte volta a valer.
+        const tres = [DA_LOJA, DE_OUTRA_LOJA, {
+            ...DE_OUTRA_LOJA, employee_id: '000777', embedding: unitVector(9),
+        }];
+
+        const { useCases } = build({
+            scope: 'global',
+            embed: embedReturning(unitVector(0)),
+            candidates: tres,
+            diner: { ...DA_LOJA, ...DINER },
+        });
+
+        const result = await useCases.identifyByFace('0202', 'abc');
+        expect(result.candidates_compared).toBe(3);
+    });
+
+    it('global: a mensagem de galeria vazia nao fala em loja', async () => {
+        const { useCases } = build({ scope: 'global', candidates: [] });
+
+        await expect(useCases.identifyByFace('0202', 'abc'))
+            .rejects.toThrow(/Nenhum rosto cadastrado ainda/);
+    });
+
+    it('site: a mensagem de galeria vazia continua falando em loja', async () => {
+        const { useCases } = build({ scope: 'site', candidates: [] });
+
+        await expect(useCases.identifyByFace('0202', 'abc'))
+            .rejects.toThrow(/nesta loja/);
+    });
+
+    it('global ainda exige a loja: o contrato da rota nao muda com o modo', async () => {
+        const { useCases } = build({ scope: 'global' });
+
+        await expect(useCases.identifyByFace(undefined, 'abc')).rejects.toThrow(/loja/i);
+        await expect(useCases.identifyByFace('202', 'abc')).rejects.toThrow(/4 dígitos/i);
     });
 });
 

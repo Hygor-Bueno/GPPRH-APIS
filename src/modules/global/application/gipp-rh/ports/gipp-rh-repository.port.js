@@ -105,6 +105,15 @@ class GippRhRepositoryPort {
      * @returns {Promise<number>} Linhas afetadas.
      */
     confirmTreasuryPayment(scheduleList, actor) { throw new Error('Not implemented'); }
+
+    /**
+     * Desfaz o fechamento: 4 (Finalizado) → 6 (Pagando). Só o que está em 4 volta.
+     *
+     * @param {string[]} scheduleList
+     * @param {import('../../../../utils/audit-actor').AuditActor} [actor]
+     * @returns {Promise<number>} Linhas afetadas.
+     */
+    revertTreasuryPayment(scheduleList, actor) { throw new Error('Not implemented'); }
 }
 
 module.exports = { GippRhRepositoryPort };

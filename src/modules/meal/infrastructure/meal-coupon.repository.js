@@ -186,6 +186,7 @@ class MealCouponRepository extends MealCouponRepositoryPort {
                 .input('seqproduto', sql.Int, coupon.seqproduto)
                 .input('tp_emis', sql.Char(1), coupon.tp_emis)
                 .input('operator_user_id', sql.Int, coupon.operator_user_id ?? null)
+                .input('redeemed_at', sql.DateTime2(0), stampedAt)
                 .query(sqlRedeemCoupon());
 
             const couponRow = redeemed.recordset[0];
@@ -209,7 +210,7 @@ class MealCouponRepository extends MealCouponRepositoryPort {
                 .input('guest_label', sql.VarChar(80), null)
                 .input('cost_center', sql.VarChar(9), null)
                 .input('site_code', sql.VarChar(10), mealLog.site_code)
-                .input('served_at', sql.DateTime2(0), new Date())
+                .input('served_at', sql.DateTime2(0), stampedAt)
                 .input('service_date', sql.Date, mealLog.service_date)
                 .input('meal_type', sql.TinyInt, mealLog.meal_type)
                 .input('identified_by', sql.TinyInt, mealLog.identified_by)

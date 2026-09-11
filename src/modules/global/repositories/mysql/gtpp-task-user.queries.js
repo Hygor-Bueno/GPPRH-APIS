@@ -18,32 +18,32 @@ const SQL_GET_TASK_PARTICIPANT_IDS = `
 `;
 
 /**
- * Todos os usuários com acesso GTPP, indicando (`check`) se já estão
- * vinculados à tarefa. O criador da tarefa nunca aparece na lista.
+ * Todos os usuários ativos, indicando (`check`) se já estão vinculados à
+ * tarefa. Os vinculados vêm primeiro, depois em ordem alfabética.
  *
  * `file_id` é a foto do colaborador (FK para `_files`), no mesmo formato que
  * `GET /users` devolve — permite ao front exibir o avatar na lista de
- * vinculação sem uma segunda requisição. Vem de `_user` nos dois ramos do
- * UNION; é NULL para quem nunca subiu foto.
+ * vinculação sem uma segunda requisição. É NULL para quem nunca subiu foto.
  *
- * Parâmetros: [taskId, taskId, taskId]
+ * Elegibilidade é `ad_status = 'active'`; o criador da tarefa aparece na
+ * lista como qualquer outro usuário.
+ *
+ * Parâmetros: [taskId, taskId]
  */
 const SQL_GET_TASK_USERS = `
-  SELECT u.user_id, e.name, _u.file_id, true AS \`check\`
-  FROM gt_task t
-  INNER JOIN gt_task_user u ON u.task_id = t.id
-  INNER JOIN _user _u ON u.user_id = _u.id
-  INNER JOIN _employee e ON e.id = u.user_id
-  WHERE t.id = ? AND u.user_id != t.user_id AND _u.status = 1
-  UNION
-  SELECT _u.id AS user_id, _u.name, _u.file_id, false AS \`check\`
-  FROM _user _u
-  INNER JOIN _application_access _aa ON _u.id = _aa.user_id
-  WHERE
-    _u.id NOT IN (SELECT user_id FROM gt_task_user WHERE task_id = ?)
-    AND _u.id != (SELECT user_id FROM gt_task WHERE id = ?)
-    AND _u.status = 1
-    AND (_aa.application_id = 3 OR _aa.application_id = 2)
+  SELECT
+      u.id                                   AS user_id,
+      ?                                      AS task_id,
+      u.name                                 AS name,
+      IF(tu.user_id IS NULL, 0, 1)           AS status,
+      IF(tu.user_id IS NULL, 0, 1)           AS \`check\`,
+      u.file_id                              AS file_id
+  FROM _user u
+  LEFT JOIN gt_task_user tu
+         ON tu.user_id = u.id
+        AND tu.task_id = ?
+  WHERE u.ad_status = 'active'
+  ORDER BY status DESC, u.name
 `;
 
 /** Verifica se um usuário já está vinculado à tarefa (como colaborador ou criador). Parâmetros: [taskId, userId, taskId, userId] */
