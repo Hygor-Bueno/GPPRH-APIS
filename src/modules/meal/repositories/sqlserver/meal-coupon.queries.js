@@ -125,9 +125,164 @@ function sqlLinkCouponToMealLog() {
     `;
 }
 
+/**
+ * Consulta das linhas já gravadas — a tela de conferência, e a de estorno.
+ *
+ * Os filtros são todos opcionais NA QUERY e não na rota: o caso de uso é que
+ * exige recorte (chave OU período), e a query só precisa saber montar as três
+ * combinações. O padrão `@x IS NULL OR coluna = @x` mantém um plano só.
+ *
+ * `IX_meal_coupon_rpt` é (`service_date`, `site_code`), então a busca com
+ * período é seek. A busca por chave usa `IX_meal_coupon_key`. Sem nenhum dos
+ * dois seria varredura da tabela inteira — é por isso que o caso de uso obriga
+ * um recorte, e não por gosto de formulário.
+ *
+ * `COUNT_BIG(*) OVER ()` devolve o total do filtro em cada linha, para a tela
+ * paginar sem uma segunda consulta.
+ */
+function sqlListCoupons() {
+    return `
+        SELECT c.id,
+               c.nfe_key,
+               c.seq,
+               c.meals_authorized,
+               c.site_code,
+               c.coupon_date,
+               c.service_date,
+               c.seqproduto,
+               c.tp_emis,
+               c.meal_log_id,
+               c.operator_user_id,
+               c.redeemed_at,
+               COUNT_BIG(*) OVER ()                    AS total_rows
+        FROM GIPP.dbo.meal_coupon c
+        WHERE (@nfe_key   IS NULL OR c.nfe_key      = @nfe_key)
+          AND (@date_from IS NULL OR c.service_date >= @date_from)
+          AND (@date_to   IS NULL OR c.service_date <= @date_to)
+          AND (@site_code IS NULL OR c.site_code     = @site_code)
+        -- O id no fim do ORDER BY evita a paginação embaralhar quando duas
+        -- refeições do mesmo cupom caem no mesmo segundo: redeemed_at é
+        -- DATETIME2(0), e isso acontece na fila do almoço.
+        ORDER BY c.service_date DESC, c.redeemed_at DESC, c.id DESC
+        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
+    `;
+}
+
+/** Uma linha, pelo id. Usada antes do estorno para dizer o que será apagado. */
+function sqlGetCouponById() {
+    return `
+        SELECT TOP (1)
+               c.id,
+               c.nfe_key,
+               c.seq,
+               c.meals_authorized,
+               c.site_code,
+               c.coupon_date,
+               c.service_date,
+               c.seqproduto,
+               c.tp_emis,
+               c.meal_log_id,
+               c.operator_user_id,
+               c.redeemed_at
+        FROM GIPP.dbo.meal_coupon c
+        WHERE c.id = @id;
+    `;
+}
+
+/**
+ * Apaga a linha de saldo e devolve o que apagou.
+ *
+ * DELETE de verdade, e não `is_active = 0` como no `diner_group`: a tabela não
+ * tem coluna de estado, e não pode ter. O saldo é contado por LINHA
+ * (`COUNT(*)` em `sqlGetCouponBalance`) e a unicidade é (`nfe_key`, `seq`) —
+ * uma linha "inativa" continuaria ocupando a sequência e segurando o saldo, que
+ * é justamente o que o estorno existe para devolver.
+ *
+ * O `OUTPUT` é o que diz se havia linha: zero linhas devolvidas significa id
+ * inexistente, e quem chamou transforma isso em 404 sem precisar de um SELECT
+ * anterior.
+ */
+function sqlDeleteCouponById() {
+    return `
+        DELETE FROM GIPP.dbo.meal_coupon
+        OUTPUT DELETED.id,
+               DELETED.nfe_key,
+               DELETED.seq,
+               DELETED.meals_authorized,
+               DELETED.site_code,
+               DELETED.coupon_date,
+               DELETED.service_date,
+               DELETED.seqproduto,
+               DELETED.tp_emis,
+               DELETED.meal_log_id,
+               DELETED.operator_user_id,
+               DELETED.redeemed_at
+        WHERE id = @id;
+    `;
+}
+
+/**
+ * Fecha o buraco deixado na sequência.
+ *
+ * ⚠️ Sem isto, apagar uma linha do MEIO cria um cupom com saldo que ninguém
+ *   consegue usar, e o erro aparece como mensagem errada e não como erro. Motivo:
+ *   `sqlGetCouponBalance` conta LINHAS, mas `sqlRedeemCoupon` grava
+ *   `MAX(seq) + 1`. Num cupom de 3 com o seq 1 apagado sobram 2 linhas (seq 2 e
+ *   3): a validação diz "resta 1", o resgate tenta gravar seq 4, e
+ *   `CK_meal_coupon_seq` (`seq <= meals_authorized`) recusa — o operador lê
+ *   "esse cupom acabou de ser usado em outro terminal" olhando para um cupom com
+ *   saldo. Reenumerar mantém `MAX(seq) = COUNT(*)`, que é a premissa das duas
+ *   consultas.
+ *
+ * O `seq` é contador interno de saldo: não sai em relatório, não é referenciado
+ * por outra tabela e não é número de documento. Renumerar não reescreve
+ * histórico de nada — só reaproveita a vaga.
+ *
+ * Roda na MESMA transação do DELETE. O `UX_meal_coupon_seq` é conferido no fim
+ * do comando, e a descida em bloco (`seq - 1` sobre uma faixa contígua) não
+ * passa por estado duplicado intermediário visível.
+ */
+function sqlResequenceCouponAfterDelete() {
+    return `
+        UPDATE GIPP.dbo.meal_coupon
+        SET seq = seq - 1
+        WHERE nfe_key = @nfe_key
+          AND seq > @seq;
+    `;
+}
+
+/**
+ * Apaga a refeição que o resgate gravou.
+ *
+ * Estornar o cupom sem apagar a refeição deixaria a refeição contada no
+ * relatório E o saldo devolvido — o mesmo almoço pago uma vez, contado duas e
+ * servível de novo. As duas linhas nasceram na mesma transação em
+ * `redeemCouponWithMealLog`, e desaparecem na mesma.
+ *
+ * O `NOT EXISTS` é cinto de segurança: se por algum caminho outra linha de
+ * cupom ainda apontar para esta refeição, a refeição fica. A FK é NO ACTION e
+ * apagaria com erro 547 de qualquer forma — assim a condição vira "não apaguei"
+ * em vez de "quebrei a transação".
+ */
+function sqlDeleteMealLogById() {
+    return `
+        DELETE FROM GIPP.dbo.meal_log
+        OUTPUT DELETED.id
+        WHERE id = @id
+          AND NOT EXISTS (
+              SELECT 1 FROM GIPP.dbo.meal_coupon c WHERE c.meal_log_id = @id
+          );
+    `;
+}
+
 module.exports = {
     sqlFindPosSiteByCnpj,
     sqlGetCouponBalance,
     sqlRedeemCoupon,
     sqlLinkCouponToMealLog,
+    sqlListCoupons,
+    sqlGetCouponById,
+    sqlDeleteCouponById,
+    sqlResequenceCouponAfterDelete,
+    sqlDeleteMealLogById,
 };

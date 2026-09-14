@@ -272,6 +272,46 @@ router.post('/coupons/redeem',
     validate(postCouponRedeemSchema),
     asyncHandler(couponController.postRedeemCoupon));
 
+/**
+ * Conferência: o que já foi resgatado.
+ *
+ * `MEAL_VIEW_REPORT` e não `MEAL_SERVE` — é a mesma pergunta dos relatórios
+ * ("o que foi servido e a quem cobrar"), e o operador de balcão não precisa
+ * dela para servir.
+ *
+ * Recorte obrigatório: `nfe_key`, ou `date_from` + `date_to` (teto de 92 dias).
+ * Os dois índices da tabela são (nfe_key) e (service_date, site_code); consulta
+ * sem recorte varre a tabela inteira.
+ */
+router.get('/coupons',
+    authMiddleware,
+    canAny(CAN_VIEW_REPORT),
+    asyncHandler(couponController.getCoupons));
+
+/**
+ * Estorno de um resgate.
+ *
+ * ⚠️ **Aqui o DELETE existe, e no `/diner-groups` não — a diferença é o
+ *   mecanismo do saldo.** Balde desativa com `is_active = 0` porque a linha
+ *   precisa continuar existindo para o histórico de custo apontar para ela. A
+ *   linha de cupom não pode: o saldo é contado por LINHA (`COUNT(*)`) e a
+ *   unicidade é (`nfe_key`, `seq`). Uma linha marcada como inativa continuaria
+ *   ocupando a sequência e segurando a refeição — ou seja, o estorno não
+ *   estornaria nada.
+ *
+ *   Some junto a refeição de `meal_log` gerada pelo resgate, na mesma transação.
+ *   As duas nasceram indivisíveis em `/coupons/redeem` e desaparecem igual:
+ *   devolver o saldo e deixar o almoço contado conta o mesmo prato duas vezes.
+ *
+ * `MEAL_MANAGE`, como o `/enroll/direct`, e pela mesma razão: servir uma
+ * refeição a mais se corrige servindo a menos, mas apagar histórico não tem
+ * desfazer. É a segunda rota do módulo estreitada para o administrador.
+ */
+router.delete('/coupons/:id',
+    authMiddleware,
+    canAny(['MEAL_MANAGE']),
+    asyncHandler(couponController.deleteCoupon));
+
 // ─── Registro de refeição ─────────────────────────────────────────────────────
 
 router.post('/logs',

@@ -76,4 +76,52 @@ async function postRedeemCoupon(req, res) {
     return respond.created(res, data);
 }
 
-module.exports = { postValidateCoupon, postRedeemCoupon };
+/**
+ * `GET /gipp/meal/coupons`
+ *
+ * O que já foi resgatado. É a tela de conferência do RH, e a origem dos ids que
+ * o estorno consome.
+ *
+ * Filtros: `nfe_key` **ou** o par `date_from`/`date_to` — um dos dois é
+ * obrigatório, e o motivo é o índice, não o formulário (ver `listCoupons`).
+ * Opcionais: `site_code`, `limit` (padrão 100, teto 500) e `offset`.
+ *
+ * Aceita snake_case e camelCase pelo mesmo motivo das rotas de cupom já
+ * existentes: o app e o painel web não escrevem no mesmo estilo, e fazer a
+ * rota ceder é mais barato que padronizar duas bases de tela.
+ */
+async function getCoupons(req, res) {
+    const q = req.query ?? {};
+
+    const data = await useCases.listCoupons({
+        nfeKey: q.nfe_key ?? q.nfeKey,
+        dateFrom: q.date_from ?? q.dateFrom,
+        dateTo: q.date_to ?? q.dateTo,
+        siteCode: q.site_code ?? q.siteCode,
+        limit: q.limit,
+        offset: q.offset,
+    });
+
+    return respond.ok(res, data);
+}
+
+/**
+ * `DELETE /gipp/meal/coupons/:id`
+ *
+ * Estorna um resgate: apaga a linha de `meal_coupon` E a refeição de `meal_log`
+ * que ela gerou, numa transação só. O saldo do cupom volta a ficar disponível.
+ *
+ * Responde **200 com o que foi apagado**, não 204. O corpo é o que a tela usa
+ * para confirmar em cima do fato — "cupom ...1934, 1 de 2 almoços, estornado" —
+ * em vez de repetir o que estava na linha antes de sumir. `meal_log_deleted`
+ * diz se a refeição foi junto.
+ *
+ * O operador do estorno sai do token, como em todo o módulo. Ele vai para o log
+ * do servidor: as linhas somem e não há tabela de auditoria no refeitório.
+ */
+async function deleteCoupon(req, res) {
+    const data = await useCases.deleteCoupon(req.params.id, actorFrom(req));
+    return respond.ok(res, data);
+}
+
+module.exports = { postValidateCoupon, postRedeemCoupon, getCoupons, deleteCoupon };

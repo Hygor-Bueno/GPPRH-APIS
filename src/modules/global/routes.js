@@ -49,6 +49,7 @@ const gappLookupController = require('./controllers/gapp-lookup.controller');
 const gappExpensesController = require('./controllers/gapp-expenses.controller');
 const gappNfController = require('./controllers/gapp-nf.controller');
 const gappStoreController = require('./controllers/gapp-store.controller');
+const meippRoutes = require('./meipp.routes');
 const { upload: fileUpload } = require('../../utils/file/file.service');
 const authMiddleware = require('../../middlewares/auth.middleware');
 const upload = require('../../middlewares/upload.middleware');
@@ -2137,5 +2138,17 @@ router.get('/gapp/damage-type', authMiddleware, asyncHandler(gappLookupControlle
  * @access Autenticado
  */
 router.get('/gapp/infractions', authMiddleware, asyncHandler(gappLookupController.listInfractions));
+
+/**
+ * Suite meipp — Mídia Interna e Externa Peg Pese.
+ *
+ * Roteador próprio (`meipp.routes.js`) porque a suite tem três zonas de
+ * autenticação distintas — sessão de usuário, token de dispositivo e URL
+ * assinada — e misturá-las neste arquivo, onde toda rota começa por
+ * `authMiddleware`, tornaria fácil uma rota de player nascer exigindo cookie.
+ *
+ * Prefixo final: `/api/v1/global/meipp/...`
+ */
+router.use('/meipp', meippRoutes);
 
 module.exports = router;

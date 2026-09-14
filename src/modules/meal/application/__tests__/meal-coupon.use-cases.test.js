@@ -2,6 +2,7 @@ const {
     MealCouponUseCases,
     REASON,
     DEFAULT_MEAL_SEQPRODUTO,
+    DEFAULT_LIST_LIMIT,
     mealsFromQuantity,
 } = require('../meal-coupon.use-cases');
 const { DINER_TYPE, IDENTIFIED_BY, MEAL_TYPE } = require('../../domain/meal.enums');
@@ -459,5 +460,121 @@ describe('redeemCoupon', () => {
 
         const [, log] = repo.redeemCouponWithMealLog.mock.calls[0];
         expect(log.meal_type).toBe(MEAL_TYPE.LUNCH);
+    });
+});
+// ─── Conferencia e estorno ────────────────────────────────────────────────────
+
+function makeAdminRepo(overrides = {}) {
+    return makeRepo({
+        listCoupons: jest.fn().mockResolvedValue({ total: 0, rows: [] }),
+        deleteCouponById: jest.fn().mockResolvedValue({
+            coupon: { id: 7, nfe_key: KEY, seq: 1, meal_log_id: 900 },
+            meal_log_deleted: true,
+        }),
+        ...overrides,
+    });
+}
+
+describe('listCoupons', () => {
+    it('exige recorte: sem chave e sem periodo, recusa', async () => {
+        // Nao e formalidade: os indices sao (nfe_key) e (service_date,
+        // site_code). Sem um dos dois a consulta varre a tabela inteira.
+        await expect(makeUseCases(makeAdminRepo()).listCoupons({}))
+            .rejects.toThrow(/nfe_key/);
+    });
+
+    it('recusa chave que nao tem 44 digitos', async () => {
+        await expect(makeUseCases(makeAdminRepo()).listCoupons({ nfeKey: '123' }))
+            .rejects.toThrow(/44 dígitos/);
+    });
+
+    it('a chave tem precedencia sobre o periodo', async () => {
+        const repo = makeAdminRepo();
+        await makeUseCases(repo).listCoupons({
+            nfeKey: KEY, dateFrom: '2026-08-01', dateTo: '2026-08-02',
+        });
+
+        // Quem procura um cupom quer o historico dele inteiro, nao a intersecao
+        // com o periodo que sobrou na tela.
+        expect(repo.listCoupons).toHaveBeenCalledWith(
+            expect.objectContaining({ nfeKey: KEY, dateFrom: null, dateTo: null }),
+        );
+    });
+
+    it('recusa periodo maior que o teto', async () => {
+        await expect(makeUseCases(makeAdminRepo()).listCoupons({
+            dateFrom: '2026-01-01', dateTo: '2026-12-31',
+        })).rejects.toThrow(/período máximo/);
+    });
+
+    it('recusa date_from depois de date_to', async () => {
+        await expect(makeUseCases(makeAdminRepo()).listCoupons({
+            dateFrom: '2026-08-10', dateTo: '2026-08-01',
+        })).rejects.toThrow(/date_from/);
+    });
+
+    it('recusa limit acima do teto', async () => {
+        await expect(makeUseCases(makeAdminRepo()).listCoupons({
+            dateFrom: '2026-08-01', dateTo: '2026-08-02', limit: 5000,
+        })).rejects.toThrow(/limit/);
+    });
+
+    it('limit invalido cai no padrao em vez de derrubar a consulta', async () => {
+        const repo = makeAdminRepo();
+        await makeUseCases(repo).listCoupons({
+            dateFrom: '2026-08-01', dateTo: '2026-08-02', limit: 'abc',
+        });
+
+        expect(repo.listCoupons).toHaveBeenCalledWith(
+            expect.objectContaining({ limit: DEFAULT_LIST_LIMIT, offset: 0 }),
+        );
+    });
+
+    it('has_more diz se a pagina acabou', async () => {
+        const repo = makeAdminRepo({
+            listCoupons: jest.fn().mockResolvedValue({
+                total: 30, rows: [{ id: 1 }, { id: 2 }],
+            }),
+        });
+
+        const page = await makeUseCases(repo).listCoupons({
+            nfeKey: KEY, limit: 2, offset: 10,
+        });
+
+        expect(page).toMatchObject({ total: 30, count: 2, has_more: true });
+    });
+});
+
+describe('deleteCoupon', () => {
+    it('recusa id que nao e inteiro positivo', async () => {
+        const repo = makeAdminRepo();
+
+        await expect(makeUseCases(repo).deleteCoupon('abc', {}))
+            .rejects.toThrow(/id do resgate/);
+        await expect(makeUseCases(repo).deleteCoupon(0, {}))
+            .rejects.toThrow(/id do resgate/);
+
+        expect(repo.deleteCouponById).not.toHaveBeenCalled();
+    });
+
+    it('id inexistente e 404, nao sucesso silencioso', async () => {
+        // Duas pessoas no mesmo relatorio e caso real: a segunda tem que ver a
+        // lista mudar, e nao um "ok" para algo que ja nao estava la.
+        const repo = makeAdminRepo({ deleteCouponById: jest.fn().mockResolvedValue(null) });
+
+        await expect(makeUseCases(repo).deleteCoupon(7, {}))
+            .rejects.toMatchObject({ statusCode: 404, code: 'COUPON_NOT_FOUND' });
+    });
+
+    it('devolve o que foi apagado, e se a refeicao foi junto', async () => {
+        const repo = makeAdminRepo();
+        const out = await makeUseCases(repo).deleteCoupon('7', { userId: 42 });
+
+        expect(repo.deleteCouponById).toHaveBeenCalledWith(7);
+        expect(out).toMatchObject({
+            deleted: true,
+            meal_log_deleted: true,
+            coupon: { id: 7, nfe_key: KEY },
+        });
     });
 });
