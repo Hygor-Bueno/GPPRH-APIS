@@ -57,12 +57,36 @@ class GappExpensesUseCases {
      */
     _resolveDetail(data, expTypeId) {
         const detail = pickTypeDetail(data);
+
+        if (data.total_value < data.discount) {
+            throw new AppError(`O valor do desconto não pode ser maior que o valor total!`);
+        }
+
         if (detail && Number(expTypeId) === ExpenseType.FUEL) {
             if (!Number(detail.km_day) || !Number(detail.liter_qtd)) {
                 throw new AppError(`Campo '${Number(detail.km_day) ? 'liter_qtd' : 'km_day'}' é obrigatorio e não podem ser zerado!`, 400);
             }
             return resolveFuelDetail(detail, data.total_value);
         }
+
+        if (detail && Number(expTypeId) === ExpenseType.MAINTENANCE) {
+            const maintenanceData = data.maintenance
+            const totalWithDiscount = Number(data.total_value) - (Number(data.discount) ?? 0);
+            const totalParts = Number(maintenanceData.value_parts) ?? 0;
+            const serviceValue = Number(maintenanceData.service_value) ?? 0;
+
+            if (((totalWithDiscount - totalParts) - Number(serviceValue)) !== 0) {
+                throw new AppError('A somatoria total dos valores é divergente do valor total da despesa!', 400)
+            }
+
+            if (maintenanceData.validity && (!maintenanceData.warranty || maintenanceData.warranty === "0")) {
+                throw new AppError('O campo garantia deve esta ativo para passar um prazo!', 400)
+            }
+            if (maintenanceData.warranty === "1" && !maintenanceData.validity) {
+                throw new AppError('O campo prazo e obrigatorio quando exite uma garantia!', 400)
+            }
+        }
+
         return detail;
     }
 

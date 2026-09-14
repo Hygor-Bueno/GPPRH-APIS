@@ -53,6 +53,15 @@ class GappActiveUseCases {
             user_id_fk: gappUser.user_id,
             work_group_fk: gappUser.work_group_fk
         };
+        const isExists = await this.repository.findById(data.active_id, gappUser.work_group_fk)
+
+        if (!data.status_active && !data.active_id) {
+            throw new AppError("Não foi possivel realizar ação, o ativo esta desabilitado.", 400)
+        }
+
+        if (!isExists.status_active) {
+            throw new AppError("Não foi possivel realizar ação, o ativo esta desabilitado.", 400)
+        }
 
         return this.repository.saveActive(payload);
     }
