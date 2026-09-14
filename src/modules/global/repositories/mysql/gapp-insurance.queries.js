@@ -203,7 +203,7 @@ function sqlGetActiveInsuranceByActiveId() {
             policy_number, proposal_number, date_init, date_final,
             bodywork, IOF_value AS iof_value, insurance_value, deductible_value,
             form_payment, franchise_list, status_insurance,
-            ins_id_fk, cov_id_fk, util_id_fk, active_id_fk
+            ins_id_fk, cov_id_fk, util_id_fk, active_id_fk, expen_id_fk
         FROM global.gapp_insurance
         WHERE active_id_fk = ? AND status_insurance = 1
     `;
