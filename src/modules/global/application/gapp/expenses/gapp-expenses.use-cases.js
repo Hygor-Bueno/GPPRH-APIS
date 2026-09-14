@@ -83,7 +83,7 @@ class GappExpensesUseCases {
                 throw new AppError('O campo garantia deve esta ativo para passar um prazo!', 400)
             }
             if (maintenanceData.warranty === "1" && !maintenanceData.validity) {
-                throw new AppError('O campo prazo e obrigatorio quando exite uma garantia!', 400)
+                throw new AppError('O campo prazo e obrigatorio quando existe uma garantia!', 400)
             }
         }
 
