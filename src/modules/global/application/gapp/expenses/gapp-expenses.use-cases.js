@@ -58,6 +58,9 @@ class GappExpensesUseCases {
     _resolveDetail(data, expTypeId) {
         const detail = pickTypeDetail(data);
         if (detail && Number(expTypeId) === ExpenseType.FUEL) {
+            if (!Number(detail.km_day) || !Number(detail.liter_qtd)) {
+                throw new AppError(`Campo '${Number(detail.km_day) ? 'liter_qtd' : 'km_day'}' é obrigatorio e não podem ser zerado!`, 400);
+            }
             return resolveFuelDetail(detail, data.total_value);
         }
         return detail;

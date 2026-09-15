@@ -13,7 +13,7 @@ const { GappInsuranceRepositoryPort } = require('../../application/gapp/ports/ga
 const {
     sqlSaveInsurance, sqlSelectInsuranceIdOut, buildSaveInsuranceParams,
     sqlListInsurance, sqlCountInsurance, sqlGetInsuranceById,
-    sqlGetActiveInsuranceByVehicleId,
+    sqlGetActiveInsuranceByActiveId,
     sqlGetVehicleWorkGroupByVehicleId, sqlGetVehicleWorkGroupByInsuranceId,
 } = require('../../repositories/mysql/gapp-insurance.queries');
 
@@ -71,8 +71,8 @@ class MysqlGappInsuranceRepository extends GappInsuranceRepositoryPort {
         return rows[0] ?? null;
     }
 
-    async findActiveInsuranceByVehicleId(vehicleId) {
-        const [rows] = await this._query(sqlGetActiveInsuranceByVehicleId(), [vehicleId]);
+    async findActiveInsuranceByActiveId(vehicleId) {
+        const [rows] = await this._query(sqlGetActiveInsuranceByActiveId(), [vehicleId]);
         return rows[0] ?? null;
     }
 }

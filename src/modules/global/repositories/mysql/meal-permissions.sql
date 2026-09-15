@@ -23,6 +23,12 @@
 --   GET   /api/v1/gipp/meal/reports/cost-center                         MEAL_VIEW_REPORT
 --   GET   /api/v1/gipp/meal/reports/payee                               MEAL_VIEW_REPORT
 --   GET   /api/v1/gipp/meal/reports/exceptions                          MEAL_VIEW_REPORT
+--   GET   /api/v1/gipp/meal/coupons                                     MEAL_VIEW_REPORT
+--   DELETE /api/v1/gipp/meal/coupons/:id                               MEAL_MANAGE
+--
+-- O DELETE de cupom é a única exclusão de verdade do módulo: apaga a linha de
+-- saldo e a refeição que ela gerou. Por isso MEAL_MANAGE, e por isso não entra
+-- no papel MEAL_RH abaixo — quem estorna é quem administra o refeitório.
 -- ============================================================
 
 -- ─── 1. Permissões ────────────────────────────────────────────────────────────

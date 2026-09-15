@@ -23,6 +23,11 @@ const {
     sqlGetCouponBalance,
     sqlRedeemCoupon,
     sqlLinkCouponToMealLog,
+    sqlListCoupons,
+    sqlGetCouponById,
+    sqlDeleteCouponById,
+    sqlResequenceCouponAfterDelete,
+    sqlDeleteMealLogById,
 } = require('../repositories/sqlserver/meal-coupon.queries');
 const { sqlInsertMealLog } = require('../repositories/sqlserver/meal.queries');
 
@@ -295,6 +300,152 @@ class MealCouponRepository extends MealCouponRepositoryPort {
                 code: 'MEAL_COUPON_DB_ERROR',
             });
         }
+    }
+
+    // ─── SQL Server: conferência e estorno ──────────────────────────────────
+
+    async listCoupons({ nfeKey, dateFrom, dateTo, siteCode, limit, offset }) {
+        return this._run(async () => {
+            const pool = await poolPromise;
+            const result = await pool.request()
+                .input('nfe_key', sql.Char(44), nfeKey ?? null)
+                .input('date_from', sql.Date, dateFrom ?? null)
+                .input('date_to', sql.Date, dateTo ?? null)
+                .input('site_code', sql.Char(4), siteCode ?? null)
+                .input('limit', sql.Int, limit)
+                .input('offset', sql.Int, offset)
+                .query(sqlListCoupons());
+
+            const rows = result.recordset ?? [];
+
+            return {
+                /* O total vem repetido em toda linha pelo `COUNT_BIG(*) OVER ()`.
+                   Sem linha nenhuma não há de onde tirar — e zero é a resposta
+                   certa nesse caso. */
+                total: rows.length > 0 ? Number(rows[0].total_rows) : 0,
+                rows: rows.map(row => this._toCoupon(row)),
+            };
+        }, 'Não foi possível consultar os cupons.');
+    }
+
+    async getCouponById(id) {
+        return this._run(async () => {
+            const pool = await poolPromise;
+            const result = await pool.request()
+                .input('id', sql.BigInt, id)
+                .query(sqlGetCouponById());
+
+            const row = result.recordset[0];
+            return row ? this._toCoupon(row) : null;
+        }, 'Não foi possível consultar o cupom.');
+    }
+
+    /**
+     * Estorno — o inverso exato de `redeemCouponWithMealLog`, e na ordem inversa
+     * dele:
+     *
+     *   1. `meal_coupon` sai primeiro. A FK `FK_meal_coupon_meal_log` é NO
+     *      ACTION: enquanto a linha de saldo apontar para a refeição, o DELETE
+     *      da refeição é recusado com 547. Não é escolha de estilo — é a única
+     *      ordem que o banco aceita.
+     *   2. `meal_log` depois, e só se nenhuma outra linha de cupom apontar para
+     *      ela.
+     *   3. A sequência fecha o buraco por último, já com a linha fora.
+     *
+     * Tudo numa transação: meio estorno é pior que estorno nenhum — devolve o
+     * saldo e mantém o almoço contado, ou o contrário.
+     */
+    async deleteCouponById(id) {
+        const pool = await poolPromise;
+        const transaction = new sql.Transaction(pool);
+
+        await transaction.begin();
+
+        try {
+            // 1. Tira a linha de saldo.
+            const deleted = await new sql.Request(transaction)
+                .input('id', sql.BigInt, id)
+                .query(sqlDeleteCouponById());
+
+            const row = deleted.recordset[0];
+
+            /* Zero linhas = id inexistente. Desfaz por higiene (nada foi
+               escrito) e devolve `null` para virar 404 na camada de cima. */
+            if (!row) {
+                await transaction.rollback();
+                return null;
+            }
+
+            const coupon = this._toCoupon(row);
+
+            // 2. Tira a refeição que esse resgate gerou.
+            let mealLogDeleted = false;
+
+            if (coupon.meal_log_id) {
+                const log = await new sql.Request(transaction)
+                    .input('id', sql.BigInt, coupon.meal_log_id)
+                    .query(sqlDeleteMealLogById());
+
+                mealLogDeleted = (log.recordset?.length ?? 0) > 0;
+            }
+
+            // 3. Fecha o buraco na sequência do cupom.
+            await new sql.Request(transaction)
+                .input('nfe_key', sql.Char(44), coupon.nfe_key)
+                .input('seq', sql.SmallInt, coupon.seq)
+                .query(sqlResequenceCouponAfterDelete());
+
+            await transaction.commit();
+
+            return { coupon, meal_log_deleted: mealLogDeleted };
+        } catch (error) {
+            await transaction.rollback().catch(() => { /* já abortada pelo XACT_ABORT */ });
+
+            if (error instanceof AppError) throw error;
+
+            /* 547 aqui é FK, não CHECK: alguma outra tabela passou a referenciar
+               a refeição ou o cupom depois que isto foi escrito. Recusar é o
+               certo — apagar por cima levaria o histórico de outro módulo. */
+            if (error?.number === CONSTRAINT_VIOLATION_CODE) {
+                console.error('[meal-coupon.repository] estorno barrado por FK', error?.message);
+                throw new AppError(
+                    'Esse resgate não pode ser excluído porque outro registro depende dele.',
+                    409,
+                    { code: 'COUPON_DELETE_BLOCKED' },
+                );
+            }
+
+            console.error('[meal-coupon.repository] delete', error);
+            throw new AppError('Não foi possível excluir o resgate do cupom.', 500, {
+                code: 'MEAL_COUPON_DB_ERROR',
+            });
+        }
+    }
+
+    /**
+     * Uma forma só para as três consultas de leitura.
+     *
+     * `CHAR(4)` e `CHAR(44)` voltam com espaços à direita do SQL Server, e
+     * `site_code` cru quebraria a comparação com o código de 4 dígitos que a
+     * tela manda de volta no filtro.
+     * @private
+     */
+    _toCoupon(row) {
+        return {
+            id: Number(row.id),
+            nfe_key: String(row.nfe_key).trim(),
+            seq: Number(row.seq),
+            meals_authorized: Number(row.meals_authorized),
+            site_code: String(row.site_code).trim(),
+            coupon_date: row.coupon_date,
+            service_date: row.service_date,
+            seqproduto: Number(row.seqproduto),
+            tp_emis: String(row.tp_emis).trim(),
+            is_contingency: String(row.tp_emis).trim() === '9',
+            meal_log_id: row.meal_log_id != null ? Number(row.meal_log_id) : null,
+            operator_user_id: row.operator_user_id != null ? Number(row.operator_user_id) : null,
+            redeemed_at: row.redeemed_at,
+        };
     }
 }
 

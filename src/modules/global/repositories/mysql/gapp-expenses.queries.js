@@ -88,14 +88,7 @@ function sqlGetActiveWorkGroup() {
     return 'SELECT work_group_fk FROM global.gapp_active WHERE active_id = ?';
 }
 
-/**
- * Resolve o vehicle_id do veículo vinculado a um ativo — usado pra despesa
- * do tipo Seguro, que precisa do vehicle_id_fk de gapp_insurance mas só
- * recebe o active_id_fk da despesa (mesmo padrão de sp_gapp_save_active_v2).
- */
-function sqlGetVehicleIdByActiveId() {
-    return 'SELECT vehicle_id FROM global.gapp_vehicle WHERE active_id_fk = ?';
-}
+
 
 // ─── Escrita — especificações por tipo de despesa ──────────────────────────
 //
@@ -184,7 +177,7 @@ function sqlInsertFine() {
     return `
         INSERT INTO global.gapp_fines
             (infraction, ait, gravity, points, article_ctb,
-             offending_driver_date, offending_driver, expen_id_fk, infraction_id_fk)
+             offending_driver_date, offending_driver_fk, expen_id_fk, infraction_id_fk)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 }
@@ -197,7 +190,7 @@ function buildInsertFineParams(data, expenId) {
         data.points ?? null,
         data.article_ctb ?? null,
         data.offending_driver_date ?? null,
-        data.offending_driver ?? null,
+        data.offending_driver_fk ?? null,
         expenId,
         data.infraction_id_fk ?? null
     ];
@@ -341,7 +334,7 @@ function sqlUpdateFine() {
             points                 = ?,
             article_ctb            = ?,
             offending_driver_date  = ?,
-            offending_driver       = ?,
+            offending_driver_fk       = ?,
             infraction_id_fk       = ?
         WHERE expen_id_fk = ?
     `;
@@ -355,7 +348,7 @@ function buildUpdateFineParams(data, expenId) {
         data.points ?? null,
         data.article_ctb ?? null,
         data.offending_driver_date ?? null,
-        data.offending_driver ?? null,
+        data.offending_driver_fk ?? null,
         data.infraction_id_fk ?? null,
         expenId
     ];
@@ -384,9 +377,9 @@ function buildExpenseFilters(filters = {}) {
     }
 
     if (filters.date_start) { conditions.push('reg.date >= ?'); params.push(filters.date_start); }
-    if (filters.date_end)   { conditions.push('reg.date <= ?'); params.push(filters.date_end); }
+    if (filters.date_end) { conditions.push('reg.date <= ?'); params.push(filters.date_end); }
 
-    return { where: `WHERE ${conditions.join(' AND ')}`, params };
+    return { where: `WHERE status_expen = 1 AND ${conditions.join(' AND ')}`, params };
 }
 
 function sqlListExpenses(filters = {}) {
@@ -403,9 +396,9 @@ function sqlListExpenses(filters = {}) {
             reg.user_id_fk, reg.status_expen, reg.coupon_number,
             reg.store_id_fk, reg.created_at, reg.updated_at
         FROM global.gapp_expenses_register reg
-        INNER JOIN global.gapp_active act ON reg.active_id_fk = act.active_id
-        LEFT JOIN global.gapp_expenses_type exp ON exp.exp_type_id = reg.exp_type_id_fk
-        ${where}
+            INNER JOIN global.gapp_active act ON reg.active_id_fk = act.active_id
+            LEFT JOIN global.gapp_expenses_type exp ON exp.exp_type_id = reg.exp_type_id_fk
+            ${where}
         ORDER BY reg.expen_id DESC
         LIMIT ? OFFSET ?
     `;
@@ -459,9 +452,9 @@ function buildVehicleExpenseFilters(filters = {}) {
     }
 
     if (filters.date_start) { conditions.push('reg.date >= ?'); params.push(filters.date_start); }
-    if (filters.date_end)   { conditions.push('reg.date <= ?'); params.push(filters.date_end); }
+    if (filters.date_end) { conditions.push('reg.date <= ?'); params.push(filters.date_end); }
 
-    return { where: `WHERE ${conditions.join(' AND ')}`, params };
+    return { where: `WHERE status_expen = 1 AND ${conditions.join(' AND ')}`, params };
 }
 
 function sqlListVehicleExpenses(filters = {}) {
@@ -514,9 +507,9 @@ function sqlGetExpenseById() {
         SELECT
             reg.expen_id, reg.date, reg.hour, reg.local, reg.description,
             reg.total_value, reg.discount, reg.provider, reg.exp_type_id_fk,
-            expt.description_type, reg.driver_id_fk, reg.active_id_fk,
+            expt.description_type, reg.driver_id_fk, reg.active_id_fk, act.is_vehicle,
             reg.user_id_fk, reg.status_expen, reg.coupon_number,
-            reg.store_id_fk, reg.created_at, reg.updated_at,
+            reg.store_id_fk, reg.created_at, reg.updated_at, 
 
             fuel.fuel_id, fuel.liter_value, fuel.coupon_number AS fuel_coupon_number,
             fuel.km_day AS fuel_km_day, fuel.liter_qtd, fuel.fuel_type_id_fk,
@@ -535,7 +528,7 @@ function sqlGetExpenseById() {
 
             fine.fine_id, fine.infraction AS fine_infraction, fine.ait,
             fine.gravity, fine.points, fine.article_ctb,
-            fine.offending_driver_date, fine.offending_driver,
+            fine.offending_driver_date, fine.offending_driver_fk,
             fine.infraction_id_fk, inf.infraction AS infraction_description,
 
             ins.id_insurance, ins.risk_cep, ins.adjustment_factor, ins.deductible_type,
@@ -544,8 +537,7 @@ function sqlGetExpenseById() {
             ins.policy_number, ins.proposal_number, ins.date_init, ins.date_final,
             ins.bodywork, ins.IOF_value AS iof_value, ins.insurance_value,
             ins.deductible_value, ins.form_payment, ins.franchise_list,
-            ins.status_insurance, ins.ins_id_fk, ins.cov_id_fk, ins.util_id_fk,
-            ins.vehicle_id_fk
+            ins.status_insurance, ins.ins_id_fk, ins.cov_id_fk, ins.util_id_fk
 
         FROM global.gapp_expenses_register reg
         INNER JOIN global.gapp_active act ON reg.active_id_fk = act.active_id
@@ -565,7 +557,7 @@ function sqlGetExpenseById() {
 module.exports = {
     sqlInsertExpense, buildInsertExpenseParams,
     sqlUpdateExpense, buildUpdateExpenseParams,
-    sqlGetActiveWorkGroup, sqlGetVehicleIdByActiveId, sqlGetExpenseType,
+    sqlGetActiveWorkGroup, sqlGetExpenseType,
     sqlInsertFuel, buildInsertFuelParams,
     sqlUpdateFuel, buildUpdateFuelParams,
     sqlInsertMaintenance, buildInsertMaintenanceParams,

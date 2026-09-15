@@ -17,45 +17,47 @@
  * @module modules/global/routes
  */
 
-const express            = require('express');
-const router             = express.Router();
-const authController     = require('./controllers/auth.controller');
+const express = require('express');
+const router = express.Router();
+const authController = require('./controllers/auth.controller');
 const employeeController = require('./controllers/employee.controller');
-const gippRhController   = require('./controllers/gipp-rh.controller');
-const payeeController    = require('./controllers/payee.controller');
-const accessController        = require('./controllers/access.controller');
-const chatController          = require('./controllers/chat.controller');
-const filesController         = require('./controllers/files.controller');
-const gtppTaskController      = require('./controllers/gtpp-task.controller');
-const gtppItemController      = require('./controllers/gtpp-task-item.controller');
-const gtppResponseController  = require('./controllers/gtpp-task-item-response.controller');
-const gtppTaskUserController  = require('./controllers/gtpp-task-user.controller');
-const gtppScopeController     = require('./controllers/gtpp-task-scope.controller');
-const gtppMessageController   = require('./controllers/gtpp-message.controller');
-const gtppNotifyController    = require('./controllers/gtpp-notify.controller');
-const gtppThemeController     = require('./controllers/gtpp-theme.controller');
-const gtppScoreController     = require('./controllers/gtpp-score.controller');
-const eppProductController    = require('./controllers/epp-product.controller');
-const eppMenuController       = require('./controllers/epp-menu.controller');
-const eppOrderController      = require('./controllers/epp-order.controller');
-const eppLogSaleController    = require('./controllers/epp-log-sale.controller');
-const eppStockController      = require('./controllers/epp-stock.controller');
-const bpppProductController   = require('./controllers/bppp-product.controller');
-const shopController          = require('./controllers/shop.controller');
-const gappActiveController    = require('./controllers/gapp-active.controller');
+const gippRhController = require('./controllers/gipp-rh.controller');
+const payeeController = require('./controllers/payee.controller');
+const accessController = require('./controllers/access.controller');
+const chatController = require('./controllers/chat.controller');
+const filesController = require('./controllers/files.controller');
+const gtppTaskController = require('./controllers/gtpp-task.controller');
+const gtppItemController = require('./controllers/gtpp-task-item.controller');
+const gtppResponseController = require('./controllers/gtpp-task-item-response.controller');
+const gtppTaskUserController = require('./controllers/gtpp-task-user.controller');
+const gtppScopeController = require('./controllers/gtpp-task-scope.controller');
+const gtppMessageController = require('./controllers/gtpp-message.controller');
+const gtppNotifyController = require('./controllers/gtpp-notify.controller');
+const gtppThemeController = require('./controllers/gtpp-theme.controller');
+const gtppScoreController = require('./controllers/gtpp-score.controller');
+const eppProductController = require('./controllers/epp-product.controller');
+const eppMenuController = require('./controllers/epp-menu.controller');
+const eppOrderController = require('./controllers/epp-order.controller');
+const eppLogSaleController = require('./controllers/epp-log-sale.controller');
+const eppStockController = require('./controllers/epp-stock.controller');
+const bpppProductController = require('./controllers/bppp-product.controller');
+const shopController = require('./controllers/shop.controller');
+const gappActiveController = require('./controllers/gapp-active.controller');
 const gappInsuranceController = require('./controllers/gapp-insurance.controller');
-const gappVehicleController   = require('./controllers/gapp-vehicle.controller');
-const gappLookupController    = require('./controllers/gapp-lookup.controller');
-const gappExpensesController  = require('./controllers/gapp-expenses.controller');
-const gappStoreController     = require('./controllers/gapp-store.controller');
-const { upload: fileUpload }  = require('../../utils/file/file.service');
-const authMiddleware     = require('../../middlewares/auth.middleware');
-const upload             = require('../../middlewares/upload.middleware');
+const gappVehicleController = require('./controllers/gapp-vehicle.controller');
+const gappLookupController = require('./controllers/gapp-lookup.controller');
+const gappExpensesController = require('./controllers/gapp-expenses.controller');
+const gappNfController = require('./controllers/gapp-nf.controller');
+const gappStoreController = require('./controllers/gapp-store.controller');
+const mieppRoutes = require('./miepp.routes');
+const { upload: fileUpload } = require('../../utils/file/file.service');
+const authMiddleware = require('../../middlewares/auth.middleware');
+const upload = require('../../middlewares/upload.middleware');
 const { canAll, canAny } = require('../../middlewares/permission.middleware');
-const { asyncHandler }   = require('../../middlewares/async-handler.middleware');
+const { asyncHandler } = require('../../middlewares/async-handler.middleware');
 const { loginLimiter, loginIpLimiter, changePasswordLimiter } = require('../../middlewares/rate-limit.middleware');
-const { validate }       = require('../../middlewares/validate.middleware');
-const { loginSchema, changePasswordSchema }   = require('../../schemas/auth.schema');
+const { validate } = require('../../middlewares/validate.middleware');
+const { loginSchema, changePasswordSchema } = require('../../schemas/auth.schema');
 const {
     postCompensationSchema,
     putCompensationSchema,
@@ -68,7 +70,7 @@ const {
 } = require('../../schemas/gipp-rh.schema');
 const { postPayeeSchema, putPayeeSchema, patchPayeeSchema } = require('../../schemas/payee.schema');
 const { searchProductQuerySchema, listByDepartmentQuerySchema } = require('../../schemas/bppp.schema');
-const { sendMessageSchema, markAsReadSchema }               = require('../../schemas/chat.schema');
+const { sendMessageSchema, markAsReadSchema } = require('../../schemas/chat.schema');
 const {
     postProductSchema, putProductSchema, patchProductStatusSchema,
     postMenuSchema, putMenuSchema,
@@ -85,7 +87,9 @@ const {
     createExpenseSchema, updateExpenseSchema,
     listExpensesQuerySchema, listVehicleExpensesQuerySchema,
     validateExpenseTypePayload,
-    createStoreSchema, updateStoreSchema, listStoreQuerySchema
+    createStoreSchema, updateStoreSchema, listStoreQuerySchema,
+    createNfSchema,
+    updateNfSchema
 } = require('../../schemas/gapp.schema');
 const {
     postTaskSchema, putTaskStateSchema, putTaskTitleSchema, putTaskDescriptionSchema, putTaskThemeSchema,
@@ -380,7 +384,7 @@ router.post('/gipp-rh/receipt-by-group',
  */
 router.get('/gipp-rh/receipt',
     authMiddleware,
-    canAny(['GIPPRH_VIEW_RECEIPT','GIPPRH_DOWNLOAD_RECEIPT', 'GIPPRH_MANAGE_RECEIPT']),
+    canAny(['GIPPRH_VIEW_RECEIPT', 'GIPPRH_DOWNLOAD_RECEIPT', 'GIPPRH_MANAGE_RECEIPT']),
     asyncHandler(gippRhController.getReceipt));
 
 // ─── Tesouraria ───────────────────────────────────────────────────────────────
@@ -420,7 +424,7 @@ router.patch('/gipp-rh/treasury/confirm',
  */
 router.get('/gipp-rh/payment-types',
     authMiddleware,
-    canAny(['GIPPRH_DOWNLOAD_RECEIPT','GIPPRH_VIEW_RECEIPT', 'GIPPRH_MANAGE_RECEIPT']),
+    canAny(['GIPPRH_DOWNLOAD_RECEIPT', 'GIPPRH_VIEW_RECEIPT', 'GIPPRH_MANAGE_RECEIPT']),
     asyncHandler(gippRhController.getPaymentTypes));
 
 // ─── Payee (Freelancers e Prestadores) ────────────────────────────────────────
@@ -1078,7 +1082,7 @@ router.post('/gtpp/items/:itemId/responses',
     canAny(['GTPP_USE']),
     fileUpload.fields([
         { name: 'files', maxCount: gtppResponseController.MAX_RESPONSE_FILES },
-        { name: 'file',  maxCount: 1 },   // @deprecated campo antigo, um anexo só
+        { name: 'file', maxCount: 1 },   // @deprecated campo antigo, um anexo só
     ]),
     asyncHandler(gtppResponseController.createItemResponse));
 
@@ -1784,13 +1788,13 @@ router.put('/gapp/active',
 //
 // Migrado de Controller/GAPP/Insurance.php. Uso: editar/criar o seguro de um
 // veículo que já existe, sem recriar o ativo/veículo. Upsert por
-// `vehicle_id_fk` via `sp_gapp_save_insurance` (mesmos workers da rota acima).
+// `active_id_fk` via `sp_gapp_save_insurance` (mesmos workers da rota acima).
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * @route POST /gapp/insurance
- * @description Cria o seguro de um veículo (`vehicle_id_fk` obrigatório).
+ * @description Cria o seguro de um veículo (`active_id_fk` obrigatório).
  * @access Requer `GAPP_CREATE_INSURANCE`
  */
 router.post('/gapp/insurance',
@@ -1801,7 +1805,7 @@ router.post('/gapp/insurance',
 
 /**
  * @route PUT /gapp/insurance
- * @description Atualiza o seguro de um veículo (`vehicle_id_fk` obrigatório).
+ * @description Atualiza o seguro de um veículo (`active_id_fk` obrigatório).
  * @access Requer `GAPP_UPDATE_INSURANCE`
  */
 router.put('/gapp/insurance',
@@ -1859,7 +1863,7 @@ router.get('/gapp/vehicle/:id',
 /**
  * @route GET /gapp/insurance
  * @description Lista/filtra seguros — inclui registros desativados (histórico).
- * Use `vehicle_id_fk` para ver todo o histórico de apólices de um veículo.
+ * Use `active_id_fk` para ver todo o histórico de apólices de um veículo.
  * @access Requer `GAPP_VIEW_INSURANCE`
  */
 router.get('/gapp/insurance',
@@ -2004,6 +2008,45 @@ router.put('/gapp/expenses/:id',
     validateExpenseTypePayload,
     asyncHandler(gappExpensesController.updateExpense));
 
+// ─── GAPP — NF de despesas de ativo ───────────────────────────────────────────────
+router.get('/gapp/nf',
+    authMiddleware,
+    canAll(['GAPP_VIEW_NF']),
+    asyncHandler(gappNfController.listNf)
+);
+
+router.get('/gapp/nf/:id',
+    authMiddleware,
+    canAll(['GAPP_VIEW_NF']),
+    asyncHandler(gappNfController.listNfById)
+);
+
+router.get('/gapp/nf-coupon',
+    authMiddleware,
+    canAll(['GAPP_VIEW_NF']),
+    asyncHandler(gappNfController.listCoupon)
+);
+
+router.post('/gapp/nf',
+    authMiddleware,
+    canAll(['GAPP_CREATE_NF']),
+    validate(createNfSchema),
+    asyncHandler(gappNfController.createNf)
+)
+router.put('/gapp/nf/:id',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_NF']),
+    validate(updateNfSchema),
+    asyncHandler(gappNfController.updateNf)
+)
+// Utiliza a o ID da despesa vinculada a nota fiscal e NÃO o ID da nota fiscal
+router.delete('/gapp/nf/:id',
+    authMiddleware,
+    canAll(['GAPP_DELETE_NF']),
+    asyncHandler(gappNfController.deleteNF)
+)
+
+
 // ─── GAPP — Tabelas de apoio (lookup, para dropdowns/filtros) ──────────────────
 //
 // Dados de referência, sem informação sensível — exigem só autenticação,
@@ -2095,5 +2138,17 @@ router.get('/gapp/damage-type', authMiddleware, asyncHandler(gappLookupControlle
  * @access Autenticado
  */
 router.get('/gapp/infractions', authMiddleware, asyncHandler(gappLookupController.listInfractions));
+
+/**
+ * Suite miepp — Mídia Interna e Externa Peg Pese.
+ *
+ * Roteador próprio (`miepp.routes.js`) porque a suite tem três zonas de
+ * autenticação distintas — sessão de usuário, token de dispositivo e URL
+ * assinada — e misturá-las neste arquivo, onde toda rota começa por
+ * `authMiddleware`, tornaria fácil uma rota de player nascer exigindo cookie.
+ *
+ * Prefixo final: `/api/v1/global/miepp/...`
+ */
+router.use('/miepp', mieppRoutes);
 
 module.exports = router;

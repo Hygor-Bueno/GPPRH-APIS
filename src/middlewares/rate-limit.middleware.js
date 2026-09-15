@@ -40,6 +40,7 @@
  * @module middlewares/rate-limit.middleware
  */
 
+const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');
 const jwtService = require('../infra/auth/jwt.service');
@@ -63,6 +64,8 @@ const LIMITS = Object.freeze({
     loginIp: 50,
     /** Falhas de troca de senha, por usuário. */
     changePassword: 5,
+    /** Tráfego das rotas `/miepp/device/*`, por dispositivo. */
+    device: 900,
 });
 
 /**
@@ -207,7 +210,9 @@ const apiLimiter = rateLimit({
     ...COMMON,
     limit: LIMITS.ip,
     keyGenerator: ipKey,
-    skip: isAuthenticated,
+    // Tráfego de player do miepp também sai daqui: não tem sessão, mas tem
+    // limiter próprio por dispositivo (`deviceLimiter`). Ver `isMieppDeviceTraffic`.
+    skip: (req) => isAuthenticated(req) || isMieppDeviceTraffic(req),
     handler: limitReachedHandler('RATE_LIMIT_IP'),
 });
 
@@ -283,12 +288,88 @@ const changePasswordLimiter = rateLimit({
     skipSuccessfulRequests: true,
 });
 
+/**
+ * Chave dos dispositivos miepp: o próprio token, resumido.
+ *
+ * Pelo mesmo motivo que o tráfego autenticado é contado por usuário e não por
+ * IP, o tráfego de player é contado por PLAYER. Numa loja, todas as telas saem
+ * pelo mesmo endereço — com chave de IP, uma caixa em laço de retry consumiria
+ * a cota das outras telas do mesmo lugar e derrubaria a veiculação inteira.
+ *
+ * A chave é o SHA-256 do token, não o token: o valor vira chave de um `Map` em
+ * memória e aparece em dump de heap e em log de depuração. O hash identifica o
+ * dispositivo igualmente bem sem carregar o segredo junto.
+ *
+ * Não há consulta ao banco aqui — o limiter roda antes da autenticação. Um
+ * token forjado só ganha um balde próprio e esbarra no 401 logo em seguida.
+ * `POST /device/pair`, que não tem token, cai para IP.
+ *
+ * @param {import('express').Request} req
+ * @returns {string}
+ */
+function deviceKey(req) {
+    const header = req.headers?.authorization;
+    const match = typeof header === 'string' ? /^Bearer\s+(.+)$/i.exec(header.trim()) : null;
+
+    if (match) {
+        const digest = crypto.createHash('sha256').update(match[1].trim()).digest('hex');
+        return `d:${digest.slice(0, 32)}`;
+    }
+
+    // A rota de entrega de mídia não manda header: o player baixa o arquivo com
+    // um cliente HTTP simples, autorizado pela assinatura na query. O `p` é
+    // chave confiável mesmo vindo do cliente, porque a assinatura HMAC cobre
+    // esse valor — trocar o `p` invalida a URL, então não dá para escapar do
+    // balde forjando outro player.
+    const playerId = Number(req.query?.p);
+    if (Number.isInteger(playerId) && playerId > 0) return `d:p${playerId}`;
+
+    return ipKey(req);
+}
+
+/**
+ * A requisição é tráfego de player do miepp?
+ *
+ * Serve para tirá-la do `apiLimiter`. Sem isso, as telas — que não têm sessão —
+ * cairiam no balde de IP, e numa loja todas saem pelo mesmo endereço: vinte
+ * telas dividiriam as 2000 requisições por janela e começariam a receber 429 em
+ * horário de pico. É a mesma armadilha descrita no topo deste arquivo, agora no
+ * lado do dispositivo. O `deviceLimiter` cobre essas rotas por player.
+ *
+ * @param {import('express').Request} req
+ * @returns {boolean}
+ */
+function isMieppDeviceTraffic(req) {
+    const path = req.path || '';
+    return path.includes('/miepp/device/') || /\/miepp\/media\/[^/]+\/file$/.test(path);
+}
+
+/**
+ * Rotas `/miepp/device/*` — por DISPOSITIVO.
+ *
+ * O player chama em laço: heartbeat, playlist e fila de comandos. Com as
+ * cadências previstas (heartbeat a cada 60s, playlist a cada 5 min, comandos a
+ * cada 30s), uma tela gasta algo como 50–100 requisições por janela. 900 em 15
+ * min (~1/s) deixa uma ordem de grandeza de folga para retry e ainda corta um
+ * dispositivo em laço descontrolado antes que ele pese no banco.
+ *
+ * Vale a mesma ressalva do topo do arquivo: o contador é por processo e são 2
+ * instâncias no cluster, então o teto real fica entre 900 e 1800.
+ */
+const deviceLimiter = rateLimit({
+    ...COMMON,
+    limit: LIMITS.device,
+    keyGenerator: deviceKey,
+    handler: limitReachedHandler('RATE_LIMIT_DEVICE'),
+});
+
 module.exports = {
     apiLimiter,
     userLimiter,
     loginLimiter,
     loginIpLimiter,
     changePasswordLimiter,
+    deviceLimiter,
     // Exportados para teste e documentação — não use nas rotas.
     LIMITS,
     WINDOW_MS,
@@ -296,6 +377,8 @@ module.exports = {
     userKey,
     loginKey,
     changePasswordKey,
+    deviceKey,
+    isMieppDeviceTraffic,
     resolveUserId,
     isAuthenticated,
     isAnonymous,

@@ -44,21 +44,15 @@ const updateActiveSchema = {
 /**
  * Valida a coerência entre `is_vehicle` e os sub-objetos `vehicle`/`insurance`.
  * Não valida campo a campo dentro deles — isso fica a cargo da procedure.
+ * ! *** MANUTENÇÃO DA FUNÇÃO ***
  */
 function validateVehicleAndInsurancePayload(req, res, next) {
     const { is_vehicle, vehicle, insurance } = req.body || {};
     const isVehicle = Number(is_vehicle) === 1;
 
-    if (isVehicle && (vehicle == null || typeof vehicle !== 'object' || Array.isArray(vehicle))) {
-        return next(new BadRequestError("'vehicle' é obrigatório como objeto quando 'is_vehicle' = 1."));
-    }
-
     if (insurance != null) {
         if (typeof insurance !== 'object' || Array.isArray(insurance)) {
             return next(new BadRequestError("'insurance' deve ser um objeto."));
-        }
-        if (!isVehicle) {
-            return next(new BadRequestError("'insurance' só se aplica quando 'is_vehicle' = 1."));
         }
     }
 
@@ -92,7 +86,7 @@ const insuranceCommonSchema = {
 // Create = novo registro de seguro para um veículo (desativa o anterior, se houver)
 const createInsuranceSchema = {
     ...insuranceCommonSchema,
-    vehicle_id_fk: { type: 'number', required: true }
+    active_id_fk: { type: 'number', required: true }
 };
 
 // Update = edita um registro de seguro existente pelo id
@@ -141,7 +135,7 @@ const listVehicleQuerySchema = {
 
 const listInsuranceQuerySchema = {
     id_insurance:      { type: 'number' },
-    vehicle_id_fk:     { type: 'number' },
+    active_id_fk:      { type: 'number' },
     status_insurance:  { type: 'number' },
     ins_id_fk:         { type: 'number' },
     cov_id_fk:         { type: 'number' },
@@ -189,13 +183,14 @@ const listExpensesQuerySchema = {
     expen_id:       { type: 'number' },
     hour:           { type: 'string' },
     active_id_fk:   { type: 'number' },
+    is_vehicle:     { type: 'number' },
     exp_type_id_fk: { type: 'number' },
     description:    { type: 'string' },
     status_expen:   { type: 'number', enum: [0, 1] },
-    date_start:      { type: 'string' },
-    date_end:        { type: 'string' },
-    page:            { type: 'number', min: 1 },
-    limit:           { type: 'number', min: 1, max: 100 },
+    date_start:     { type: 'string' },
+    date_end:       { type: 'string' },
+    page:           { type: 'number', min: 1 },
+    limit:          { type: 'number', min: 1, max: 100 },
 };
 
 // Baseada na pcr_select_filtered_expenses (legado) — mesmos filtros +
@@ -266,6 +261,35 @@ const listStoreQuerySchema = {
     limit:        { type: 'number' },
 };
 
+const nfFieldSchema = {
+    number_nf:         { type: 'string', maxLength: 30 },
+    dt_issue:          { type: 'string' },
+    dt_delivery:       { type: 'string' },
+    hr_exit:           { type: 'string' },
+    expen_id_fk:       { type: 'number' },
+    user_id_fk:        { type: 'number' },
+    nf_key:            { type: 'string', maxLength: 100 },
+}
+
+const listNfQuerySchema = {
+    nf_id:        { type: 'number' },
+    number_nf:    { type: 'string', maxLength: 30 },
+    dt_issue:     { type: 'string' },
+    dt_delivery:  { type: 'string' },
+    hr_exit:      { type: 'string' },
+    expen_id_fk:  { type: 'number' },
+    user_id_fk:   { type: 'number' },
+    nf_key:       { type: 'string', maxLength: 100 },
+    page:         { type: 'number' },
+    limit:        { type: 'number' },
+}
+
+const createNfSchema = {...nfFieldSchema}
+const updateNfSchema = {
+    ...nfFieldSchema,
+    nf_id:        { type: 'number' },
+}
+
 module.exports = {
     createActiveSchema,
     updateActiveSchema,
@@ -282,5 +306,9 @@ module.exports = {
     validateExpenseTypePayload,
     createStoreSchema,
     updateStoreSchema,
-    listStoreQuerySchema
+    listStoreQuerySchema,
+    nfFieldSchema,
+    listNfQuerySchema,
+    createNfSchema,
+    updateNfSchema
 };

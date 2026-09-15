@@ -17,7 +17,7 @@ const { ExpenseType } = require('../../domain/gapp/expenses/expense-type.enum');
 const {
     sqlInsertExpense, buildInsertExpenseParams,
     sqlUpdateExpense, buildUpdateExpenseParams,
-    sqlGetActiveWorkGroup, sqlGetVehicleIdByActiveId, sqlGetExpenseType,
+    sqlGetActiveWorkGroup, sqlGetExpenseType,
     sqlInsertFuel, buildInsertFuelParams,
     sqlUpdateFuel, buildUpdateFuelParams,
     sqlInsertMaintenance, buildInsertMaintenanceParams,
@@ -157,8 +157,7 @@ class MysqlExpensesRepository extends ExpensesRepositoryPort {
      * Cria/atualiza a apólice de seguro vinculada à despesa, reaproveitando
      * a mesma `sp_gapp_save_insurance` usada nativamente por /gapp/insurance
      * — ela já desativa a apólice ativa anterior do veículo antes de criar
-     * uma nova. `vehicle_id_fk` é resolvido do `active_id_fk` da despesa,
-     * nunca do cliente. No update, a apólice já vinculada (se houver) é
+     * uma nova. No update, a apólice já vinculada (se houver) é
      * atualizada in-place — nunca recriada, porque um sinistro pode
      * referenciá-la.
      * @private
@@ -167,11 +166,6 @@ class MysqlExpensesRepository extends ExpensesRepositoryPort {
     async _saveInsuranceDetail(conn, detail, expenId, activeId, isUpdate) {
         if (activeId == null) {
             throw new AppError("Despesa do tipo Seguro exige 'active_id_fk' (usado pra resolver o veículo)", 400);
-        }
-
-        const [[vehicle]] = await conn.query(sqlGetVehicleIdByActiveId(), [activeId]);
-        if (!vehicle) {
-            throw new AppError('O ativo informado não é um veículo (sem registro em gapp_vehicle)', 400);
         }
 
         let existingInsuranceId = null;
@@ -184,10 +178,11 @@ class MysqlExpensesRepository extends ExpensesRepositoryPort {
             ...detail,
             id_insurance: existingInsuranceId,
             is_update: existingInsuranceId != null ? 1 : 0,
-            vehicle_id_fk: vehicle.vehicle_id
+            active_id_fk: activeId
         };
 
         try {
+            console.log(insurancePayload);
             await conn.execute(sqlSaveInsurance(), buildSaveInsuranceParams(insurancePayload));
         } catch (error) {
             // SQLSTATE 45000 = erro de negócio sinalizado pela procedure → 400.

@@ -63,7 +63,7 @@ function shapeExpenseDetail(row) {
         points: row.points,
         article_ctb: row.article_ctb,
         offending_driver_date: row.offending_driver_date,
-        offending_driver: row.offending_driver,
+        offending_driver_fk: row.offending_driver_fk,
         infraction_id_fk: row.infraction_id_fk,
         infraction_description: row.infraction_description
     } : null;
@@ -95,7 +95,7 @@ function shapeExpenseDetail(row) {
         ins_id_fk: row.ins_id_fk,
         cov_id_fk: row.cov_id_fk,
         util_id_fk: row.util_id_fk,
-        vehicle_id_fk: row.vehicle_id_fk
+        active_id_fk: row.active_id_fk
     } : null;
 
     return {
@@ -111,6 +111,7 @@ function shapeExpenseDetail(row) {
         description_type: row.description_type,
         driver_id_fk: row.driver_id_fk,
         active_id_fk: row.active_id_fk,
+        is_vehicle: row.is_vehicle,
         user_id_fk: row.user_id_fk,
         status_expen: row.status_expen,
         coupon_number: row.coupon_number,

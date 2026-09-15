@@ -25,7 +25,7 @@ function makeFakeUserRepository(overrides = {}) {
 
 function makeFakeInsuranceRepository(overrides = {}) {
     const repo = new GappInsuranceRepositoryPort();
-    repo.findActiveInsuranceByVehicleId = jest.fn().mockResolvedValue({ id_insurance: 1 });
+    repo.findActiveInsuranceByActiveId = jest.fn().mockResolvedValue({ id_insurance: 1 });
     return Object.assign(repo, overrides);
 }
 
@@ -107,7 +107,7 @@ describe('GappActiveUseCases', () => {
             const result = await useCases.getById(1, CURRENT_USER);
 
             expect(result.vehicle).toEqual({ vehicle_id: 200 });
-            expect(insuranceRepository.findActiveInsuranceByVehicleId).toHaveBeenCalledWith(200);
+            expect(insuranceRepository.findActiveInsuranceByActiveId).toHaveBeenCalledWith(200);
             expect(result.insurance).toEqual({ id_insurance: 1 });
         });
 

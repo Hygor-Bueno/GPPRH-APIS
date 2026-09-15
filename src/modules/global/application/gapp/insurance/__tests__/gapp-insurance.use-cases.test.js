@@ -28,7 +28,7 @@ describe('GappInsuranceUseCases', () => {
             const repository = makeFakeRepository({ findVehicleWorkGroup: jest.fn().mockResolvedValue({ work_group_fk: 999 }) });
             const useCases = new GappInsuranceUseCases({ repository, userRepository: makeFakeUserRepository() });
 
-            await expect(useCases.save({ is_update: 0, vehicle_id_fk: 200 }, CURRENT_USER)).rejects.toThrow(AppError);
+            await expect(useCases.save({ is_update: 0, active_id_fk: 200 }, CURRENT_USER)).rejects.toThrow(AppError);
             expect(repository.saveInsurancePolicy).not.toHaveBeenCalled();
         });
 
@@ -36,7 +36,7 @@ describe('GappInsuranceUseCases', () => {
             const repository = makeFakeRepository({ findVehicleWorkGroup: jest.fn().mockResolvedValue(null) });
             const useCases = new GappInsuranceUseCases({ repository, userRepository: makeFakeUserRepository() });
 
-            await expect(useCases.save({ is_update: 0, vehicle_id_fk: 999 }, CURRENT_USER)).rejects.toThrow(AppError);
+            await expect(useCases.save({ is_update: 0, active_id_fk: 999 }, CURRENT_USER)).rejects.toThrow(AppError);
         });
 
         it('should throw 404 on update when the insurance belongs to another work group', async () => {
@@ -51,7 +51,7 @@ describe('GappInsuranceUseCases', () => {
             const repository = makeFakeRepository();
             const useCases = new GappInsuranceUseCases({ repository, userRepository: makeFakeUserRepository() });
 
-            const result = await useCases.save({ is_update: 0, vehicle_id_fk: 200 }, CURRENT_USER);
+            const result = await useCases.save({ is_update: 0, active_id_fk: 200 }, CURRENT_USER);
 
             expect(repository.saveInsurancePolicy).toHaveBeenCalled();
             expect(result).toEqual({ id: 1 });

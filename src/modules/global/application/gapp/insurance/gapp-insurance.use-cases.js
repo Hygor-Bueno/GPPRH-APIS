@@ -41,7 +41,7 @@ class GappInsuranceUseCases {
      */
     async _assertOwnership(data, workGroupFk) {
         if (!data.is_update) {
-            const vehicle = await this.repository.findVehicleWorkGroup(data.vehicle_id_fk);
+            const vehicle = await this.repository.findVehicleWorkGroup(data.active_id_fk);
             if (!vehicle || vehicle.work_group_fk !== workGroupFk) {
                 throw new AppError('Veículo não encontrado no seu grupo de trabalho', 404);
             }

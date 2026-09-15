@@ -112,6 +112,18 @@ const DAY_MS = 86400000;
 /** `M0_CODFIL`: quatro dígitos. */
 const SITE_CODE_PATTERN = /^[0-9]{4}$/;
 
+/** Recorte máximo da consulta, em dias. Igual ao dos relatórios do módulo. */
+const MAX_LIST_SPAN_DAYS = 92;
+
+/** Página padrão e teto da consulta de resgates. */
+const DEFAULT_LIST_LIMIT = 100;
+const MAX_LIST_LIMIT = 500;
+
+const DATE_PATTERN = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
+
+/** Chave de acesso da NFC-e: 44 dígitos, sem máscara. */
+const NFE_KEY_PATTERN = /^[0-9]{44}$/;
+
 const UUID_PATTERN =
     /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
@@ -408,6 +420,184 @@ class MealCouponUseCases {
         );
     }
 
+    /**
+     * Os resgates já gravados, com recorte.
+     *
+     * ── Por que o recorte é obrigatório ─────────────────────────────────────
+     *
+     * Ou a chave do cupom, ou o par de datas. Não é formulário chato: a tabela
+     * tem uma linha por refeição servida e só cresce, e os dois índices que
+     * existem são (`nfe_key`) e (`service_date`, `site_code`). Consulta sem
+     * nenhum dos dois é varredura da tabela inteira — mesma razão que já obriga
+     * `date_from`/`date_to` nos relatórios.
+     *
+     * A chave tem precedência sobre as datas quando vêm as duas: quem procura
+     * um cupom específico quer o histórico dele, não a interseção com o período
+     * que sobrou na tela.
+     *
+     * @param {{nfeKey?: string, dateFrom?: string, dateTo?: string,
+     *          siteCode?: string, limit?: number|string, offset?: number|string}} filters
+     */
+    async listCoupons(filters = {}) {
+        const key = trimOrNull(filters.nfeKey);
+        const from = trimOrNull(filters.dateFrom);
+        const to = trimOrNull(filters.dateTo);
+        const site = trimOrNull(filters.siteCode);
+
+        if (key && !NFE_KEY_PATTERN.test(key)) {
+            /* Só a chave nua. Aqui não passa QR: `readNfceQr` existe para o
+               balcão, onde vale gastar o parse e o dígito verificador em cima do
+               que a câmera leu. Esta rota é de conferência, e quem a chama já
+               tem a chave — veio da resposta de `/coupons/validate` ou desta
+               própria lista. */
+            throw new BadRequestError('nfe_key tem que ter 44 dígitos, sem pontuação.');
+        }
+
+        if (!key) {
+            if (!from || !to) {
+                throw new BadRequestError(
+                    'Informe nfe_key, ou o período com date_from e date_to (YYYY-MM-DD).',
+                );
+            }
+
+            if (!DATE_PATTERN.test(from) || !DATE_PATTERN.test(to)) {
+                throw new BadRequestError('Datas no formato YYYY-MM-DD.');
+            }
+
+            if (from > to) {
+                throw new BadRequestError('date_from não pode ser depois de date_to.');
+            }
+
+            const spanDays =
+                (Date.parse(to + 'T00:00:00Z') - Date.parse(from + 'T00:00:00Z')) / DAY_MS;
+
+            if (spanDays > MAX_LIST_SPAN_DAYS) {
+                throw new BadRequestError(
+                    `O período máximo é de ${MAX_LIST_SPAN_DAYS} dias. Peça por partes.`,
+                );
+            }
+        }
+
+        if (site && !SITE_CODE_PATTERN.test(site)) {
+            throw new BadRequestError('site_code tem que ter 4 dígitos (ex.: 0202).');
+        }
+
+        const limit = this._positiveInt(filters.limit, DEFAULT_LIST_LIMIT);
+        const offset = this._positiveInt(filters.offset, 0, { allowZero: true });
+
+        if (limit > MAX_LIST_LIMIT) {
+            throw new BadRequestError(`limit máximo é ${MAX_LIST_LIMIT}.`);
+        }
+
+        const page = await this.repository.listCoupons({
+            nfeKey: key,
+            /* A chave manda: com ela, o período sai do caminho para o histórico
+               do cupom aparecer inteiro. */
+            dateFrom: key ? null : from,
+            dateTo: key ? null : to,
+            siteCode: site,
+            limit,
+            offset,
+        });
+
+        return {
+            filters: {
+                nfe_key: key,
+                date_from: key ? null : from,
+                date_to: key ? null : to,
+                site_code: site,
+                limit,
+                offset,
+            },
+            total: page.total,
+            count: page.rows.length,
+            /* `has_more` pronto para a tela não recalcular — e para "acabou"
+               significar a mesma coisa em todas elas. */
+            has_more: offset + page.rows.length < page.total,
+            rows: page.rows,
+        };
+    }
+
+    /**
+     * Estorna um resgate pelo id.
+     *
+     * ⚠️ **É exclusão de verdade, e leva a refeição junto.** Duas coisas somem:
+     *   a linha de saldo (`meal_coupon`) e a refeição que ela gerou
+     *   (`meal_log`). Não é zelo do adapter — é o que mantém as duas contas
+     *   verdadeiras. Apagar só o saldo devolveria o cupom para uso enquanto o
+     *   almoço continua contado no relatório do dia: o mesmo prato contado duas
+     *   vezes, e pago por ninguém.
+     *
+     * Não existe `is_active = 0` aqui, ao contrário do `diner_group`. O saldo do
+     * cupom é contado por LINHA e a unicidade é (`nfe_key`, `seq`) — linha
+     * inativa continuaria segurando a vaga, que é exatamente o que o estorno
+     * precisa devolver.
+     *
+     * Por isso a rota é de `MEAL_MANAGE` e não de `MEAL_SERVE`: servir se
+     * desfaz, apagar histórico não.
+     *
+     * @param {number|string} id
+     * @param {{userId: ?number}} actor
+     */
+    async deleteCoupon(id, actor = {}) {
+        const couponId = this._positiveInt(id, null);
+
+        if (!couponId) {
+            throw new BadRequestError('id do resgate tem que ser um número inteiro positivo.');
+        }
+
+        const result = await this.repository.deleteCouponById(couponId);
+
+        if (!result) {
+            /* 404 e não 204: a tela precisa distinguir "apaguei" de "já não
+               estava lá" — duas pessoas no mesmo relatório é caso real, e a
+               segunda tem que ver a lista mudar, não um sucesso silencioso. */
+            throw new AppError('Resgate de cupom não encontrado.', 404, {
+                code: 'COUPON_NOT_FOUND',
+            });
+        }
+
+        /* Único rastro que sobra: as linhas foram embora e o módulo não tem
+           tabela de auditoria. Quem apagou, o quê, e quando. */
+        console.warn('[meal-coupon] estorno', {
+            coupon_id: result.coupon.id,
+            nfe_key: result.coupon.nfe_key,
+            seq: result.coupon.seq,
+            meal_log_id: result.coupon.meal_log_id,
+            meal_log_deleted: result.meal_log_deleted,
+            by_user_id: actor.userId ?? null,
+            at: this.now().toISOString(),
+        });
+
+        return {
+            deleted: true,
+            coupon: result.coupon,
+            meal_log_deleted: result.meal_log_deleted,
+            message: result.meal_log_deleted
+                ? 'Resgate excluído. A refeição correspondente também foi removida.'
+                : 'Resgate excluído.',
+        };
+    }
+
+    /**
+     * Inteiro vindo de query string, com padrão.
+     *
+     * Valor inválido cai no padrão em vez de recusar a requisição: `limit=abc`
+     * não é ataque nem engano que mude o resultado, e recusar deixaria a tela
+     * sem lista por causa de um campo que ela nem mostra.
+     * @private
+     */
+    _positiveInt(value, fallback, { allowZero = false } = {}) {
+        if (value === undefined || value === null || value === '') return fallback;
+
+        const parsed = Number(value);
+
+        if (!Number.isInteger(parsed)) return fallback;
+        if (parsed < 0 || (!allowZero && parsed === 0)) return fallback;
+
+        return parsed;
+    }
+
     /** @private */
     _refuse(reason, message, extra = {}) {
         return { valid: false, reason, message, ...extra };
@@ -421,5 +611,8 @@ module.exports = {
     DEFAULT_MEAL_SEQPRODUTO,
     ENFORCE_DATE,
     LOOKBACK_DAYS,
+    MAX_LIST_SPAN_DAYS,
+    DEFAULT_LIST_LIMIT,
+    MAX_LIST_LIMIT,
     mealsFromQuantity,
 };

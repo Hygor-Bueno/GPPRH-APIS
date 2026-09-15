@@ -46,7 +46,7 @@ class GappVehicleUseCases {
         const vehicle = await this.repository.findById(id, gappUser.work_group_fk);
         if (!vehicle) throw new AppError('Veículo não encontrado', 404);
 
-        vehicle.insurance = await this.insuranceRepository.findActiveInsuranceByVehicleId(vehicle.vehicle_id) || null;
+        vehicle.insurance = await this.insuranceRepository.findActiveInsuranceByActiveId(vehicle.active_id_fk) || null;
         return vehicle;
     }
 }

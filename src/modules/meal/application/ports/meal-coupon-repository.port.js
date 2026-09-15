@@ -63,6 +63,43 @@ class MealCouponRepositoryPort {
      * @throws {AppError} 409 quando o saldo acabou entre a conferência e o resgate.
      */
     redeemCouponWithMealLog(coupon, mealLog) { throw new Error('Not implemented'); }
+
+    /**
+     * As linhas já gravadas, com recorte.
+     *
+     * Quem chama já validou o recorte: ou `nfeKey`, ou o par de datas. A
+     * implementação não confere de novo — o motivo do recorte é o índice, e
+     * quem conhece o índice é o adapter, mas quem conhece a regra é o caso de
+     * uso.
+     *
+     * @param {{nfeKey: ?string, dateFrom: ?string, dateTo: ?string,
+     *          siteCode: ?string, limit: number, offset: number}} filters
+     * @returns {Promise<{rows: object[], total: number}>}
+     */
+    listCoupons(filters) { throw new Error('Not implemented'); }
+
+    /**
+     * Uma linha, pelo id. `null` quando não existe.
+     * @param {number} id
+     * @returns {Promise<?object>}
+     */
+    getCouponById(id) { throw new Error('Not implemented'); }
+
+    /**
+     * Estorna um resgate: apaga a linha de saldo, a refeição que ela gerou, e
+     * fecha o buraco na sequência — tudo numa transação só.
+     *
+     * As três etapas são indivisíveis pelo mesmo motivo que o resgate é: apagar
+     * o saldo sem apagar a refeição conta um almoço que ninguém pagou; apagar a
+     * refeição sem apagar o saldo prende o saldo de um cupom que não foi
+     * servido; e deixar o buraco na sequência trava o saldo restante (ver
+     * `sqlResequenceCouponAfterDelete`).
+     *
+     * @param {number} id
+     * @returns {Promise<?{coupon: object, meal_log_deleted: boolean}>}
+     *          `null` quando o id não existe — quem chamou transforma em 404.
+     */
+    deleteCouponById(id) { throw new Error('Not implemented'); }
 }
 
 module.exports = { MealCouponRepositoryPort };
