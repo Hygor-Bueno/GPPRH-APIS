@@ -59,7 +59,7 @@ class GappActiveUseCases {
             throw new AppError("Não foi possivel realizar ação, o ativo esta desabilitado.", 400)
         }
 
-        if (!isExists.status_active) {
+        if (!isExists.status_active && !data.status_active) {
             throw new AppError("Não foi possivel realizar ação, o ativo esta desabilitado.", 400)
         }
 
