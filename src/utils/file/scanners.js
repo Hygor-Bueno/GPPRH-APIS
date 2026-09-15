@@ -29,7 +29,7 @@ const { AppError } = require('../../errors/app.error');
  * @param {Buffer} buf - Conteúdo do arquivo.
  * @throws {AppError} 400 se uma ameaça for detectada.
  */
-function scanForBinaryThreats(buf) {
+function scanForBinaryThreats(buf, { allowWebScripts = false } = {}) {
     const scan = buf.slice(0, Math.min(MAX_SCAN_BYTES, buf.length));
 
     // Windows PE: cabeçalho MZ seguido de PE\x00\x00 nos próximos 512 bytes
@@ -67,9 +67,13 @@ function scanForBinaryThreats(buf) {
     const always = [
         [Buffer.from('<?php'),   'código PHP'],
         [Buffer.from('<?PHP'),   'código PHP'],
-        [Buffer.from('<script'), 'tag <script>'],
-        [Buffer.from('<SCRIPT'), 'tag <script>'],
     ];
+    if (!allowWebScripts) {
+        always.push(
+            [Buffer.from('<script'), 'tag <script>'],
+            [Buffer.from('<SCRIPT'), 'tag <script>'],
+        );
+    }
     for (const [needle, label] of always) {
         if (_indexOf(scan, needle) !== -1) {
             throw new AppError(`Bloqueado: ${label} detectado.`, 400);

@@ -18,7 +18,7 @@ const { AppError } = require('../../errors/app.error');
  * @returns {string} MIME type real (ex: `'image/jpeg'`, `'application/pdf'`).
  * @throws {AppError} 400 se o tipo não for reconhecido ou suportado.
  */
-function detect(buf) {
+function detect(buf, claimedExtension = null) {
     if (!buf || buf.length < 4) {
         throw new AppError('Arquivo inválido ou vazio.', 400);
     }
@@ -71,6 +71,15 @@ function detect(buf) {
     const sample = buf.slice(0, Math.min(512, buf.length));
     if (!sample.includes(0x00)) {
         const text = sample.toString('utf8');
+        const webMimeByExtension = {
+            html: 'text/html',
+            htm: 'text/html',
+            css: 'text/css',
+            js: 'application/javascript',
+        };
+        if (webMimeByExtension[claimedExtension]) {
+            return webMimeByExtension[claimedExtension];
+        }
         if (text.trimStart().startsWith('<?xml') || text.trimStart().startsWith('<')) {
             // Verifica se realmente parece XML antes de classificar
             if (/^<\?xml[\s\S]/i.test(text.trimStart()) || /^<[a-zA-Z][\s\S]*>/.test(text.trimStart())) {
