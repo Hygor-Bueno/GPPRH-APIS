@@ -52,6 +52,17 @@ describe('mime-detector — vídeo', () => {
     });
 });
 
+describe('mime-detector — arquivos web', () => {
+    it('should detect HTML, CSS, and JavaScript from a textual buffer and extension', () => {
+        expect(detect(Buffer.from('<!doctype html><script>const app = 1;</script>'), 'html'))
+            .toBe('text/html');
+        expect(detect(Buffer.from('body { color: red; }'), 'css'))
+            .toBe('text/css');
+        expect(detect(Buffer.from('const app = true;'), 'js'))
+            .toBe('application/javascript');
+    });
+});
+
 describe('mime-detector — ISO-BMFF que NÃO é vídeo', () => {
     // HEIC (foto padrão do iPhone) e AVIF usam o mesmo box `ftyp` do MP4. Sem a
     // recusa explícita, uma foto seria classificada como vídeo e gravada .mp4.
