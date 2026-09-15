@@ -74,6 +74,9 @@ const MIME_TO_EXT = {
     'application/pdf':                                                                     'pdf',
     'text/plain':                                                                          'txt',
     'text/csv':                                                                            'csv',
+    'text/html':                                                                          'html',
+    'text/css':                                                                            'css',
+    'application/javascript':                                                             'js',
     'application/msword':                                                                  'doc',
     'application/vnd.ms-excel':                                                            'xls',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':                  'xlsx',
@@ -126,6 +129,10 @@ const EXT_TO_EXPECTED_MIME = {
     xml:  ['application/xml', 'text/xml'],
     txt:  ['text/plain'],
     csv:  ['text/plain', 'text/csv'],
+    html: ['text/html'],
+    htm:  ['text/html'],
+    css:  ['text/css'],
+    js:   ['application/javascript'],
     // .mp4 e .mov são trocados um pelo outro o tempo todo (o iPhone grava um
     // container QuickTime, apps renomeiam para .mp4) — os dois se aceitam.
     mp4:  ['video/mp4', 'video/quicktime'],
@@ -145,7 +152,7 @@ const MODULE_PATTERN = /^[A-Z]{2,8}$/;
  */
 const BLOCKED_EXTENSIONS = [
     // Web / frontend
-    'js','mjs','cjs','jsx','ts','tsx','html','htm','xhtml','vue','svelte',
+    'mjs','cjs','jsx','ts','tsx','xhtml','vue','svelte',
     // Backend
     'php','php3','php4','php5','phtml','phar',
     'py','pyc','pyo','pyw',

@@ -64,7 +64,7 @@ const LIMITS = Object.freeze({
     loginIp: 50,
     /** Falhas de troca de senha, por usuário. */
     changePassword: 5,
-    /** Tráfego das rotas `/meipp/device/*`, por dispositivo. */
+    /** Tráfego das rotas `/miepp/device/*`, por dispositivo. */
     device: 900,
 });
 
@@ -210,9 +210,9 @@ const apiLimiter = rateLimit({
     ...COMMON,
     limit: LIMITS.ip,
     keyGenerator: ipKey,
-    // Tráfego de player do meipp também sai daqui: não tem sessão, mas tem
-    // limiter próprio por dispositivo (`deviceLimiter`). Ver `isMeippDeviceTraffic`.
-    skip: (req) => isAuthenticated(req) || isMeippDeviceTraffic(req),
+    // Tráfego de player do miepp também sai daqui: não tem sessão, mas tem
+    // limiter próprio por dispositivo (`deviceLimiter`). Ver `isMieppDeviceTraffic`.
+    skip: (req) => isAuthenticated(req) || isMieppDeviceTraffic(req),
     handler: limitReachedHandler('RATE_LIMIT_IP'),
 });
 
@@ -289,7 +289,7 @@ const changePasswordLimiter = rateLimit({
 });
 
 /**
- * Chave dos dispositivos meipp: o próprio token, resumido.
+ * Chave dos dispositivos miepp: o próprio token, resumido.
  *
  * Pelo mesmo motivo que o tráfego autenticado é contado por usuário e não por
  * IP, o tráfego de player é contado por PLAYER. Numa loja, todas as telas saem
@@ -328,7 +328,7 @@ function deviceKey(req) {
 }
 
 /**
- * A requisição é tráfego de player do meipp?
+ * A requisição é tráfego de player do miepp?
  *
  * Serve para tirá-la do `apiLimiter`. Sem isso, as telas — que não têm sessão —
  * cairiam no balde de IP, e numa loja todas saem pelo mesmo endereço: vinte
@@ -339,13 +339,13 @@ function deviceKey(req) {
  * @param {import('express').Request} req
  * @returns {boolean}
  */
-function isMeippDeviceTraffic(req) {
+function isMieppDeviceTraffic(req) {
     const path = req.path || '';
-    return path.includes('/meipp/device/') || /\/meipp\/media\/[^/]+\/file$/.test(path);
+    return path.includes('/miepp/device/') || /\/miepp\/media\/[^/]+\/file$/.test(path);
 }
 
 /**
- * Rotas `/meipp/device/*` — por DISPOSITIVO.
+ * Rotas `/miepp/device/*` — por DISPOSITIVO.
  *
  * O player chama em laço: heartbeat, playlist e fila de comandos. Com as
  * cadências previstas (heartbeat a cada 60s, playlist a cada 5 min, comandos a
@@ -378,7 +378,7 @@ module.exports = {
     loginKey,
     changePasswordKey,
     deviceKey,
-    isMeippDeviceTraffic,
+    isMieppDeviceTraffic,
     resolveUserId,
     isAuthenticated,
     isAnonymous,

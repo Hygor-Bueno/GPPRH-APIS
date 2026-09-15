@@ -124,28 +124,28 @@ Detalhes, rotas cobertas e roteiro de validação manual: [`docs/gipp-auditoria-
 - **GTPP** (Gestão de Tarefas) — tarefas, itens, usuários, histórico, score
 - **GIPP-RH** — compensações, beneficiários, recibos de pagamento
 - **BPPP** (Busca de Preço) — consulta de preço/estoque no Consinco (somente leitura)
-- **meipp** (Mídia Interna e Externa) — mídia indoor digital: telas, playlists, agendamento, comandos remotos
+- **miepp** (Mídia Interna e Externa) — mídia indoor digital: telas, playlists, agendamento, comandos remotos
 - **Auth** — login/logout/me via cookie
 
-### ⚠️ meipp — três autenticações que não se misturam
+### ⚠️ miepp — três autenticações que não se misturam
 
 O painel usa a sessão por cookie de sempre. As telas (player Android) usam
 `Authorization: Bearer` num middleware **próprio**
-(`meipp-device-auth.middleware.js`) — **não** mexa no `auth.middleware` para
+(`miepp-device-auth.middleware.js`) — **não** mexa no `auth.middleware` para
 acomodá-las; a proibição da seção Autenticação continua valendo. A entrega de
-mídia (`/meipp/media/:uuid/file`) não usa nenhum dos dois: é autorizada por
+mídia (`/miepp/media/:uuid/file`) não usa nenhum dos dois: é autorizada por
 assinatura HMAC na query.
 
-O acesso ao módulo é ter linha ativa em `meipp_users` (papel
-`admin`/`editor`/`viewer`), **não** uma permissão do `canAny`. `meipp_users` é
+O acesso ao módulo é ter linha ativa em `miepp_users` (papel
+`admin`/`editor`/`viewer`), **não** uma permissão do `canAny`. `miepp_users` é
 tabela de papel, não de identidade — o vínculo com a sessão é `global_user_id`.
 
-Rotas `/meipp/device/*` e a de mídia ficam **fora** do `apiLimiter` e são
+Rotas `/miepp/device/*` e a de mídia ficam **fora** do `apiLimiter` e são
 contadas por dispositivo (`deviceLimiter`): sem sessão elas cairiam no balde de
 IP, e as telas de uma mesma loja derrubariam umas às outras.
 
 Detalhes, regra de resolução de playlist e pontas soltas:
-[`docs/meipp.md`](docs/meipp.md). DDL: `GIPP-SQL/meipp-deploy.sql` (fora do repo).
+[`docs/miepp.md`](docs/miepp.md). DDL: `GIPP-SQL/miepp-deploy.sql` (fora do repo).
 
 ## Permissões EPP
 | Código | Escopo |

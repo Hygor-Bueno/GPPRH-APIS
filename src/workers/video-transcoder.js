@@ -35,7 +35,7 @@ const {
     SQL_RELEASE_STUCK, SQL_REPLACE_FILE, SQL_SET_ATTACHMENT_STATUS,
     SQL_FIND_AFFECTED_TASKS,
 } = require('../modules/global/repositories/mysql/video-transcode.queries');
-const { SQL_SET_MEDIA_STATUS_BY_FILE } = require('../modules/global/repositories/mysql/meipp-media.queries');
+const { SQL_SET_MEDIA_STATUS_BY_FILE } = require('../modules/global/repositories/mysql/miepp-media.queries');
 const {
     TARGET_VIDEO_CODEC, TARGET_MIME, TARGET_EXTENSION,
     MAX_ATTEMPTS, STUCK_AFTER_MINUTES, buildFfmpegArgs,
@@ -165,29 +165,29 @@ async function notifyReady(fileId, status) {
 }
 
 /**
- * Espelha o ciclo de vida da conversão em `meipp_media`.
+ * Espelha o ciclo de vida da conversão em `miepp_media`.
  *
  * O mesmo arquivo de `_files` pode ser anexo de tarefa GTPP **e** mídia do
- * meipp (o storage deduplica por hash), então os dois consumidores são
- * atualizados lado a lado. Sem isto, um vídeo do meipp nasceria `processing` e
+ * miepp (o storage deduplica por hash), então os dois consumidores são
+ * atualizados lado a lado. Sem isto, um vídeo do miepp nasceria `processing` e
  * ficaria assim para sempre — o player nunca o receberia, e não haveria erro
  * em lugar nenhum apontando o motivo.
  *
  * Roda FORA da transação que troca o arquivo em `_files`, e nunca derruba o
- * job: aquela transação é o caminho crítico do GTPP, e o meipp pode ser
+ * job: aquela transação é o caminho crítico do GTPP, e o miepp pode ser
  * atualizado em seguida sem risco de desfazer a conversão. Se esta escrita
  * falhar, a mídia fica no status anterior e o pior caso é o operador reenviar.
  *
- * @param {'processing'|'ready'|'error'} status - valor do ENUM `meipp_media.status`.
+ * @param {'processing'|'ready'|'error'} status - valor do ENUM `miepp_media.status`.
  * @param {number} fileId
  */
-async function setMeippMediaStatus(status, fileId) {
+async function setMieppMediaStatus(status, fileId) {
     try {
-        // `meipp_media.file_id` é VARCHAR: o parâmetro vai como string para a
+        // `miepp_media.file_id` é VARCHAR: o parâmetro vai como string para a
         // comparação não cair em conversão implícita.
         await poolGlobal.execute(SQL_SET_MEDIA_STATUS_BY_FILE, [status, String(fileId)]);
     } catch (err) {
-        console.error('[transcoder] Falha ao atualizar meipp_media:', err.message);
+        console.error('[transcoder] Falha ao atualizar miepp_media:', err.message);
     }
 }
 
@@ -206,7 +206,7 @@ async function processJob(job) {
     }
 
     await poolGlobal.execute(SQL_SET_ATTACHMENT_STATUS, ['processing', job.file_id]);
-    await setMeippMediaStatus('processing', job.file_id);
+    await setMieppMediaStatus('processing', job.file_id);
 
     const tempOutput = path.join(os.tmpdir(), `transcode-${job.id}-${Date.now()}.${TARGET_EXTENSION}`);
 
@@ -254,7 +254,7 @@ async function processJob(job) {
             `${((Date.now() - startedAt) / 1000).toFixed(0)}s`
         );
 
-        await setMeippMediaStatus('ready', job.file_id);
+        await setMieppMediaStatus('ready', job.file_id);
         await notifyReady(job.file_id, 'ready');
     } finally {
         try { fs.unlinkSync(tempOutput); } catch { /* já removido */ }
@@ -275,7 +275,7 @@ async function failJob(job, err) {
     if (finalAttempt) {
         await poolGlobal.execute(SQL_SET_ATTACHMENT_STATUS, ['failed', job.file_id]).catch(() => {});
 
-        // No meipp a falha final vira `error`, e não `ready`.
+        // No miepp a falha final vira `error`, e não `ready`.
         //
         // O arquivo original continua intacto e poderia ser servido sem
         // conversão — é o que o GTPP faz, porque lá um anexo que o navegador
@@ -285,7 +285,7 @@ async function failJob(job, err) {
         // veiculação, sem ninguém saber por quê. Com `error` a mídia fica fora
         // da playlist E aparece marcada no painel, que é onde o operador pode
         // reagir e reenviar noutro formato.
-        await setMeippMediaStatus('error', job.file_id);
+        await setMieppMediaStatus('error', job.file_id);
 
         await notifyReady(job.file_id, 'failed').catch(() => {});
     }

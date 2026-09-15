@@ -75,7 +75,10 @@ const TRANSCODE_ENABLED = process.env.VIDEO_TRANSCODE_ENABLED === 'true';
 /** MIMEs de imagem que recebem strip de metadados EXIF (quando possível). */
 const IMAGE_MIMES  = new Set(['image/png', 'image/jpeg', 'image/webp']);
 /** MIMEs de texto que recebem scan de código + complexidade. */
-const TEXT_MIMES   = new Set(['text/plain', 'text/csv']);
+const TEXT_MIMES   = new Set([
+    'text/plain', 'text/csv', 'text/html', 'text/css', 'application/javascript',
+]);
+const WEB_MIMES    = new Set(['text/html', 'text/css', 'application/javascript']);
 /** MIMEs OOXML que recebem verificação de zip bomb. */
 const OOXML_MIMES  = new Set([
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -203,9 +206,10 @@ class FileService {
         // ── Camada 1: nome e extensão ─────────────────────────────────────────
         let safeName = sanitizeFilename(file.originalname);
         validateExtension(safeName);
+        const claimedExtension = path.extname(safeName).replace('.', '').toLowerCase();
 
         // ── Camada 2: MIME real por magic bytes ───────────────────────────────
-        let mimeType = detect(buf);
+        let mimeType = detect(buf, claimedExtension);
 
         if (!MIME_TO_EXT[mimeType]) {
             throw new AppError(`Tipo de arquivo não suportado (detectado: ${mimeType}).`, 400);
@@ -222,13 +226,13 @@ class FileService {
         // aqui é o contêiner: o arquivo já foi validado por magic bytes e pela
         // marca ISO-BMFF/EBML, e vídeo não é executado por nada no servidor.
         if (!VIDEO_MIMES.has(mimeType)) {
-            scanForBinaryThreats(buf);
+            scanForBinaryThreats(buf, { allowWebScripts: WEB_MIMES.has(mimeType) });
         }
 
         // ── Camada 4: scans específicos por tipo ──────────────────────────────
         if (mimeType === 'application/pdf') {
             scanPdfContent(buf);
-        } else if (TEXT_MIMES.has(mimeType)) {
+        } else if (TEXT_MIMES.has(mimeType) && !WEB_MIMES.has(mimeType)) {
             scanForCode(buf);
             checkTextComplexity(buf);
         } else if (IMAGE_MIMES.has(mimeType)) {
