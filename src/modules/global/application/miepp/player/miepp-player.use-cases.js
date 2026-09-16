@@ -91,25 +91,25 @@ class MieppPlayerUseCases {
     }
 
     /**
-     * Gera o código de pareamento de curta duração.
+     * Gera o código de pareamento.
      *
-     * O código é assinado, não gravado: o `pm2-runtime` roda o backend em
-     * cluster com 2 instâncias, então um código guardado em memória só valeria
-     * se a troca caísse no mesmo processo que o emitiu. Guardar no banco
-     * exigiria tabela nova fora do schema fechado. Ver
-     * `infrastructure/miepp/miepp-pairing-code.service.js`.
+     * São 8 dígitos, gravados em `miepp_pairing_codes`: uso único, validade
+     * curta e **um só por player** — emitir um novo invalida o anterior. Um
+     * código curto o bastante para digitar não tem entropia para carregar
+     * assinatura, então o que o protege é isso somado ao `pairLimiter` da rota
+     * de pareamento. Ver `infrastructure/miepp/miepp-pairing-code.service.js`.
      *
-     * Consequência aceita: um código emitido não pode ser cancelado antes de
-     * expirar — o TTL curto é a única janela de risco.
+     * @param {number} id
+     * @param {object} [actor] - usuário da sessão (`req.user`), para a trilha.
      */
-    async issuePairingCode(id) {
+    async issuePairingCode(id, actor) {
         const player = await this._requirePlayer(id);
 
         if (Number(player.active) !== 1) {
             throw new AppError('Player inativo não pode ser pareado.', 400);
         }
 
-        return this.pairingService.issue(player.id);
+        return this.pairingService.issue(player.id, actor?.id ?? null);
     }
 
     /** Revoga todos os tokens vivos — a tela volta a pedir pareamento. */

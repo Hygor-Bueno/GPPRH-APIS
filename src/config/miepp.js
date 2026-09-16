@@ -13,9 +13,9 @@ require('dotenv').config();
 /**
  * @typedef {object} MieppConfig
  * @property {string}      mediaTokenSecret   - HMAC das URLs de mídia.
- * @property {string}      pairingSecret      - HMAC dos códigos de pareamento.
  * @property {string}      publicBaseUrl      - prefixo das URLs entregues ao player.
  * @property {number}      mediaTokenTtlHours
+ * @property {number}      pairingCodeLength  - dígitos do código de pareamento.
  * @property {number}      pairingTtlMinutes
  * @property {number|null} deviceTokenTtlDays - `null` = token sem expiração.
  * @property {number|null} fallbackPlaylistId - playlist padrão quando nada casa.
@@ -36,7 +36,6 @@ function optionalNumberFromEnv(name) {
 /** @type {MieppConfig} */
 const mieppConfig = {
     mediaTokenSecret: process.env.MIEPP_MEDIA_TOKEN_SECRET || '',
-    pairingSecret: process.env.MIEPP_PAIRING_SECRET || '',
 
     // As URLs de mídia entregues ao player precisam ser absolutas: o Android
     // não tem "origem" para resolver caminho relativo. Em produção é
@@ -45,6 +44,11 @@ const mieppConfig = {
 
     mediaTokenTtlHours: numberFromEnv('MIEPP_MEDIA_TOKEN_TTL_HOURS', 24),
     pairingTtlMinutes: numberFromEnv('MIEPP_PAIRING_TTL_MINUTES', 10),
+
+    // Dígitos do código de pareamento. 8 é o teto do requisito: precisa caber
+    // num controle remoto. Encurtar mais derruba a entropia a um ponto em que
+    // o `pairLimiter` vira a única defesa — ver o cabeçalho do serviço.
+    pairingCodeLength: numberFromEnv('MIEPP_PAIRING_CODE_LENGTH', 8),
 
     // Ausente = token de device sem expiração, revogável só manualmente. É o
     // comportamento pedido no requisito ("reutilizado indefinidamente até ser
@@ -74,7 +78,6 @@ const mieppConfig = {
 function missingMieppEnv() {
     const missing = [];
     if (!mieppConfig.mediaTokenSecret) missing.push('MIEPP_MEDIA_TOKEN_SECRET');
-    if (!mieppConfig.pairingSecret) missing.push('MIEPP_PAIRING_SECRET');
     return missing;
 }
 

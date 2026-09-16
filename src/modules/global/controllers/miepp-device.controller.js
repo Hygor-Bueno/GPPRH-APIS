@@ -52,8 +52,14 @@ async function getPlaylist(req, res) {
 /**
  * Heartbeat.
  *
- * O IP vem de `req.ip` (resolvido pelo `trust proxy`), nunca do corpo: um
- * dispositivo não deve poder declarar de onde está falando.
+ * `req.ip` (resolvido pela lista de proxies confiáveis do `app.factory`) é o IP
+ * de SAÍDA da loja — igual para todas as telas do mesmo lugar, então não serve
+ * para localizar uma tela específica.
+ *
+ * Por isso o app também informa `local_ip` (o endereço dele na LAN), e é esse
+ * que vai para `last_ip`. É dado de diagnóstico, não de autorização: um device
+ * que mentisse sobre o próprio IP só atrapalharia quem olha o painel. O IP
+ * observado continua gravado no `detail` do log, para conferência.
  *
  * @route POST /miepp/device/heartbeat
  */

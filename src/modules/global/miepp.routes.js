@@ -45,7 +45,7 @@ const { asyncHandler } = require('../../middlewares/async-handler.middleware');
 const { validate } = require('../../middlewares/validate.middleware');
 const { audit } = require('../../middlewares/miepp-audit.middleware');
 const { authenticateDevice } = require('../../middlewares/miepp-device-auth.middleware');
-const { deviceLimiter } = require('../../middlewares/rate-limit.middleware');
+const { deviceLimiter, pairLimiter } = require('../../middlewares/rate-limit.middleware');
 const { canAny } = require('../../middlewares/permission.middleware');
 const {
     CAN_READ,
@@ -75,12 +75,16 @@ const {
 
 /**
  * @route POST /miepp/device/pair
- * @description Troca o código de pareamento pelo token do dispositivo. O token
- * é devolvido em texto puro UMA única vez — o banco guarda só o SHA-256.
+ * @description Troca o código de pareamento (8 dígitos) pelo token do
+ * dispositivo. O token é devolvido em texto puro UMA única vez — o banco guarda
+ * só o SHA-256. O código é de uso único e some ao ser consumido.
+ *
+ * Sob `pairLimiter` (10 tentativas por IP / 15 min), e não sob o `deviceLimiter`:
+ * é o que impede varredura do espaço de 8 dígitos.
  * @access Público (autorizado pelo próprio código de pareamento)
  */
 router.post('/device/pair',
-    deviceLimiter,
+    pairLimiter,
     validate(postPairSchema),
     asyncHandler(deviceController.pair));
 

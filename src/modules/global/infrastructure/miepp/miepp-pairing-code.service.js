@@ -1,23 +1,30 @@
 /**
- * @fileoverview Emite e valida o código de pareamento de um player.
+ * @fileoverview Emite e consome o código de pareamento de um player.
  *
- * ─── Por que o código é assinado e não guardado ──────────────────────────────
- * O backend interno roda sob `pm2-runtime` em cluster com 2 instâncias (ver
- * `CLAUDE.md`). Um código guardado em memória só seria reconhecido pelo
- * processo que o emitiu — metade das tentativas de pareamento falharia, de
- * forma intermitente e praticamente indiagnosticável no balcão. Guardar no
- * banco exigiria uma tabela fora do schema fechado do módulo.
+ * ─── O código é curto e gravado, não assinado ────────────────────────────────
+ * A primeira versão era um código assinado por HMAC, sem estado, para funcionar
+ * no cluster de 2 instâncias sem tabela nova. Funcionava, mas tinha 62
+ * caracteres: servia para copiar/colar ou QR, não para digitar numa tela com
+ * controle remoto. Como o requisito passou a ser **8 dígitos**, não há entropia
+ * para carregar assinatura — 8 dígitos só podem ser validados consultando onde
+ * foram gravados. Daí `miepp_pairing_codes`.
  *
- * Então o código é auto-contido: leva o player e o vencimento, assinados por
- * HMAC. Qualquer instância valida qualquer código.
+ * ─── O que segura um código de 8 dígitos ─────────────────────────────────────
+ * 10^8 combinações é pouco para resistir a força bruta sozinho. O que protege
+ * é a soma de quatro coisas:
  *
- * ─── O que isso custa ────────────────────────────────────────────────────────
- * Um código emitido **não pode ser cancelado** antes de expirar — não há onde
- * marcar a revogação. O TTL curto (10 min por padrão) é a única janela de
- * risco, e quem estiver com o código nesse intervalo consegue parear aquele
- * player específico. Se o requisito exigir revogação imediata ou um código
- * curto digitável no controle remoto (6 dígitos), aí sim é preciso uma tabela
- * `miepp_pairing_codes` — é a extensão natural daqui.
+ *   1. **uso único** — `used_at` mata o código no primeiro pareamento;
+ *   2. **validade curta** — 10 minutos por padrão;
+ *   3. **um código vivo por player** — emitir outro apaga o anterior, então a
+ *      quantidade de códigos válidos ao mesmo tempo é pequena;
+ *   4. **`pairLimiter`** em `POST /device/pair` — poucas tentativas por IP por
+ *      janela, que é o que torna a varredura inviável na prática.
+ *
+ * O ponto 4 é o essencial: sem ele os outros três não bastam. Se um dia a rota
+ * de pareamento sair de trás do limiter, o tamanho do código precisa crescer.
+ *
+ * Ganho colateral em relação à versão assinada: agora o código **pode ser
+ * cancelado** antes de expirar, porque existe uma linha para apagar.
  *
  * @module modules/global/infrastructure/miepp/miepp-pairing-code.service
  */
@@ -25,101 +32,139 @@
 const crypto = require('crypto');
 
 const { AppError } = require('../../../../errors/app.error');
+const { execute, transaction } = require('./miepp-mysql.helper');
+const {
+    SQL_INVALIDATE_PLAYER_CODES,
+    SQL_INSERT_PAIRING_CODE,
+    SQL_FIND_PAIRING_CODE,
+    SQL_CONSUME_PAIRING_CODE,
+} = require('../../repositories/mysql/miepp-pairing-code.queries');
 
 /** Validade padrão, em minutos — tempo de ir até a tela e concluir o pareamento. */
 const DEFAULT_TTL_MINUTES = 10;
 
+/** Dígitos do código. 8 é o teto pedido pelo requisito. */
+const DEFAULT_CODE_LENGTH = 8;
+
+/** Tentativas de gerar um código não colidente antes de desistir. */
+const MAX_GENERATION_ATTEMPTS = 5;
+
 class MieppPairingCodeService {
     /**
      * @param {object} options
-     * @param {string} options.secret - `MIEPP_PAIRING_SECRET`.
      * @param {number} [options.ttlMinutes]
+     * @param {number} [options.codeLength]
      */
-    constructor({ secret, ttlMinutes = DEFAULT_TTL_MINUTES } = {}) {
-        this.secret = secret || '';
+    constructor({ ttlMinutes = DEFAULT_TTL_MINUTES, codeLength = DEFAULT_CODE_LENGTH } = {}) {
         this.ttlMs = ttlMinutes * 60 * 1000;
+        this.codeLength = codeLength;
     }
 
     /**
      * @private
-     * A checagem do segredo mora aqui, e não no construtor, pelo mesmo motivo
-     * do `MieppMediaTokenService`: este processo serve outros módulos, e um
-     * `.env` sem as chaves do miepp não pode derrubar o boot deles.
+     * Sorteia um código só de dígitos.
+     *
+     * `randomInt` e não `Math.random()`: o gerador padrão do V8 é previsível a
+     * partir de saídas observadas, e aqui o valor é um segredo de curta duração.
+     *
+     * Zeros à esquerda são preservados (`padStart`) — o código é texto, e
+     * descartá-los reduziria o espaço de busca sem ninguém perceber.
+     *
+     * @returns {string}
      */
-    _sign(payload) {
-        if (!this.secret) {
-            throw new AppError('MIEPP_PAIRING_SECRET não configurado.', 500);
-        }
-        return crypto.createHmac('sha256', this.secret).update(payload).digest('hex');
+    _generateCode() {
+        const ceiling = 10 ** this.codeLength;
+        return String(crypto.randomInt(0, ceiling)).padStart(this.codeLength, '0');
     }
 
     /**
-     * Emite o código para um player.
-     *
-     * A assinatura é truncada em 32 hex (128 bits): o suficiente para tornar a
-     * falsificação inviável num código que vive 10 minutos, e curto o bastante
-     * para o código caber na tela do painel e ser copiado sem quebra de linha.
+     * Emite um código para o player, invalidando os anteriores dele.
      *
      * @param {number} playerId
-     * @returns {{code: string, expires_at: string, expires_in_seconds: number}}
+     * @param {number|null} [createdBy] - `_user.id` de quem pediu.
+     * @returns {Promise<{code: string, expires_at: string, expires_in_seconds: number}>}
      */
-    issue(playerId) {
-        const expiresAt = Math.floor((Date.now() + this.ttlMs) / 1000);
-        const signature = this._sign(`${playerId}.${expiresAt}`).slice(0, 32);
+    async issue(playerId, createdBy = null) {
+        const expiresAt = new Date(Date.now() + this.ttlMs);
 
-        const code = Buffer.from(`${playerId}.${expiresAt}.${signature}`, 'utf8')
-            .toString('base64url');
+        // Apaga os códigos vivos deste player e, de quebra, o lixo expirado de
+        // todos — é o que mantém a tabela pequena e a colisão improvável.
+        await execute(SQL_INVALIDATE_PLAYER_CODES, [playerId]);
 
-        return {
-            code,
-            expires_at: new Date(expiresAt * 1000).toISOString(),
-            expires_in_seconds: Math.round(this.ttlMs / 1000),
-        };
+        for (let attempt = 1; attempt <= MAX_GENERATION_ATTEMPTS; attempt += 1) {
+            const code = this._generateCode();
+
+            try {
+                await execute(SQL_INSERT_PAIRING_CODE, [playerId, code, expiresAt, createdBy]);
+
+                return {
+                    code,
+                    expires_at: expiresAt.toISOString(),
+                    expires_in_seconds: Math.round(this.ttlMs / 1000),
+                };
+            } catch (error) {
+                // Colisão com um código ainda vivo de outro player: sorteia de
+                // novo. Qualquer outro erro sobe.
+                const duplicate = error?.details?.code === 'ER_DUP_ENTRY'
+                    || error?.code === 'ER_DUP_ENTRY';
+                if (!duplicate || attempt === MAX_GENERATION_ATTEMPTS) throw error;
+            }
+        }
+
+        throw new AppError('Não foi possível gerar um código de pareamento. Tente novamente.', 500);
     }
 
     /**
-     * Valida o código e devolve o player a que ele pertence.
+     * Valida o código e o consome.
      *
-     * Toda falha (formato, assinatura, vencimento) vira o mesmo 401: distinguir
-     * "código malformado" de "código expirado" só ajudaria quem está tentando
-     * adivinhar.
+     * Leitura e consumo vão na MESMA transação, com `FOR UPDATE` na busca: sem
+     * isso, duas requisições simultâneas com o mesmo código passariam as duas e
+     * o player receberia dois tokens.
+     *
+     * Toda falha (inexistente, expirado, já usado) vira o mesmo 401 — distinguir
+     * ajudaria apenas quem está tentando adivinhar.
      *
      * @param {string} code
-     * @returns {number} `miepp_players.id`
+     * @returns {Promise<number>} `miepp_players.id`
      * @throws {AppError} 401
      */
-    verify(code) {
+    async verify(code) {
         const invalid = () => new AppError('Código de pareamento inválido ou expirado.', 401);
 
-        if (typeof code !== 'string' || code.length === 0) throw invalid();
+        if (typeof code !== 'string') throw invalid();
 
-        let decoded;
-        try {
-            decoded = Buffer.from(code, 'base64url').toString('utf8');
-        } catch {
-            throw invalid();
-        }
+        const normalized = code.trim();
+        if (!/^\d+$/.test(normalized) || normalized.length !== this.codeLength) throw invalid();
 
-        const parts = decoded.split('.');
-        if (parts.length !== 3) throw invalid();
+        return transaction(async (conn) => {
+            const [rows] = await conn.query(SQL_FIND_PAIRING_CODE, [normalized]);
+            if (rows.length === 0) throw invalid();
 
-        const [rawPlayerId, rawExpiresAt, signature] = parts;
-        const playerId = Number(rawPlayerId);
-        const expiresAt = Number(rawExpiresAt);
+            const record = rows[0];
+            const [result] = await conn.query(SQL_CONSUME_PAIRING_CODE, [record.id]);
 
-        if (!Number.isInteger(playerId) || playerId <= 0) throw invalid();
-        if (!Number.isFinite(expiresAt) || expiresAt * 1000 < Date.now()) throw invalid();
+            // Corrida perdida: outra transação consumiu entre o SELECT e o
+            // UPDATE. Não deveria acontecer com o FOR UPDATE, mas se acontecer
+            // o comportamento certo é recusar, não parear duas vezes.
+            if (Number(result.affectedRows || 0) === 0) throw invalid();
 
-        const expected = this._sign(`${playerId}.${expiresAt}`).slice(0, 32);
+            return Number(record.player_id);
+        });
+    }
 
-        const received = Buffer.from(signature, 'utf8');
-        const computed = Buffer.from(expected, 'utf8');
-
-        if (received.length !== computed.length) throw invalid();
-        if (!crypto.timingSafeEqual(received, computed)) throw invalid();
-
-        return playerId;
+    /**
+     * Cancela os códigos vivos de um player, sem emitir outro.
+     *
+     * Só é possível porque agora existe linha para apagar — na versão assinada
+     * não havia como revogar antes do vencimento.
+     *
+     * @param {number} playerId
+     * @returns {Promise<number>} quantos foram invalidados.
+     */
+    async revoke(playerId) {
+        const result = await execute(SQL_INVALIDATE_PLAYER_CODES, [playerId]);
+        return Number(result.affectedRows || 0);
     }
 }
 
-module.exports = { MieppPairingCodeService, DEFAULT_TTL_MINUTES };
+module.exports = { MieppPairingCodeService, DEFAULT_TTL_MINUTES, DEFAULT_CODE_LENGTH };

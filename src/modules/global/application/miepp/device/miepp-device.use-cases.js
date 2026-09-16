@@ -63,7 +63,7 @@ class MieppDeviceUseCases {
      * @returns {Promise<{token: string, player: object, expires_at: string|null}>}
      */
     async pair(pairingCode) {
-        const playerId = this.pairingService.verify(pairingCode);
+        const playerId = await this.pairingService.verify(pairingCode);
 
         const player = await this.playerRepository.findById(playerId);
         if (!player || Number(player.active) !== 1) {
@@ -177,11 +177,14 @@ class MieppDeviceUseCases {
      * @param {object} body   - `{ app_version, memory, event_type, detail }`.
      * @param {string|null} ip - IP observado pelo Express (não vem do corpo).
      */
-    async heartbeat(player, body = {}, ip = null) {
+    async heartbeat(player, body = {}, observedIp = null) {
         const eventType = body.event_type || StatusLogEvent.ONLINE;
 
         await this.playerRepository.registerHeartbeat(player.id, {
-            ip,
+            // O IP de LAN vence o observado quando o app o informa: é ele que
+            // localiza a tela na rede da loja. O observado é o de saída e fica
+            // igual para todas as telas do mesmo lugar.
+            ip: body.local_ip || observedIp,
             appVersion: body.app_version ?? null,
             eventType,
             // O detalhe é livre (JSON), mas só passamos campos conhecidos: o
@@ -192,6 +195,10 @@ class MieppDeviceUseCases {
                 memory_total_mb: body.memory_total_mb ?? null,
                 storage_free_mb: body.storage_free_mb ?? null,
                 message: body.message ?? null,
+                // Os dois lado a lado, para conferência: o que o app declarou
+                // e o que o servidor observou.
+                local_ip: body.local_ip ?? null,
+                observed_ip: observedIp,
             },
         });
 

@@ -177,8 +177,17 @@ const postScheduleTargetSchema = {
 
 // ─── Device ──────────────────────────────────────────────────────────────────
 
+/** Código de pareamento: exatamente 8 dígitos, sem espaço nem letra. */
+const PAIRING_CODE_PATTERN = /^[0-9]{8}$/;
+
 const postPairSchema = {
-    pairing_code: { type: 'string', required: true, minLength: 8, maxLength: 200 },
+    pairing_code: {
+        type: 'string',
+        required: true,
+        minLength: 8,
+        maxLength: 8,
+        pattern: PAIRING_CODE_PATTERN,
+    },
 };
 
 const postHeartbeatSchema = {
@@ -188,6 +197,10 @@ const postHeartbeatSchema = {
     storage_free_mb: { type: 'number', required: false, min: 0 },
     event_type:      { type: 'string', required: false, enum: values(StatusLogEvent) },
     message:         { type: 'string', required: false, maxLength: 500 },
+    // IP do dispositivo na rede local, informado por ele mesmo. É o que permite
+    // achar a tela dentro da loja — o IP que o servidor observa é o de saída da
+    // loja, igual para todas as telas do mesmo lugar.
+    local_ip:        { type: 'string', required: false, maxLength: 45 },
     // O IP NÃO vem do corpo: é lido de `req.ip`. Um dispositivo não deve poder
     // declarar de onde está falando.
 };
@@ -229,4 +242,5 @@ module.exports = {
     RESOLUTION_PATTERN,
     MAC_PATTERN,
     URL_PATTERN,
+    PAIRING_CODE_PATTERN,
 };

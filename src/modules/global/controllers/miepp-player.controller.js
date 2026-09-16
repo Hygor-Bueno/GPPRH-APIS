@@ -42,7 +42,7 @@ async function deactivate(req, res) {
  * lugar nenhum — ver `miepp-pairing-code.service`.
  */
 async function issuePairingCode(req, res) {
-    return respond.created(res, await useCases.issuePairingCode(Number(req.params.id)));
+    return respond.created(res, await useCases.issuePairingCode(Number(req.params.id), req.user));
 }
 
 async function revokeTokens(req, res) {

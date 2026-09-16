@@ -173,14 +173,25 @@ describe('resolução da playlist', () => {
 });
 
 describe('heartbeat', () => {
-    it('grava o IP observado pelo servidor e ignora o que o corpo alega', async () => {
+    it('prefere o local_ip informado pelo app, que é o que localiza a tela', async () => {
         const { useCases, playerRepository } = makeUseCases();
 
-        await useCases.heartbeat(PLAYER, { app_version: '1.2.0', ip: '9.9.9.9' }, '10.0.0.5');
+        await useCases.heartbeat(PLAYER, { app_version: '1.2.0', local_ip: '192.168.1.47' }, '203.0.113.50');
 
         const [, beat] = playerRepository.registerHeartbeat.mock.calls[0];
-        expect(beat.ip).toBe('10.0.0.5');
+        expect(beat.ip).toBe('192.168.1.47');
         expect(beat.appVersion).toBe('1.2.0');
+        // O observado fica guardado para conferência, não se perde.
+        expect(beat.detail.observed_ip).toBe('203.0.113.50');
+    });
+
+    it('cai no IP observado quando o app não informa o local_ip', async () => {
+        const { useCases, playerRepository } = makeUseCases();
+
+        await useCases.heartbeat(PLAYER, { app_version: '1.2.0' }, '203.0.113.50');
+
+        const [, beat] = playerRepository.registerHeartbeat.mock.calls[0];
+        expect(beat.ip).toBe('203.0.113.50');
     });
 
     it('só campos conhecidos entram no detail, nunca o corpo cru', async () => {
