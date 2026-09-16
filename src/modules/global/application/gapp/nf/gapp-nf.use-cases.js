@@ -1,5 +1,3 @@
-
-
 class GappNfUseCases {
     /**
      * @param {Object} deps

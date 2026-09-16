@@ -48,6 +48,7 @@ const gappVehicleController = require('./controllers/gapp-vehicle.controller');
 const gappLookupController = require('./controllers/gapp-lookup.controller');
 const gappExpensesController = require('./controllers/gapp-expenses.controller');
 const gappNfController = require('./controllers/gapp-nf.controller');
+const gappInfractionsController = require('./controllers/gapp-infractions.controller');
 const gappStoreController = require('./controllers/gapp-store.controller');
 const mieppRoutes = require('./miepp.routes');
 const { upload: fileUpload } = require('../../utils/file/file.service');
@@ -2009,50 +2010,125 @@ router.put('/gapp/expenses/:id',
     asyncHandler(gappExpensesController.updateExpense));
 
 // ─── GAPP — NF de despesas de ativo ───────────────────────────────────────────────
+/**
+ * @route GET /gapp/nf
+ * @description Lista todas as notas fiscais registradas
+ * @access GAPP_VIEW_NF
+ */
 router.get('/gapp/nf',
     authMiddleware,
     canAll(['GAPP_VIEW_NF']),
     asyncHandler(gappNfController.listNf)
 );
 
-router.get('/gapp/nf/:id',
+/**
+ * @route GET /gapp/nf/:number_nf
+ * @description Recebe o numero da nota fiscal como parametro
+ * e retorna a nota fiscal com todos os cupons vinculados a ela.
+ * @access GAPP_VIEW_NF
+ */
+router.get('/gapp/nf/:number_nf',
     authMiddleware,
     canAll(['GAPP_VIEW_NF']),
     asyncHandler(gappNfController.listNfById)
 );
 
+/**
+ * @route GET /gapp/nf-coupon
+ * @description Lista todos os cupons que estão livres para serem
+ * vinculados a uma nota fiscal
+ * @access GAPP_VIEW_NF
+ */
 router.get('/gapp/nf-coupon',
     authMiddleware,
     canAll(['GAPP_VIEW_NF']),
     asyncHandler(gappNfController.listCoupon)
 );
 
+/**
+ * @route POST /gapp/nf/:number_nf
+ * @description Realiza o registro de uma NF
+ * @access GAPP_CREATE_NF
+ */
 router.post('/gapp/nf',
     authMiddleware,
     canAll(['GAPP_CREATE_NF']),
     validate(createNfSchema),
     asyncHandler(gappNfController.createNf)
 )
+/**
+ * @route PUT /gapp/nf/:id
+ * @description Realiza o update de uma NF, utiliza o id como parametro
+ * para identificar o registro
+ * @access GAPP_UPDATE_NF
+ */
 router.put('/gapp/nf/:id',
     authMiddleware,
     canAll(['GAPP_UPDATE_NF']),
     validate(updateNfSchema),
     asyncHandler(gappNfController.updateNf)
 )
-// Utiliza a o ID da despesa vinculada a nota fiscal e NÃO o ID da nota fiscal
+/**
+ * @route DELETE /gapp/nf/:id
+ * @description Deleta o registro de uma NF com base no seu id
+ * @access GAPP_DELETE_NF
+ */
 router.delete('/gapp/nf/:id',
     authMiddleware,
     canAll(['GAPP_DELETE_NF']),
     asyncHandler(gappNfController.deleteNF)
 )
 
+// ─── GAPP ─ Infrações ─────────────────────────────────────────────────────────
 
-// ─── GAPP — Tabelas de apoio (lookup, para dropdowns/filtros) ──────────────────
+/**
+ * @route GET /gapp/infractions
+ * @description Lista todos os registros de infrações 
+ * @access GAPP_VIEW_INFRACTIONS
+ */
+router.get('/gapp/infractions',
+    authMiddleware,
+    canAll(['GAPP_VIEW_INFRACTIONS']),
+    asyncHandler(gappInfractionsController.list)
+);
+/**
+ * @route GET /gapp/infractions/:id
+ * @description Lista o registro de uma infração com base no id
+ * @access GAPP_VIEW_INFRACTIONS
+ */
+router.get('/gapp/infractions/:id',
+    authMiddleware,
+    canAll(['GAPP_VIEW_INFRACTIONS']),
+    asyncHandler(gappInfractionsController.listById)
+);
+/**
+ * @route POST /gapp/infractions
+ * @description Registra uma nova infração
+ * @access GAPP_VIEW_INFRACTIONS
+ */
+router.post('/gapp/infractions',
+    authMiddleware,
+    canAll(['GAPP_CREATE_INFRACTIONS']),
+    asyncHandler(gappInfractionsController.createInfraction)
+);
+/**
+ * @route PUT /gapp/infractions/:id
+ * @description Atualiza uma infração com base o id 
+ * @access GAPP_VIEW_INFRACTIONS
+ */
+router.put('/gapp/infractions/:id',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_INFRACTIONS']),
+    asyncHandler(gappInfractionsController.updateInfraction)
+);
+
+
+// ─── GAPP — Tabelas de apoio (lookup, para dropdowns/filtros) ─────────────────
 //
 // Dados de referência, sem informação sensível — exigem só autenticação,
 // sem permissão granular (mesmo padrão de GET /shops).
 //
-// ─────────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────
 
 /**
  * @route GET /gapp/units
