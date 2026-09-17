@@ -49,6 +49,7 @@ const gappLookupController = require('./controllers/gapp-lookup.controller');
 const gappExpensesController = require('./controllers/gapp-expenses.controller');
 const gappNfController = require('./controllers/gapp-nf.controller');
 const gappInfractionsController = require('./controllers/gapp-infractions.controller');
+const gappMovimentationController = require('./controllers/gapp-movimentation.controller');
 const gappStoreController = require('./controllers/gapp-store.controller');
 const mieppRoutes = require('./miepp.routes');
 const { upload: fileUpload } = require('../../utils/file/file.service');
@@ -2122,7 +2123,48 @@ router.put('/gapp/infractions/:id',
     asyncHandler(gappInfractionsController.updateInfraction)
 );
 
+// ─── GAPP ─ Movimentações ─────────────────────────────────────────────────────
 
+/**
+ * @route GET /gapp/movimentation
+ * @description Lista todos os registros de movimentação 
+ * @access GAPP_VIEW_
+ */
+router.get('/gapp/movimentation',
+    authMiddleware,
+    // canAll(['GAPP_VIEW_INFRACTIONS']),
+    asyncHandler(gappMovimentationController.list)
+);
+/**
+ * @route GET /gapp/movimentation/:id
+ * @description Lista o registro de uma movimentação com base no id
+ * @access GAPP_VIEW_
+ */
+router.get('/gapp/movimentation/:id',
+    authMiddleware,
+    // canAll(['GAPP_VIEW_INFRACTIONS']),
+    asyncHandler(gappMovimentationController.listById)
+);
+/**
+ * @route POST /gapp/movimentation
+ * @description Registra uma nova movimentação
+ * @access GAPP_VIEW_
+ */
+router.post('/gapp/movimentation',
+    authMiddleware,
+    // canAll(['GAPP_CREATE_INFRACTIONS']),
+    asyncHandler(gappMovimentationController.createMovimentation)
+);
+/**
+ * @route PUT /gapp/movimentation/:id
+ * @description Atualiza uma movimentação com base o id 
+ * @access GAPP_VIEW_
+ */
+router.put('/gapp/movimentation/:id',
+    authMiddleware,
+    // canAll(['GAPP_UPDATE_INFRACTIONS']),
+    asyncHandler(gappMovimentationController.updateMovimentation)
+);
 // ─── GAPP — Tabelas de apoio (lookup, para dropdowns/filtros) ─────────────────
 //
 // Dados de referência, sem informação sensível — exigem só autenticação,
