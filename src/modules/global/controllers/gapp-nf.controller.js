@@ -25,7 +25,7 @@ async function listNf(req, res) {
 }
 
 async function listNfById(req, res) {
-    const result = await useCases.listByid(Number(req.params.id), req.body, req.user);
+    const result = await useCases.listByid(Number(req.params.number_nf), req.body, req.user);
     return respond.ok(res, result);
 }
 
