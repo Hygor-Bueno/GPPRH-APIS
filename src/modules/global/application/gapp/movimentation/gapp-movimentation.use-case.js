@@ -35,6 +35,7 @@ class GappMovimentationUseCases {
     async createMovimentation(data, user) {
         const gappUser = await this._resolveGappUser(user);
 
+        console.log(data)
         const payload = { ...data, user_id_fk: gappUser.user_id }
         const active = { active_id: data.active_id_fk, status_active: Number(data.internal) }
 

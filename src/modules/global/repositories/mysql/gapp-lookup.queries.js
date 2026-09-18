@@ -39,6 +39,9 @@ function sqlListDepartments() {
         ORDER BY full_description
     `;
 }
+function sqlListSubDepartments(){
+    return `SELECT * FROM global.gapp_subdepartament`
+}
 
 function sqlListActiveClass() {
     return 'SELECT * FROM global.gapp_active_class ORDER BY desc_active_class';
@@ -88,5 +91,6 @@ module.exports = {
     sqlListUnits, sqlListActiveClass, sqlListWorkGroup,
     sqlListDriver, sqlListFuelType, sqlListUser,
     sqlListInsuranceCompany, sqlListTypeCoverage, sqlListUtilization,
-    sqlListDepartments, sqlListDamageType, sqlListInfractions
+    sqlListDepartments, sqlListSubDepartments, sqlListDamageType, 
+    sqlListInfractions
 };

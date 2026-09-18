@@ -2244,6 +2244,13 @@ router.get('/gapp/utilization', authMiddleware, asyncHandler(gappLookupControlle
 router.get('/gapp/departments', authMiddleware, asyncHandler(gappLookupController.listDepartments));
 
 /**
+ * @route GET /gapp/sub-departments
+ * @description Lista subdepartamentos
+ * @access Autenticado
+ */
+router.get('/gapp/sub-departments', authMiddleware, asyncHandler(gappLookupController.listSubDepartments));
+
+/**
  * @route GET /gapp/damage-type
  * @description Lista tipos de dano (gapp_damage_type) — FK de gapp_sinister.
  * @access Autenticado

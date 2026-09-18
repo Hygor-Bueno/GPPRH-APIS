@@ -44,6 +44,10 @@ async function listDepartments(req, res) {
   return respond.ok(res, await useCases.listDepartments());
 }
 
+async function listSubDepartments(req, res) {
+  return respond.ok(res, await useCases.listSubDepartments());
+}
+
 async function listDamageType(req, res) {
   return respond.ok(res, await useCases.listDamageType());
 }
@@ -55,5 +59,5 @@ async function listInfractions(req, res) {
 module.exports = {
   listUnits, listActiveClass, listWorkGroup, listDriver, listFuelType, listUser,
   listInsuranceCompany, listTypeCoverage, listUtilization, listDepartments,
-  listDamageType, listInfractions
+  listSubDepartments, listDamageType, listInfractions
 };

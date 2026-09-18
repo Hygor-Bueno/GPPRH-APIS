@@ -16,6 +16,7 @@ class LookupRepositoryPort {
     listTypeCoverage() { throw new Error('Not implemented'); }
     listUtilization() { throw new Error('Not implemented'); }
     listDepartments() { throw new Error('Not implemented'); }
+    listSubDepartments() { throw new Error('Not implemented'); }
     listDamageType() { throw new Error('Not implemented'); }
     listInfractions() { throw new Error('Not implemented'); }
 }

@@ -23,6 +23,7 @@ class GappLookupUseCases {
     listTypeCoverage() { return this.repository.listTypeCoverage(); }
     listUtilization() { return this.repository.listUtilization(); }
     listDepartments() { return this.repository.listDepartments(); }
+    listSubDepartments() { return this.repository.listSubDepartments(); }
     listDamageType() { return this.repository.listDamageType(); }
     listInfractions() { return this.repository.listInfractions(); }
 }
