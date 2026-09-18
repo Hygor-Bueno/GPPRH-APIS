@@ -98,7 +98,7 @@ const updateInsuranceSchema = {
 // ─── Consulta (GET) ─────────────────────────────────────────────────
 
 const listActiveQuerySchema = {
-    active_id:           { type: 'number' },
+    active_id:            { type: 'number' },
     brand:                { type: 'string', maxLength: 100 },
     model:                { type: 'string', maxLength: 100 },
     number_nf:            { type: 'number' },
@@ -111,6 +111,7 @@ const listActiveQuerySchema = {
     used_in:              { type: 'number' },
     date_purchase_from:   { type: 'string' },
     date_purchase_to:     { type: 'string' },
+    license_plates:       { type: 'string' },
     page:                 { type: 'number', min: 1 },
     limit:                { type: 'number', min: 1, max: 100 },
 };

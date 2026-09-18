@@ -85,16 +85,18 @@ const ACTIVE_FILTER_CLAUSES = {
     user_id_fk: 'a.user_id_fk = ?',
     work_group_fk: 'a.work_group_fk = ?',
     used_in: 'a.used_in = ?',
+    license_plates: 'v.license_plates LIKE ?'
 };
 
 function buildActiveFilters(filters = {}) {
     const conditions = [];
     const params = [];
+    const join = filters.license_plates ? 'JOIN global.gapp_vehicle v ON (a.active_id = v.active_id_fk)' : '';
 
     for (const [key, clause] of Object.entries(ACTIVE_FILTER_CLAUSES)) {
         if (filters[key] != null && filters[key] !== '') {
             conditions.push(clause);
-            params.push(key === 'brand' || key === 'model' ? `%${filters[key]}%` : filters[key]);
+            params.push(key === 'brand' || key === 'model' || key === 'license_plates' ? `%${filters[key]}%` : filters[key]);
         }
     }
 
@@ -107,7 +109,7 @@ function buildActiveFilters(filters = {}) {
         params.push(filters.date_purchase_to);
     }
 
-    return { where: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '', params };
+    return { where: conditions.length ? `${join} WHERE ${conditions.join(' AND ')}` : '', params };
 }
 
 function sqlListActive(filters = {}) {

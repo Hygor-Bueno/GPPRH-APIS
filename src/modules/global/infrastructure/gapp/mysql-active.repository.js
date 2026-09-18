@@ -20,7 +20,8 @@ class MysqlActiveRepository extends ActiveRepositoryPort {
     /** @private */
     async _query(sql, params = []) {
         try {
-            return await poolGlobal.query(sql, params);
+            const req = await poolGlobal.query(sql, params);
+            return req;
         } catch (error) {
             if (error instanceof AppError) throw error;
             throw new AppError(error.message || 'Erro ao acessar o banco de dados.', 500, {
