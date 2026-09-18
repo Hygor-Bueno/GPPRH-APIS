@@ -2128,41 +2128,41 @@ router.put('/gapp/infractions/:id',
 /**
  * @route GET /gapp/movimentation
  * @description Lista todos os registros de movimentação 
- * @access GAPP_VIEW_
+ * @access GAPP_VIEW_MOVIMENTATION
  */
 router.get('/gapp/movimentation',
     authMiddleware,
-    // canAll(['GAPP_VIEW_INFRACTIONS']),
+    canAll(['GAPP_VIEW_MOVIMENTATION']),
     asyncHandler(gappMovimentationController.list)
 );
 /**
  * @route GET /gapp/movimentation/:id
  * @description Lista o registro de uma movimentação com base no id
- * @access GAPP_VIEW_
+ * @access GAPP_VIEW_MOVIMENTATION
  */
 router.get('/gapp/movimentation/:id',
     authMiddleware,
-    // canAll(['GAPP_VIEW_INFRACTIONS']),
+    canAll(['GAPP_VIEW_MOVIMENTATION']),
     asyncHandler(gappMovimentationController.listById)
 );
 /**
  * @route POST /gapp/movimentation
  * @description Registra uma nova movimentação
- * @access GAPP_VIEW_
+ * @access GAPP_CREATE_MOVIMENTATION
  */
 router.post('/gapp/movimentation',
     authMiddleware,
-    // canAll(['GAPP_CREATE_INFRACTIONS']),
+    canAll(['GAPP_CREATE_MOVIMENTATION']),
     asyncHandler(gappMovimentationController.createMovimentation)
 );
 /**
  * @route PUT /gapp/movimentation/:id
  * @description Atualiza uma movimentação com base o id 
- * @access GAPP_VIEW_
+ * @access GAPP_UPDATE_MOVIMENTATION
  */
 router.put('/gapp/movimentation/:id',
     authMiddleware,
-    // canAll(['GAPP_UPDATE_INFRACTIONS']),
+    canAll(['GAPP_UPDATE_MOVIMENTATION']),
     asyncHandler(gappMovimentationController.updateMovimentation)
 );
 // ─── GAPP — Tabelas de apoio (lookup, para dropdowns/filtros) ─────────────────

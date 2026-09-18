@@ -1,6 +1,6 @@
 
 function sqlListMovimentation() {
-    return `SELECT mv.mov_id, ac.model, ac.brand, mv.active_id_fk, mv.unit_id_fk, un.unit_name,
+    return `SELECT DISTINCT(mv.mov_id), ac.model, ac.brand, mv.active_id_fk, mv.unit_id_fk, un.unit_name,
     			   ac.number_nf, mv.destiny, mv.internal, mv.sale_value, mv.status_mov, vh.license_plates  
 			FROM global.gapp_movimentation mv
 				JOIN global.gapp_active ac ON (mv.active_id_fk = ac.active_id)
