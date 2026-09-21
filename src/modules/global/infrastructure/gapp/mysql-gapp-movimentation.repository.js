@@ -5,9 +5,9 @@ const {
     sqlListMovimentationById,
     sqlInsertMovimentation,
     sqlUpdateMovimentation,
-    sqlActiveValuesById,
+    sqlCountMovimentation,
     buildInsertMovimentation,
-    buildUpdateMovimentation
+    buildUpdateMovimentation,
 } = require('../../repositories/mysql/gapp-movimentation.queries');
 const { sqlSaveActive, buildSaveActiveParams } = require('../../repositories/mysql/gapp-active.queries');
 
@@ -39,13 +39,12 @@ class MysqlMovimentationRepository {
         return rows
     }
 
-    async findValueActive(id) {
-        const sql = sqlActiveValuesById(id);
-        const [rows] = await this._query(sql, id);
+    async hasExternalMovimentation(active_id) {
+        const sql = sqlCountMovimentation();
+        const [rows] = await this._query(sql, active_id);
 
-        return rows[0].value_purchase;
+        return rows[0].quantity
     }
-
 
     async insertMovimentation(payload, activeData) {
         const conn = await poolGlobal.getConnection();

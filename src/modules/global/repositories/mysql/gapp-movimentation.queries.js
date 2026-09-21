@@ -4,9 +4,9 @@ function sqlListMovimentation() {
     			   ac.number_nf, mv.destiny, mv.internal, mv.sale_value, mv.status_mov, vh.license_plates  
 			FROM global.gapp_movimentation mv
 				JOIN global.gapp_active ac ON (mv.active_id_fk = ac.active_id)
-				JOIN global.gapp_units un ON (mv.unit_id_fk = un.unit_id)
-                JOIN global.gapp_vehicle vh ON(mv.active_id_fk = vh.active_id_fk)
-            ORDER BY mov_id DESC;`
+				JOIN global.gapp_units un ON (ac.units_id_fk = un.unit_id)
+                JOIN global.gapp_vehicle vh ON (mv.active_id_fk = vh.active_id_fk)
+            ORDER BY mov_id DESC`
 }
 
 function sqlListMovimentationById() {
@@ -39,6 +39,10 @@ function sqlUpdateMovimentation() {
 		    WHERE mov_id = ?`
 }
 
+function sqlCountMovimentation() {
+    return `SELECT COUNT(*) AS quantity FROM global.gapp_movimentation WHERE status_mov = 1 AND internal = 0 AND active_id_fk = ?`
+}
+
 function buildUpdateMovimentation(data, mov_id) {
     return [
         data.destiny ?? null,
@@ -54,16 +58,12 @@ function buildUpdateMovimentation(data, mov_id) {
     ]
 }
 
-function sqlActiveValuesById() {
-    return `SELECT value_purchase FROM global.gapp_active WHERE active_id = ?`
-}
-
 module.exports = {
     sqlListMovimentation,
     sqlListMovimentationById,
     sqlInsertMovimentation,
     sqlUpdateMovimentation,
-    sqlActiveValuesById,
+    sqlCountMovimentation,
     buildInsertMovimentation,
     buildUpdateMovimentation,
 }

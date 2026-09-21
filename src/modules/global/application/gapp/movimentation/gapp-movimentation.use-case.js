@@ -1,3 +1,5 @@
+const { AppError } = require('../../../../../errors/app.error');
+
 class GappMovimentationUseCases {
 
     /**
@@ -35,8 +37,14 @@ class GappMovimentationUseCases {
     async createMovimentation(data, user) {
         const gappUser = await this._resolveGappUser(user);
 
-        console.log(data)
-        const payload = { ...data, user_id_fk: gappUser.user_id }
+        const isInternal = Number(data.internal);
+
+        const payload = {
+            ...data, user_id_fk: gappUser.user_id,
+            sale_value: isInternal ? 0 : data.sale_value,
+            unit_id_fk: isInternal ? data.unit_id_fk : null,
+            sub_dep_id_fk: isInternal ? data.sub_dep_id_fk : null
+        }
         const active = { active_id: data.active_id_fk, status_active: Number(data.internal) }
 
         const res = await this.repository.insertMovimentation(payload, active)
@@ -46,17 +54,28 @@ class GappMovimentationUseCases {
     async updateMovimentation(id, data, user) {
         const gappUser = await this._resolveGappUser(user);
 
-        const isInternal = Number(data.internal)
-        const isActive = Number(data.status_mov)
+        const isInternal = Number(data.internal);
+        const isActive = Number(data.status_mov);
 
-        const payload = { ...data, user_id_fk: gappUser.user_id, sale_value: isInternal ? 0 : data.sale_value };
+        const payload = {
+            ...data,
+            user_id_fk: gappUser.user_id,
+            sale_value: isInternal ? 0 : data.sale_value,
+            unit_id_fk: isInternal ? data.unit_id_fk : null,
+            sub_dep_id_fk: isInternal ? data.sub_dep_id_fk : null
+        };
+
         const active = {
             active_id: data.active_id_fk,
             status_active: isInternal || (!isInternal && !isActive) ? 1 : 0
         }
+        const hasExternal = await this.repository.hasExternalMovimentation(data.active_id_fk);
+
+        if (hasExternal && isInternal) {
+            throw new AppError('Não e possivel realizar a ação, a uma movimentação externa para esse ativo!', 404)
+        }
 
         const res = await this.repository.updateMovimentation(id, payload, active);
-
         return res
     }
 }

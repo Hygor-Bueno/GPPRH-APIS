@@ -11,8 +11,8 @@ class MovimentationRepositoryPort {
     /** @param {object} id payload */
     updateMovimentation(id, payload) { throw new Error('Not implemented'); }
 
-    /** @param {object} id */
-    findValueActive(id) { throw new Error('Not implemented'); }
+    /** @param {object} active_id */
+    hasExternalMovimentation(active_id) { throw new Error('Not implemented'); }
 
 }
 
