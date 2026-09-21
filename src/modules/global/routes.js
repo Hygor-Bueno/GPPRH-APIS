@@ -51,6 +51,7 @@ const gappNfController = require('./controllers/gapp-nf.controller');
 const gappInfractionsController = require('./controllers/gapp-infractions.controller');
 const gappMovimentationController = require('./controllers/gapp-movimentation.controller');
 const gappStoreController = require('./controllers/gapp-store.controller');
+const gappSettingsController = require('./controllers/gapp-settings.controller');
 const mieppRoutes = require('./miepp.routes');
 const { upload: fileUpload } = require('../../utils/file/file.service');
 const authMiddleware = require('../../middlewares/auth.middleware');
@@ -2165,6 +2166,23 @@ router.put('/gapp/movimentation/:id',
     canAll(['GAPP_UPDATE_MOVIMENTATION']),
     asyncHandler(gappMovimentationController.updateMovimentation)
 );
+
+// ─── GAPP — Settins ───────────────────────────────────────────────────────────
+// Rotas de configurações relacionadas ao modulo gapp
+
+router.post('/gapp/settings/active-type',
+    authMiddleware,
+    // canAll(['GAPP_CREATE_SETTIGNS']),
+    asyncHandler(gappSettingsController.createActiveType)
+);
+
+router.post('/gapp/settings/active-class',
+    authMiddleware,
+    // canAll(['GAPP_VIEW_ACTIVE_TYPE']),
+    asyncHandler(gappSettingsController.createActiveClass)
+);
+
+
 // ─── GAPP — Tabelas de apoio (lookup, para dropdowns/filtros) ─────────────────
 //
 // Dados de referência, sem informação sensível — exigem só autenticação,
