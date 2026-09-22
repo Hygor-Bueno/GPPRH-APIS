@@ -4,7 +4,7 @@ const { MysqlGappUserRepository } = require('../infrastructure/gapp/mysql-gapp-u
 const { respond } = require('../../../utils/respond');
 
 const useCases = new GappSettingsUseCases({
-    repository: new MysqlGappUserRepository(),
+    repository: new MysqlSettingRepository(),
     userRepository: new MysqlGappUserRepository(),
 });
 
@@ -64,5 +64,5 @@ module.exports = {
     createActiveClass, createActiveType, createCompany,
     createUnit, createDepartament, createSubdepartament,
     updateActiveClass, updateActiveType, updateCompany,
-    updateUnit, updateDepartament, updateSubdepartament
+    updateUnit, updateDepartament, updateSubdepartament,
 }

@@ -2170,16 +2170,136 @@ router.put('/gapp/movimentation/:id',
 // ─── GAPP — Settins ───────────────────────────────────────────────────────────
 // Rotas de configurações relacionadas ao modulo gapp
 
+/**
+ * @route POST /gapp/settings/active-type
+ * @description Cria um novo tipo de ativo
+ * @access GAPP_CREATE_SETTIGNS
+ */
 router.post('/gapp/settings/active-type',
     authMiddleware,
-    // canAll(['GAPP_CREATE_SETTIGNS']),
+    canAll(['GAPP_CREATE_SETTIGNS']),
     asyncHandler(gappSettingsController.createActiveType)
 );
 
+/**
+ * @route PUT /gapp/settings/active-type/:id
+ * @description Atualiza um tipo de ativo com base no id
+ * @access GAPP_UPDATE_SETTIGNS
+ */
+router.put('/gapp/settings/active-type/:id',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_SETTIGNS']),
+    asyncHandler(gappSettingsController.updateActiveType)
+);
+
+/**
+ * @route POST /gapp/settings/active-class
+ * @description Cria um novo tipo de class para ativos
+ * @access GAPP_CREATE_SETTIGNS
+ */
 router.post('/gapp/settings/active-class',
     authMiddleware,
-    // canAll(['GAPP_VIEW_ACTIVE_TYPE']),
+    canAll(['GAPP_CREATE_SETTIGNS']),
     asyncHandler(gappSettingsController.createActiveClass)
+);
+
+/**
+ * @route PUT /gapp/settings/active-class/:id
+ * @description Atualiza um tipo de classe com base no id
+ * @access GAPP_UPDATE_SETTIGNS
+ */
+router.put('/gapp/settings/active-class/:id',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_SETTIGNS']),
+    asyncHandler(gappSettingsController.updateActiveClass)
+);
+
+/**
+ * @route POST /gapp/settings/company
+ * @description Cria uma nova compania
+ * @access GAPP_CREATE_SETTIGNS
+ */
+router.post('/gapp/settings/company',
+    authMiddleware,
+    canAll(['GAPP_CREATE_SETTIGNS']),
+    asyncHandler(gappSettingsController.createCompany)
+);
+
+/**
+ * @route PUT /gapp/settings/company/:id
+ * @description Atualiza uma companhia com base no id
+ * @access GAPP_UPDATE_SETTIGNS
+ */
+router.put('/gapp/settings/company/:id',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_SETTIGNS']),
+    asyncHandler(gappSettingsController.updateCompany)
+);
+
+/**
+ * @route POST /gapp/settings/unit
+ * @description Cria uma nova unidade
+ * @access GAPP_CREATE_SETTIGNS
+ */
+router.post('/gapp/settings/unit',
+    authMiddleware,
+    canAll(['GAPP_CREATE_SETTIGNS']),
+    asyncHandler(gappSettingsController.createUnit)
+);
+
+/**
+ * @route PUT /gapp/settings/unit/:id
+ * @description Atualiza uma unidade com base no id
+ * @access GAPP_UPDATE_SETTIGNS
+ */
+router.put('/gapp/settings/unit/:id',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_SETTIGNS']),
+    asyncHandler(gappSettingsController.updateUnit)
+);
+
+/**
+ * @route POST /gapp/settings/departament
+ * @description Cria um novo departamento
+ * @access GAPP_CREATE_SETTIGNS
+ */
+router.post('/gapp/settings/departament',
+    authMiddleware,
+    canAll(['GAPP_CREATE_SETTIGNS']),
+    asyncHandler(gappSettingsController.createDepartament)
+);
+
+/**
+ * @route PUT /gapp/settings/departament/:id
+ * @description Atualiza um departamento com base no id
+ * @access GAPP_UPDATE_SETTIGNS
+ */
+router.put('/gapp/settings/departament/:id',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_SETTIGNS']),
+    asyncHandler(gappSettingsController.updateDepartament)
+);
+
+/**
+ * @route POST /gapp/settings/subdepartament
+ * @description Cria um novo  subdepartamento
+ * @access GAPP_CREATE_SETTIGNS
+ */
+router.post('/gapp/settings/subdepartament',
+    authMiddleware,
+    canAll(['GAPP_CREATE_SETTIGNS']),
+    asyncHandler(gappSettingsController.createSubdepartament)
+);
+
+/**
+ * @route PUT /gapp/settings/subdepartament/:id
+ * @description Atualiza um subdepartamento com base no id
+ * @access GAPP_UPDATE_SETTIGNS
+ */
+router.put('/gapp/settings/subdepartament/:id',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_SETTIGNS']),
+    asyncHandler(gappSettingsController.updateSubdepartament)
 );
 
 
@@ -2189,6 +2309,13 @@ router.post('/gapp/settings/active-class',
 // sem permissão granular (mesmo padrão de GET /shops).
 //
 // ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @route GET /gapp/company
+ * @description Lista companias (gapp_company).
+ * @access Autenticado
+ */
+router.get('/gapp/company', authMiddleware, asyncHandler(gappLookupController.listCompany));
 
 /**
  * @route GET /gapp/units
@@ -2203,6 +2330,12 @@ router.get('/gapp/units', authMiddleware, asyncHandler(gappLookupController.list
  * @access Autenticado
  */
 router.get('/gapp/active-class', authMiddleware, asyncHandler(gappLookupController.listActiveClass));
+/**
+ * @route GET /gapp/active-type
+ * @description Lista tipos de ativo (gapp_active_type).
+ * @access Autenticado
+ */
+router.get('/gapp/active-type', authMiddleware, asyncHandler(gappLookupController.listActiveType));
 
 /**
  * @route GET /gapp/work-group
@@ -2266,7 +2399,7 @@ router.get('/gapp/departments', authMiddleware, asyncHandler(gappLookupControlle
  * @description Lista subdepartamentos
  * @access Autenticado
  */
-router.get('/gapp/sub-departments', authMiddleware, asyncHandler(gappLookupController.listSubDepartments));
+router.get('/gapp/subdepartments', authMiddleware, asyncHandler(gappLookupController.listSubDepartments));
 
 /**
  * @route GET /gapp/damage-type

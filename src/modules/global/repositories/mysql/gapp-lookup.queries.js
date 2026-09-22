@@ -10,6 +10,10 @@ function sqlListUnits() {
     return 'SELECT * FROM global.gapp_units ORDER BY unit_name';
 }
 
+function sqlListCompany() {
+    return 'SELECT * FROM global.gapp_company ORDER BY comp_id ';
+}
+
 /**
  * Departamentos com unidade e empresa resolvidas — mesmo shape retornado pelo
  * legado (GLOBAL/Controller/GAPP/Departament.php?all=1).
@@ -45,6 +49,10 @@ function sqlListSubDepartments(){
 
 function sqlListActiveClass() {
     return 'SELECT * FROM global.gapp_active_class ORDER BY desc_active_class';
+}
+
+function sqlListActiveType() {
+    return 'SELECT * FROM global.gapp_active_type ORDER BY active_type_id';
 }
 
 function sqlListWorkGroup() {
@@ -92,5 +100,5 @@ module.exports = {
     sqlListDriver, sqlListFuelType, sqlListUser,
     sqlListInsuranceCompany, sqlListTypeCoverage, sqlListUtilization,
     sqlListDepartments, sqlListSubDepartments, sqlListDamageType, 
-    sqlListInfractions
+    sqlListInfractions, sqlListActiveType, sqlListCompany
 };

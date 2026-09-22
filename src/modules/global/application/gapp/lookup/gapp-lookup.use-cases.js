@@ -14,7 +14,9 @@ class GappLookupUseCases {
     }
 
     listUnits() { return this.repository.listUnits(); }
+    listCompany() { return this.repository.listCompany(); }
     listActiveClass() { return this.repository.listActiveClass(); }
+    listActiveType() { return this.repository.listActiveType(); }
     listWorkGroup() { return this.repository.listWorkGroup(); }
     listDriver() { return this.repository.listDriver(); }
     listFuelType() { return this.repository.listFuelType(); }

@@ -7,7 +7,9 @@
 
 class LookupRepositoryPort {
     listUnits() { throw new Error('Not implemented'); }
+    listCompany() { throw new Error('Not implemented'); }
     listActiveClass() { throw new Error('Not implemented'); }
+    listActiveType() { throw new Error('Not implemented'); }
     listWorkGroup() { throw new Error('Not implemented'); }
     listDriver() { throw new Error('Not implemented'); }
     listFuelType() { throw new Error('Not implemented'); }

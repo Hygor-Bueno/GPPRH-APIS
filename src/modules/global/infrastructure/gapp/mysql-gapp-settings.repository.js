@@ -1,17 +1,15 @@
+const { poolGlobal } = require('../../../../config/mysql');
 const { AppError } = require('../../../../errors/app.error');
 const {
-    sqlInsertActiveClass,
-    sqlInsertActiveType,
-    sqlInsertCompany,
-    sqlInsertUnit,
-    sqlInsertDepartament,
-    sqlInsertSubdepartament,
-    buildInsertActiveClass,
-    buildInsertActiveType,
-    buildInsertCompany,
-    buildInsertUnit,
-    buildInsertDepartament,
-    buildInsertSubdepartment
+    sqlInsertActiveClass, sqlInsertActiveType, sqlInsertCompany,
+    sqlInsertUnit, sqlInsertDepartament, sqlInsertSubdepartament,
+    buildInsertActiveClass, buildInsertActiveType, buildInsertCompany,
+    buildInsertUnit, buildInsertDepartament, buildInsertSubdepartment,
+
+    sqlUpdateActiveClass, sqlUpdateActiveType, sqlUpdateCompany,
+    sqlUpdateUnit, sqlUpdateDepartament, sqlUpdateSubdepartament,
+    buildUpdateActiveClass, buildUpdateActiveType, buildUpdateCompany,
+    buildUpdateUnit, buildUpdateDepartament, buildUpdateSubdepartment
 } = require('../../repositories/mysql/gapp-settings.queries.js');
 
 class MysqlSettingRepository {
@@ -29,7 +27,7 @@ class MysqlSettingRepository {
         }
     }
 
-
+    // * INSERTS
     async insertActiveType(payload) {
         const [result] = await this._query(sqlInsertActiveType(), buildInsertActiveType(payload));
         return { insertId: result.insertId };
@@ -58,6 +56,37 @@ class MysqlSettingRepository {
     async insertSubdeparment(payload) {
         const [result] = await this._query(sqlInsertSubdepartament(), buildInsertSubdepartment(payload));
         return { insertId: result.insertId };
+    }
+
+    // * UPDATES
+    async updateActiveType(payload, id) {
+        const [result] = await this._query(sqlUpdateActiveType(), buildUpdateActiveType(payload, id));
+        return { updated: result.affectedRows };
+    }
+
+    async updateActiveClass(payload, id) {
+        const [result] = await this._query(sqlUpdateActiveClass(), buildUpdateActiveClass(payload, id));
+        return { updated: result.affectedRows };
+    }
+
+    async updateCompany(payload, id) {
+        const [result] = await this._query(sqlUpdateCompany(), buildUpdateCompany(payload, id));
+        return { updated: result.affectedRows };
+    }
+
+    async updateUnit(payload, id) {
+        const [result] = await this._query(sqlUpdateUnit(), buildUpdateUnit(payload, id));
+        return { updated: result.affectedRows };
+    }
+
+    async updateDepartament(payload, id) {
+        const [result] = await this._query(sqlUpdateDepartament(), buildUpdateDepartament(payload, id));
+        return { updated: result.affectedRows };
+    }
+
+    async updateSubdeparment(payload, id) {
+        const [result] = await this._query(sqlUpdateSubdepartament(), buildUpdateSubdepartment(payload, id));
+        return { updated: result.affectedRows };
     }
 
 }

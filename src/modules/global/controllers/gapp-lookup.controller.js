@@ -7,9 +7,15 @@ const useCases = new GappLookupUseCases({ repository: new MysqlLookupRepository(
 async function listUnits(req, res) {
   return respond.ok(res, await useCases.listUnits());
 }
+async function listCompany(req, res) {
+  return respond.ok(res, await useCases.listCompany());
+}
 
 async function listActiveClass(req, res) {
   return respond.ok(res, await useCases.listActiveClass());
+}
+async function listActiveType(req, res) {
+  return respond.ok(res, await useCases.listActiveType());
 }
 
 async function listWorkGroup(req, res) {
@@ -59,5 +65,5 @@ async function listInfractions(req, res) {
 module.exports = {
   listUnits, listActiveClass, listWorkGroup, listDriver, listFuelType, listUser,
   listInsuranceCompany, listTypeCoverage, listUtilization, listDepartments,
-  listSubDepartments, listDamageType, listInfractions
+  listSubDepartments, listDamageType, listInfractions, listActiveType, listCompany
 };

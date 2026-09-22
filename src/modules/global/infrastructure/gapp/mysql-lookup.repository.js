@@ -12,6 +12,7 @@ const {
     sqlListDriver, sqlListFuelType, sqlListUser,
     sqlListInsuranceCompany, sqlListTypeCoverage, sqlListUtilization,
     sqlListDepartments, sqlListSubDepartments, sqlListDamageType, sqlListInfractions,
+    sqlListActiveType, sqlListCompany
 } = require('../../repositories/mysql/gapp-lookup.queries');
 
 class MysqlLookupRepository extends LookupRepositoryPort {
@@ -29,7 +30,9 @@ class MysqlLookupRepository extends LookupRepositoryPort {
     }
 
     listUnits() { return this._query(sqlListUnits()); }
+    listCompany() { return this._query(sqlListCompany()); }
     listActiveClass() { return this._query(sqlListActiveClass()); }
+    listActiveType() { return this._query(sqlListActiveType()); }
     listWorkGroup() { return this._query(sqlListWorkGroup()); }
     listDriver() { return this._query(sqlListDriver()); }
     listFuelType() { return this._query(sqlListFuelType()); }

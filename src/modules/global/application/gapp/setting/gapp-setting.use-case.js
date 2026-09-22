@@ -38,23 +38,60 @@ class GappSettingsUseCases {
         return res
     }
 
-    async createActiveCompany(data, user) {
+    async createCompany(data, user) {
         const res = await this.repository.insertCompany(data);
         return res
     }
 
-    async createActiveUnit(data, user) {
+    async createUnit(data, user) {
         const res = await this.repository.insertUnit(data);
         return res
     }
 
-    async createActiveDeparment(data, user) {
+    async createDepartament(data, user) {
         const res = await this.repository.insertDepartament(data);
         return res
     }
 
-    async createActiveSubdeparment(data, user) {
+    async createSubdepartament(data, user) {
         const res = await this.repository.insertSubdeparment(data);
+        return res
+    }
+
+    // UPDATES
+    async updateActiveType(id, data, user) {
+        const gappUser = await this._resolveGappUser(user);
+
+        const payload = {
+            ...data, group_id_fk: gappUser.work_group_fk
+        }
+
+        const res = await this.repository.updateActiveType(payload, id);
+        return res
+    }
+
+    async updateActiveClass(id, data, user) {
+        const res = await this.repository.updateActiveClass(data, id);
+        return res
+    }
+
+    async updateCompany(id, data, user) {
+        const res = await this.repository.updateCompany(data, id);
+        return res
+    }
+
+    async updateUnit(id, data, user) {
+        const res = await this.repository.updateUnit(data, id);
+        return res
+    }
+
+    async updateDepartament(id, data, user) {
+        const res = await this.repository.updateDepartament(data, id);
+        return res
+    }
+
+    async updateSubdepartament(id, data, user) {
+        const res = await this.repository.updateSubdeparment(data, id);
         return res
     }
 

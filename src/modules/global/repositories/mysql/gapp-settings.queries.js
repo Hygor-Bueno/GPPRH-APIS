@@ -1,12 +1,12 @@
 function sqlInsertActiveType() {
     return `INSERT INTO global.gapp_active_type (
-	            desc_acitve_type, date_active_type, status_active_type, group_id_fk
+	            desc_active_type, date_active_type, status_active_type, group_id_fk
             ) VALUES (?, ?, ?, ?)`
 }
 
 function buildInsertActiveType(data) {
     return [
-        data.desc_acitve_type ?? null,
+        data.desc_active_type ?? null,
         data.date_active_type ?? null,
         data.status_active_type ?? null,
         data.group_id_fk ?? null
@@ -50,7 +50,7 @@ function sqlInsertUnit() {
 function buildInsertUnit(data) {
     return [
         data.unit_number ?? null,
-        data.address ?? null,
+        JSON.stringify(data.address) ?? null,
         data.unit_name ?? null,
         data.cnpj ?? null,
         data.status_unit ?? null,
@@ -82,18 +82,108 @@ function buildInsertSubdepartment(data) {
     ]
 
 }
+/*
+* ============ UPDATES ============== *
+*/
+function sqlUpdateActiveType() {
+    return `UPDATE global.gapp_active_type SET 
+                desc_active_type = ?, date_active_type = ?, status_active_type = ?, group_id_fk = ? 
+            WHERE active_type_id = ?`
+}
+
+function buildUpdateActiveType(data, id) {
+    return [
+        data.desc_active_type ?? null,
+        data.date_active_type ?? null,
+        data.status_active_type ?? null,
+        data.group_id_fk ?? null,
+        id
+    ]
+}
+
+function sqlUpdateActiveClass() {
+    return `UPDATE global.gapp_active_class SET
+                desc_active_class = ?, status_active_class = ?, active_type_id_fk = ? 
+            WHERE id_active_class = ?`
+}
+
+function buildUpdateActiveClass(data, id) {
+    return [
+        data.desc_active_class ?? null,
+        data.status_active_class ?? null,
+        data.active_type_id_fk ?? null,
+        id
+    ]
+}
+
+function sqlUpdateCompany() {
+    return `UPDATE global.gapp_company SET 
+                corporate_name = ?, fantasy_name = ?, status_comp = ?
+            WHERE comp_id = ?`
+}
+
+function buildUpdateCompany(data, id) {
+    return [
+        data.corporate_name ?? null,
+        data.fantasy_name ?? null,
+        data.status_comp ?? null,
+        id
+    ]
+}
+
+function sqlUpdateUnit() {
+    return `UPDATE global.gapp_units SET
+                unit_number = ?, address = ?, unit_name = ?, cnpj = ?, status_unit = ?, comp_id_fk = ?
+            WHERE unit_id = ?`
+}
+
+function buildUpdateUnit(data, id) {
+    return [
+        data.unit_number ?? null,
+        JSON.stringify(data.address) ?? null,
+        data.unit_name ?? null,
+        data.cnpj ?? null,
+        data.status_unit ?? null,
+        data.comp_id_fk ?? null,
+        id
+    ]
+}
+
+function sqlUpdateDepartament() {
+    return `UPDATE global.gapp_departaments SET dep_name = ?, status_dep = ?, unit_id_fk = ? WHERE dep_id = ?`
+}
+
+function buildUpdateDepartament(data, id) {
+    return [
+        data.dep_name ?? null,
+        data.status_dep ?? null,
+        data.unit_id_fk ?? null,
+        id
+    ]
+}
+
+function sqlUpdateSubdepartament() {
+    return `UPDATE global.gapp_subdepartament SET sub_dep_name = ?, status_sub_dep = ?, dep_id_fk = ? WHERE sub_dep_id = ?`
+}
+
+function buildUpdateSubdepartment(data, id) {
+    return [
+        data.sub_dep_name ?? null,
+        data.status_sub_dep ?? null,
+        data.dep_id_fk ?? null,
+        id
+    ]
+
+}
 
 module.exports = {
-    sqlInsertActiveClass,
-    sqlInsertActiveType,
-    sqlInsertCompany,
-    sqlInsertUnit,
-    sqlInsertDepartament,
-    sqlInsertSubdepartament,
-    buildInsertActiveClass,
-    buildInsertActiveType,
-    buildInsertCompany,
-    buildInsertUnit,
-    buildInsertDepartament,
-    buildInsertSubdepartment
+    sqlInsertActiveClass, sqlInsertActiveType, sqlInsertCompany,
+    sqlInsertUnit, sqlInsertDepartament, sqlInsertSubdepartament,
+    buildInsertActiveClass, buildInsertActiveType, buildInsertCompany,
+    buildInsertUnit, buildInsertDepartament, buildInsertSubdepartment,
+
+    sqlUpdateActiveClass, sqlUpdateActiveType, sqlUpdateCompany,
+    sqlUpdateUnit, sqlUpdateDepartament, sqlUpdateSubdepartament,
+    buildUpdateActiveClass, buildUpdateActiveType, buildUpdateCompany,
+    buildUpdateUnit, buildUpdateDepartament, buildUpdateSubdepartment
 }
