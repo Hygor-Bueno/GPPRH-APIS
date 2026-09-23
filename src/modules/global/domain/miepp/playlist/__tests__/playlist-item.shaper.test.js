@@ -4,9 +4,14 @@
 
 const {
     resolveDuration,
+    resolveOrigin,
+    resolveMaxAge,
     isPlayable,
+    isExpired,
     shapeItems,
+    shapeFallbackItem,
     FALLBACK_DURATION_SECONDS,
+    FALLBACK_ITEM_ID,
 } = require('../playlist-item.shaper');
 
 const signUrl = (uuid) => `https://exemplo/assinada/${uuid}`;
@@ -26,8 +31,22 @@ function makeRow(overrides = {}) {
         checksum: 'abc',
         status: 'ready',
         file_id: '42',
+        // Mídia comum: sem grade por trás, e por isso sem prazo.
+        grid_id: null,
+        max_age_seconds: null,
         ...overrides,
     };
+}
+
+/** Linha de grade — a única que tem prazo, porque é a única que mostra preço. */
+function makeGridRow(maxAgeSeconds, overrides = {}) {
+    return makeRow({
+        media_uuid: 'uuid-grade',
+        title: 'Grade Hortifruti',
+        grid_id: 7,
+        max_age_seconds: maxAgeSeconds,
+        ...overrides,
+    });
 }
 
 describe('duração efetiva', () => {
@@ -93,5 +112,108 @@ describe('montagem da lista', () => {
     it('lista vazia não quebra', () => {
         expect(shapeItems([], signUrl)).toEqual([]);
         expect(shapeItems(undefined, signUrl)).toEqual([]);
+    });
+});
+
+describe('origem da mídia', () => {
+    it('sem grade por trás é upload', () => {
+        expect(resolveOrigin(makeRow())).toBe('upload');
+        expect(resolveOrigin(makeRow({ grid_id: undefined }))).toBe('upload');
+    });
+
+    it('com grade por trás é gerada', () => {
+        expect(resolveOrigin(makeGridRow(600))).toBe('generated');
+    });
+
+    it('todo item entrega o origin — o app decide retenção de cache por ele', () => {
+        const [upload, gerada] = shapeItems(
+            [makeRow(), makeGridRow(600, { item_id: 2, order_index: 1 })],
+            signUrl,
+        );
+
+        expect(upload.media.origin).toBe('upload');
+        expect(gerada.media.origin).toBe('generated');
+    });
+});
+
+describe('validade do conteúdo', () => {
+    it('mídia sem prazo devolve null, não zero', () => {
+        // A diferença importa: zero significa "venceu", null significa "não
+        // vence". Confundir os dois derrubaria todo institucional da tela.
+        expect(resolveMaxAge(makeRow())).toBeNull();
+        expect(resolveMaxAge(makeRow({ max_age_seconds: undefined }))).toBeNull();
+    });
+
+    it('aceita o número como string — é como a expressão SQL às vezes volta', () => {
+        expect(resolveMaxAge(makeGridRow('1132'))).toBe(1132);
+    });
+
+    it('item sem prazo omite o campo em vez de mandar null', () => {
+        // "Ausente = não vence" é o contrato com o app; mandar null obrigaria
+        // o app a tratar dois casos para dizer a mesma coisa.
+        const [item] = shapeItems([makeRow()], signUrl);
+        expect(item).not.toHaveProperty('max_age_seconds');
+    });
+
+    it('item de grade leva os segundos que ainda restam', () => {
+        const [item] = shapeItems([makeGridRow(1132)], signUrl);
+        expect(item.max_age_seconds).toBe(1132);
+    });
+
+    it('só vence o que tem prazo — mídia antiga sem prazo não vence', () => {
+        expect(isExpired(makeRow())).toBe(false);
+        expect(isExpired(makeGridRow(1))).toBe(false);
+        expect(isExpired(makeGridRow(0))).toBe(true);
+    });
+});
+
+describe('grade vencida na lista', () => {
+    it('sai da lista quando sobra outro item para tocar', () => {
+        const rows = [
+            makeGridRow(0, { item_id: 1, order_index: 0 }),
+            makeRow({ item_id: 2, order_index: 1, media_uuid: 'institucional' }),
+        ];
+
+        const items = shapeItems(rows, signUrl);
+
+        expect(items.map((item) => item.media.uuid)).toEqual(['institucional']);
+    });
+
+    it('sai da lista quando há reserva configurada, mesmo ficando vazia', () => {
+        const items = shapeItems([makeGridRow(0)], signUrl, { hasFallback: true });
+        expect(items).toEqual([]);
+    });
+
+    it('FICA na lista quando não há nada para pôr no lugar', () => {
+        // Regra de produto: preço vencido na parede é ruim, parede apagada é
+        // pior. O item volta com `max_age_seconds: 0` e quem decide é o app.
+        const items = shapeItems([makeGridRow(0)], signUrl, { hasFallback: false });
+
+        expect(items).toHaveLength(1);
+        expect(items[0].max_age_seconds).toBe(0);
+    });
+
+    it('não confunde vencida com não tocável', () => {
+        // Grade vencida e mídia em processamento saem pelo mesmo buraco da
+        // lista, mas por motivos diferentes — e a não tocável sai sempre,
+        // mesmo sem reserva.
+        const items = shapeItems([makeRow({ status: 'processing' })], signUrl);
+        expect(items).toEqual([]);
+    });
+});
+
+describe('reserva como item', () => {
+    it('vira item sintético com id fora da tabela', () => {
+        const item = shapeFallbackItem(makeRow({ media_uuid: 'reserva' }), signUrl);
+
+        expect(item.item_id).toBe(FALLBACK_ITEM_ID);
+        expect(item.order).toBe(0);
+        expect(item.media.uuid).toBe('reserva');
+        expect(item.duration).toBe(15);
+    });
+
+    it('nunca leva prazo — a reserva é o conteúdo que não pode vencer', () => {
+        const item = shapeFallbackItem(makeRow(), signUrl);
+        expect(item).not.toHaveProperty('max_age_seconds');
     });
 });

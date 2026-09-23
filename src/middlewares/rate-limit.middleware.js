@@ -22,10 +22,23 @@
  *
  * ─── O que NÃO era o problema ────────────────────────────────────────────────
  *
- * `trust proxy` está correto. Verificado em 24/08/2026 mandando um
- * `X-Forwarded-For` forjado de fora: o balde não mudou, ou seja, o Apache
- * acrescenta o IP real ao final do header e o Express pega esse valor. O
- * limiter também não é burlável pelo cliente. Não mexa nisso.
+ * ⚠️ CORRIGIDO EM 15/09/2026 — a conclusão abaixo estava errada.
+ *
+ * O texto original dizia: "`trust proxy` está correto. Verificado em 24/08/2026
+ * mandando um `X-Forwarded-For` forjado de fora: o balde não mudou". O teste
+ * foi feito, mas a conclusão não seguia: "o balde não mudou ao forjar" é
+ * indistinguível de "o balde é sempre o mesmo" — e era o segundo caso.
+ *
+ * A cadeia até o container tem DOIS saltos (Apache do 10.10.10.99 → Apache do
+ * 192 na :4090 → container), e `trust proxy = 1` fazia `req.ip` devolver
+ * `10.10.10.99` para TODO mundo. Consequência: todo limiter por IP dividia um
+ * balde único — 50 senhas erradas na empresa trancariam o login de todos, e o
+ * `loginLimiter` (IP+username) virava username puro, que é exatamente o que a
+ * refatoração de 24/08 queria evitar.
+ *
+ * Descoberto porque as três telas do MIEPP gravaram `last_ip = 10.10.10.99`.
+ * Agora a confiança é por ENDEREÇO (ver `app.factory.js`), o que resolve as
+ * duas cadeias (interna de 2 saltos, pública de 1) e continua não-spoofável.
  *
  * ─── Limitação conhecida: o contador é por processo ──────────────────────────
  *
@@ -66,6 +79,8 @@ const LIMITS = Object.freeze({
     changePassword: 5,
     /** Tráfego das rotas `/miepp/device/*`, por dispositivo. */
     device: 900,
+    /** Tentativas de pareamento (`POST /miepp/device/pair`), por IP. */
+    pair: 10,
 });
 
 /**
@@ -363,6 +378,29 @@ const deviceLimiter = rateLimit({
     handler: limitReachedHandler('RATE_LIMIT_DEVICE'),
 });
 
+/**
+ * Pareamento de tela — 10 tentativas por IP a cada 15 min.
+ *
+ * É a defesa principal do código de 8 dígitos. 10^8 combinações não resistem a
+ * varredura por si: sem limite, alguém tentando continuamente acabaria casando
+ * com algum código vivo e ganharia um token de dispositivo. Com 10 tentativas
+ * por janela, varrer o espaço levaria tempo geológico, e os códigos são de uso
+ * único e duram 10 minutos.
+ *
+ * `skipSuccessfulRequests` mantém a instalação legítima barata: parear uma tela
+ * de verdade não consome tentativa. Quem gasta a cota é quem erra.
+ *
+ * ⚠️ Se um dia esta rota sair de trás deste limiter, o código precisa crescer —
+ * o tamanho dele foi escolhido contando com esta barreira.
+ */
+const pairLimiter = rateLimit({
+    ...COMMON,
+    limit: LIMITS.pair,
+    keyGenerator: ipKey,
+    handler: limitReachedHandler('RATE_LIMIT_PAIR'),
+    skipSuccessfulRequests: true,
+});
+
 module.exports = {
     apiLimiter,
     userLimiter,
@@ -370,6 +408,7 @@ module.exports = {
     loginIpLimiter,
     changePasswordLimiter,
     deviceLimiter,
+    pairLimiter,
     // Exportados para teste e documentação — não use nas rotas.
     LIMITS,
     WINDOW_MS,

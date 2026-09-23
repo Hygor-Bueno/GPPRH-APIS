@@ -75,3 +75,73 @@ describe('GET /files/:fileId', () => {
         expect(res.body).toEqual({ error: true, message: 'Arquivo não encontrado.' });
     });
 });
+
+/**
+ * O cliente desistir no meio da transferência é rotina nesta rota, não falha.
+ *
+ * O navegador monta a miniatura de um vídeo pedindo o Range do primeiro quadro
+ * e corta a conexão assim que desenha. Antes disso ser distinguido, cada uma
+ * dessas desistências virava um "File missing on disk" no log — 239 alarmes
+ * falsos numa semana, todos com o arquivo intacto — e ainda tentava responder
+ * 404 com os cabeçalhos já enviados.
+ *
+ * Aqui o `res` é dublê: abortar de verdade pelo supertest depende de corrida
+ * de socket e o teste ficaria intermitente.
+ */
+describe('GET /files/:fileId — desistência do cliente', () => {
+    function fakeRes({ headersSent = false } = {}) {
+        return {
+            set: jest.fn(),
+            headersSent,
+            status: jest.fn().mockReturnThis(),
+            json: jest.fn(),
+            sendFile: jest.fn(),
+        };
+    }
+
+    async function serveComErro(res, code, message) {
+        const erro = new Error(message);
+        erro.code = code;
+        res.sendFile.mockImplementation((_path, _options, callback) => callback(erro));
+
+        await filesController.serveFile({ params: { fileId: '7' } }, res);
+    }
+
+    it('não trata requisição abortada como arquivo ausente', async () => {
+        const res = fakeRes();
+        await serveComErro(res, 'ECONNABORTED', 'Request aborted');
+
+        expect(res.status).not.toHaveBeenCalled();
+        expect(res.json).not.toHaveBeenCalled();
+    });
+
+    it('não trata socket fechado no meio da escrita como arquivo ausente', async () => {
+        const res = fakeRes();
+        await serveComErro(res, 'EPIPE', 'write EPIPE');
+
+        expect(res.status).not.toHaveBeenCalled();
+        expect(res.json).not.toHaveBeenCalled();
+    });
+
+    it('não tenta responder depois que os cabeçalhos já foram enviados', async () => {
+        // Sem esta guarda, o erro de transporte vira um ERR_HTTP_HEADERS_SENT
+        // em cima dele — e é o segundo que aparece no log, escondendo o
+        // primeiro.
+        const res = fakeRes({ headersSent: true });
+        await serveComErro(res, 'ECONNRESET', 'socket hang up');
+
+        expect(res.status).not.toHaveBeenCalled();
+        expect(res.json).not.toHaveBeenCalled();
+    });
+
+    it('continua respondendo 404 quando o arquivo realmente não está lá', async () => {
+        const res = fakeRes();
+        await serveComErro(res, 'ENOENT', 'ENOENT: no such file or directory');
+
+        expect(res.status).toHaveBeenCalledWith(404);
+        expect(res.json).toHaveBeenCalledWith({
+            error: true,
+            message: 'Arquivo não encontrado.',
+        });
+    });
+});

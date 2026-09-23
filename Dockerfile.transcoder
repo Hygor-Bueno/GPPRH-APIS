@@ -18,7 +18,7 @@ ENV NODE_ENV=production
 # ffmpeg do Debian (build padrão, com libx264 e AAC — que é tudo que usamos).
 # `--no-install-recommends` evita arrastar a cadeia de X11 e áudio de desktop.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg \
+ && apt-get install -y --no-install-recommends ffmpeg tzdata \
  && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./

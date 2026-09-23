@@ -55,6 +55,43 @@ module.exports = {
       env: {
         NODE_ENV: "production"
       }
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Renderizador da grade de produtos do MIEPP
+    // ─────────────────────────────────────────────────────────────────────────
+    //
+    // ⚠️ `instances: 1`, e não é economia. O app acima roda em cluster com 2
+    //    instâncias; um laço de cadência ali rodaria DUAS vezes — duas consultas
+    //    ao Consinco por ciclo, dois Chromium simultâneos e duas gravações
+    //    concorrentes na mesma grade. É o mesmo motivo que pôs o
+    //    transcodificador de vídeo em processo próprio. O worker ainda pega um
+    //    `GET_LOCK` no MySQL como cinto extra, caso alguém mude este número.
+    //
+    // Fica no MESMO container do backend porque a imagem já traz o Chromium do
+    // Puppeteer — o container `transcoder` só tem ffmpeg.
+    {
+      name: "miepp-grid-renderer",
+      script: "./src/workers/miepp-grid-renderer.js",
+
+      exec_mode: "fork",
+      instances: 1,
+
+      kill_timeout: 10000,
+      exp_backoff_restart_delay: 100,
+
+      // O pico é o Chromium, que abre e fecha a cada ciclo. Se bater neste
+      // teto, é vazamento — e aí reiniciar é o comportamento certo.
+      max_memory_restart: "700M",
+
+      error_file: "/app/logs/miepp-grid-renderer-error.log",
+      out_file: "/app/logs/miepp-grid-renderer-out.log",
+      merge_logs: true,
+      log_date_format: "YYYY-MM-DD HH:mm:ss",
+
+      env: {
+        NODE_ENV: "production"
+      }
     }
   ]
 };

@@ -53,17 +53,60 @@ const SQL_COUNT_PLAYLIST_USAGE = `
 // ─── Itens ───────────────────────────────────────────────────────────────────
 
 /**
+ * Validade RESTANTE do conteúdo do item, em segundos — não o prazo nominal.
+ *
+ * Só grade de produtos tem validade: ela mostra PREÇO, e preço que o servidor
+ * não reconfere há tempo demais não pode continuar na parede. Mídia comum
+ * (institucional, campanha) não vence e recebe NULL.
+ *
+ * O relógio que conta é o da última consulta ao Consinco (`last_checked_at`),
+ * não o do download: se a tela baixa uma grade de prazo 20 min dezoito minutos
+ * depois da última checagem, aquele arquivo vale 2 min, não 20.
+ *
+ * `last_checked_at IS NULL` = grade recém-criada, nunca foi ao Consinco e não
+ * tem preço nenhum para mostrar → zero. É o mesmo critério do
+ * `GRID_STALE_EXPRESSION` de `miepp-product-grid.queries`, e os dois precisam
+ * continuar concordando: lá decide o que o painel marca como vencido, aqui o
+ * que a tela pode exibir.
+ *
+ * Sai como DURAÇÃO e não como instante, de propósito. O MySQL roda em -03 e o
+ * `resolved_at` da resposta nasce em UTC no Node; `NOW()` e `last_checked_at`
+ * vêm do mesmo relógio, então a subtração está certa sem nenhuma conversão — e
+ * o que chega ao player não tem fuso para interpretar errado.
+ */
+const ITEM_MAX_AGE_EXPRESSION = `
+    CASE
+        WHEN g.id IS NULL THEN NULL
+        WHEN g.last_checked_at IS NULL THEN 0
+        ELSE GREATEST(
+            0,
+            g.stale_after_minutes * 60 - TIMESTAMPDIFF(SECOND, g.last_checked_at, NOW())
+        )
+    END
+`;
+
+/**
  * Itens de uma playlist com a mídia resolvida. É o insumo de
  * `domain/miepp/playlist/playlist-item.shaper` — os nomes das colunas do SELECT
- * (`item_id`, `media_uuid`) são o contrato com aquele módulo.
+ * (`item_id`, `media_uuid`, `grid_id`, `max_age_seconds`) são o contrato com
+ * aquele módulo.
+ *
+ * O LEFT JOIN com `miepp_product_grids` é o que diz se a mídia foi GERADA pelo
+ * servidor ou ENVIADA pelo painel. A relação é 1:1
+ * (`uq_miepp_product_grids_media`), então o join não multiplica linha. Não
+ * existe coluna `origin` em `miepp_media` e não deve existir: seria um
+ * denormalizado com uma única fonte de verdade — este join — para discordar.
  */
 const SQL_GET_PLAYLIST_ITEMS = `
     SELECT i.id AS item_id, i.playlist_id, i.media_id, i.order_index,
            i.duration_override, i.transition,
            m.uuid AS media_uuid, m.title, m.type, m.mime_type, m.size_bytes,
-           m.duration_seconds, m.checksum, m.status, m.file_id
+           m.duration_seconds, m.checksum, m.status, m.file_id,
+           g.id AS grid_id,
+           ${ITEM_MAX_AGE_EXPRESSION} AS max_age_seconds
     FROM miepp_playlist_items i
     INNER JOIN miepp_media m ON m.id = i.media_id
+    LEFT JOIN miepp_product_grids g ON g.media_id = m.id
     WHERE i.playlist_id = ?
     ORDER BY i.order_index, i.id
 `;
@@ -113,6 +156,7 @@ const SQL_GET_PLAYLIST_ITEM_IDS = `
 `;
 
 module.exports = {
+    ITEM_MAX_AGE_EXPRESSION,
     SQL_LIST_PLAYLISTS,
     SQL_COUNT_PLAYLISTS,
     SQL_GET_PLAYLIST_BY_ID,

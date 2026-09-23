@@ -40,9 +40,47 @@ const { errorHandler } = require('./middlewares/error.middleware');
 function createApp({ allowedOrigins, routes, serveUploads = false }) {
   const app = express();
 
-  // Necessário quando a API está atrás de um proxy reverso (Apache, etc.)
-  // Permite que express-rate-limit use o IP real do cliente via X-Forwarded-For
-  app.set('trust proxy', 1);
+  /**
+   * Proxies confiáveis, por ENDEREÇO e não por contagem de saltos.
+   *
+   * ─── O que estava errado com `trust proxy = 1` (corrigido em 15/09/2026) ───
+   * A cadeia até o container tem DOIS saltos de proxy:
+   *
+   *   cliente → Apache do 10.10.10.99 → Apache do 192 na :4090 → container
+   *
+   * O `X-Forwarded-For` que chega é `<cliente>, 10.10.10.99`. Confiando em um
+   * salto só, o Express pulava um da direita e parava em `10.10.10.99` — ou
+   * seja, `req.ip` era o IP do servidor de frontend para TODO mundo, sempre.
+   *
+   * Três consequências medidas antes da correção:
+   *   - `miepp_players.last_ip` gravava `10.10.10.99` para todas as telas;
+   *   - todo rate limiting por IP caía num balde único: 50 senhas erradas na
+   *     empresa inteira trancariam o `loginIpLimiter` de todos, e o
+   *     `loginLimiter` (IP+username) degenerava em username puro — exatamente o
+   *     que a refatoração de 24/08 quis evitar;
+   *   - o IP de origem do consentimento biométrico do refeitório (LGPD, ver
+   *     `meal-enroll.controller.js`) era gravado sempre igual, o que o próprio
+   *     comentário de lá descreve como "o mesmo que não registrar".
+   *
+   * O teste de 24/08 ("forjei X-Forwarded-For e o balde não mudou") é
+   * indistinguível de "o balde é sempre o mesmo" — as duas situações produzem a
+   * mesma observação, e era a segunda que estava acontecendo.
+   *
+   * ─── Por que por endereço, e não `trust proxy = 2` ────────────────────────
+   * Contar saltos quebra silenciosamente quando a cadeia muda de tamanho — e
+   * ela já é diferente entre o backend interno (2 saltos) e o público (1, pelo
+   * Apache do próprio 192). Por endereço, cada um resolve o seu sozinho.
+   *
+   * Continua não-spoofável: o Express caminha o XFF da direita para a esquerda
+   * pulando só os endereços desta lista e para no primeiro que não está nela.
+   * Entradas forjadas pelo cliente ficam à ESQUERDA das reais e nunca são
+   * alcançadas.
+   *
+   *   loopback        → dev local e chamadas internas
+   *   172.16.0.0/12   → gateway da bridge do Docker (é o peer do socket)
+   *   10.10.10.99     → Apache do servidor de frontend
+   */
+  app.set('trust proxy', ['loopback', '172.16.0.0/12', '10.10.10.99']);
 
   /**
    * Corpo JSON maior APENAS no autocadastro facial.

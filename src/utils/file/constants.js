@@ -129,6 +129,10 @@ const EXT_TO_EXPECTED_MIME = {
     xml:  ['application/xml', 'text/xml'],
     txt:  ['text/plain'],
     csv:  ['text/plain', 'text/csv'],
+    // .sql não tem magic bytes: o detector sempre devolve `text/plain`. Sem
+    // esta linha o `reconcileExtension` cai no ramo "extensão não mapeada" e
+    // funciona por acidente — declarar torna a intenção verificável.
+    sql:  ['text/plain'],
     html: ['text/html'],
     htm:  ['text/html'],
     css:  ['text/css'],
@@ -167,7 +171,12 @@ const BLOCKED_EXTENSIONS = [
     // C / C++ / sistema
     'c','cpp','cc','cxx','h','hpp',
     // Banco de dados
-    'sql',
+    // `sql` foi LIBERADO em 16/09/2026. É texto puro e nada no servidor executa
+    // o conteúdo de um arquivo enviado — o destino dele é download. A liberação
+    // só funciona junto com a exceção de scan em `file.service.js`
+    // (`PLAIN_TEXT_SKIP_CODE_SCAN`): sem ela o arquivo passa pela lista de
+    // extensões e é recusado depois pelo detector de código, que acusa
+    // justamente o `CREATE`/`SELECT` que todo .sql tem.
     // Config / infra
     'json','yaml','yml','toml',
     'env','ini','cfg','conf','config',

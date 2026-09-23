@@ -16,9 +16,13 @@ const useCases = new MealEnrollUseCases({
 /**
  * IP de origem do consentimento.
  *
- * `req.ip` já resolve `X-Forwarded-For` porque o app roda com
- * `trust proxy = 1` — sem isso todo consentimento ficaria registrado com o IP do
+ * `req.ip` resolve `X-Forwarded-For` pela lista de proxies confiáveis do
+ * `app.factory` — sem isso todo consentimento ficaria registrado com o IP do
  * Apache, o que é o mesmo que não registrar.
+ *
+ * ⚠️ Foi o que aconteceu até 15/09/2026: com `trust proxy = 1` e dois saltos na
+ * cadeia, `req.ip` era `10.10.10.99` para todos. Os consentimentos gravados
+ * ANTES dessa data têm o IP do servidor de frontend, não o do titular.
  */
 function originIp(req) {
     return req.ip ?? req.socket?.remoteAddress ?? null;

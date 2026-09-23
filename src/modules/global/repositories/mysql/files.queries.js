@@ -17,7 +17,7 @@
  */
 function sqlFindByHash() {
     return `
-        SELECT id, file_path, file_name, file_extension, file_type, file_size, file_hash, video_codec, status
+        SELECT id, file_path, file_name, file_extension, file_type, file_size, file_hash, video_codec, poster_path, status
         FROM _files
         WHERE file_hash = ? AND status = 1
         LIMIT 1
@@ -33,7 +33,7 @@ function sqlFindByHash() {
  */
 function sqlFindById() {
     return `
-        SELECT id, file_path, file_name, file_extension, file_type, file_size, file_hash, video_codec, status
+        SELECT id, file_path, file_name, file_extension, file_type, file_size, file_hash, video_codec, poster_path, status
         FROM _files
         WHERE id = ? AND status = 1
         LIMIT 1

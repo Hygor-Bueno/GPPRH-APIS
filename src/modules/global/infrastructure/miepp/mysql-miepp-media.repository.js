@@ -11,6 +11,7 @@ const {
     SQL_COUNT_MEDIA,
     SQL_GET_MEDIA_BY_ID,
     SQL_GET_MEDIA_BY_UUID,
+    SQL_GET_DEVICE_MEDIA_BY_ID,
     SQL_INSERT_MEDIA,
     SQL_UPDATE_MEDIA,
     SQL_DELETE_MEDIA,
@@ -18,8 +19,16 @@ const {
 } = require('../../repositories/mysql/miepp-media.queries');
 
 class MysqlMieppMediaRepository extends MediaRepositoryPort {
-    async list({ type, status, limit, offset }) {
-        const filters = [type ?? null, type ?? null, status ?? null, status ?? null];
+    /**
+     * Os filtros vão duplicados porque o SQL usa o padrão `(? IS NULL OR col = ?)`
+     * — o mesmo parâmetro é lido duas vezes, e o mysql2 não nomeia placeholder.
+     */
+    async list({ type, status, origin, limit, offset }) {
+        const filters = [
+            type ?? null, type ?? null,
+            status ?? null, status ?? null,
+            origin ?? null, origin ?? null,
+        ];
         const [rows, total] = await Promise.all([
             query(SQL_LIST_MEDIA, [...filters, limit, offset]),
             count(SQL_COUNT_MEDIA, filters),
@@ -34,6 +43,11 @@ class MysqlMieppMediaRepository extends MediaRepositoryPort {
 
     async findByUuid(uuid) {
         const rows = await query(SQL_GET_MEDIA_BY_UUID, [uuid]);
+        return rows[0] || null;
+    }
+
+    async findForDevice(id) {
+        const rows = await query(SQL_GET_DEVICE_MEDIA_BY_ID, [id]);
         return rows[0] || null;
     }
 

@@ -34,12 +34,20 @@ const {
     SQL_CLAIM_SELECT, SQL_CLAIM_MARK, SQL_MARK_DONE, SQL_MARK_FAILED,
     SQL_RELEASE_STUCK, SQL_REPLACE_FILE, SQL_SET_ATTACHMENT_STATUS,
     SQL_FIND_AFFECTED_TASKS,
+    SQL_LIST_VIDEOS_WITHOUT_POSTER, SQL_SET_POSTER_PATH, SQL_BUMP_POSTER_ATTEMPT,
 } = require('../modules/global/repositories/mysql/video-transcode.queries');
 const { SQL_SET_MEDIA_STATUS_BY_FILE } = require('../modules/global/repositories/mysql/miepp-media.queries');
 const {
     TARGET_VIDEO_CODEC, TARGET_MIME, TARGET_EXTENSION,
     MAX_ATTEMPTS, STUCK_AFTER_MINUTES, buildFfmpegArgs,
 } = require('../utils/video/transcode-policy');
+const {
+    POSTER_TIMEOUT_MS, POSTER_BATCH_SIZE, POSTER_SEEK_SECONDS,
+    posterPathFor, buildPosterArgs,
+} = require('../utils/video/poster-policy');
+
+/** Tentativas de capa antes de desistir daquele vídeo. */
+const POSTER_MAX_ATTEMPTS = Number(process.env.VIDEO_POSTER_MAX_ATTEMPTS || 3);
 
 /** Mesma raiz usada pelo FileService para resolver `file_path`. */
 const STORAGE_ROOT = path.resolve(__dirname, '..', '..');
@@ -291,9 +299,144 @@ async function failJob(job, err) {
     }
 }
 
+// ─── Quadro de capa ───────────────────────────────────────────────────────────
+
+/**
+ * Extrai um quadro do vídeo com ffmpeg.
+ *
+ * Vídeo mais curto que o ponto de busca faz o ffmpeg terminar sem escrever
+ * nada — sem erro, só um arquivo ausente. Por isso a segunda tentativa no
+ * segundo zero em vez de desistir: um vídeo de 2 segundos é raro, mas existe.
+ */
+function runPosterFfmpeg(inputPath, outputPath, seekSeconds) {
+    return new Promise((resolve, reject) => {
+        execFile(
+            FFMPEG_BIN,
+            buildPosterArgs(inputPath, outputPath, seekSeconds),
+            { timeout: POSTER_TIMEOUT_MS, maxBuffer: 1024 * 1024 },
+            (err, _stdout, stderr) => {
+                if (err) {
+                    const detail = (stderr || err.message || '').trim().slice(0, 450);
+                    return reject(new Error(detail || 'ffmpeg falhou sem mensagem'));
+                }
+                resolve();
+            }
+        );
+    });
+}
+
+/**
+ * Gera a capa de UM vídeo.
+ *
+ * A tentativa é contada antes da extração: o caso que precisa de teto é
+ * justamente o arquivo que pendura ou derruba o worker, e aí nenhum `UPDATE`
+ * posterior chegaria a rodar.
+ *
+ * @returns {Promise<boolean>} true quando a capa foi gravada.
+ */
+async function generatePoster(file) {
+    const inputAbsolute = path.join(STORAGE_ROOT, file.file_path);
+
+    await poolGlobal.execute(SQL_BUMP_POSTER_ATTEMPT, [file.id]);
+
+    if (!fs.existsSync(inputAbsolute)) {
+        console.warn(`[poster] file=${file.id} sem arquivo em disco: ${file.file_path}`);
+        return false;
+    }
+
+    const posterRelative = posterPathFor(file.file_path);
+    const posterAbsolute = path.join(STORAGE_ROOT, posterRelative);
+
+    fs.mkdirSync(path.dirname(posterAbsolute), { recursive: true });
+
+    for (const seek of [POSTER_SEEK_SECONDS, 0]) {
+        await runPosterFfmpeg(inputAbsolute, posterAbsolute, seek);
+        if (fs.existsSync(posterAbsolute) && fs.statSync(posterAbsolute).size > 0) break;
+    }
+
+    if (!fs.existsSync(posterAbsolute) || fs.statSync(posterAbsolute).size === 0) {
+        try { fs.unlinkSync(posterAbsolute); } catch { /* nem chegou a existir */ }
+        throw new Error('ffmpeg não escreveu quadro algum');
+    }
+
+    fs.chmodSync(posterAbsolute, 0o644);
+    await poolGlobal.execute(SQL_SET_POSTER_PATH, [posterRelative, file.id]);
+
+    return true;
+}
+
+/**
+ * Varre os vídeos sem capa e gera em lote.
+ *
+ * Roda DEPOIS da fila de conversão no mesmo ciclo, e não em paralelo: a
+ * conversão é o trabalho que alguém está esperando, a capa é manutenção. Um
+ * lote pequeno por ciclo mantém o worker responsivo à fila.
+ *
+ * Falha de um vídeo nunca interrompe o lote — mesma regra do render da grade.
+ */
+async function posterTick() {
+    const [files] = await poolGlobal.query(
+        SQL_LIST_VIDEOS_WITHOUT_POSTER,
+        [POSTER_MAX_ATTEMPTS, POSTER_BATCH_SIZE]
+    );
+
+    if (files.length === 0) return;
+
+    let generated = 0;
+    for (const file of files) {
+        if (shuttingDown) break;
+
+        try {
+            if (await generatePoster(file)) generated += 1;
+        } catch (err) {
+            console.error(`[poster] file=${file.id} falhou:`, err.message);
+        }
+    }
+
+    if (generated > 0) {
+        console.log(`[poster] ${generated} capa(s) gerada(s) de ${files.length} vídeo(s) examinado(s)`);
+    }
+}
+
 // ─── Laço principal ───────────────────────────────────────────────────────────
 
-async function tick() {
+/**
+ * Registra erro repetido sem encher o log.
+ *
+ * Uma falha permanente — tabela ausente, credencial errada, disco cheio — se
+ * repete a cada ciclo. A 10 segundos por ciclo isso são 8.640 linhas idênticas
+ * por dia, que afogam justamente o que apareceu uma vez só e importava. Loga a
+ * primeira, cala enquanto a mensagem for a mesma e volta a avisar a cada 60
+ * repetições (~10 min), sempre dizendo quantas houve.
+ */
+function makeErrorThrottle(prefix) {
+    let last = null;
+    let repeats = 0;
+
+    return (message) => {
+        if (message !== last) {
+            last = message;
+            repeats = 0;
+            console.error(`${prefix} ${message}`);
+            return;
+        }
+
+        repeats += 1;
+        if (repeats % 60 === 0) {
+            console.error(`${prefix} ${message} (repetido ${repeats}x)`);
+        }
+    };
+}
+
+const logQueueError  = makeErrorThrottle('[transcoder] Erro na fila de conversão:');
+const logPosterError = makeErrorThrottle('[poster] Erro na varredura:');
+
+/**
+ * Fila de conversão: devolve os presos e drena o que houver.
+ *
+ * Depende de `gt_video_transcode_queue`.
+ */
+async function transcodeTick() {
     const [released] = await poolGlobal.execute(SQL_RELEASE_STUCK, [STUCK_AFTER_MINUTES]);
     if (released.affectedRows > 0) {
         console.warn(`[transcoder] ${released.affectedRows} job(s) preso(s) devolvido(s) à fila`);
@@ -302,11 +445,34 @@ async function tick() {
     // Drena a fila inteira antes de voltar a dormir.
     while (!shuttingDown) {
         const job = await claimJob();
-        if (!job) return;
+        if (!job) break;
 
         try { await processJob(job); }
         catch (err) { await failJob(job, err); }
     }
+}
+
+/**
+ * As duas metades do ciclo são INDEPENDENTES, e cada uma tem seu próprio
+ * try/catch por um motivo concreto.
+ *
+ * A conversão depende de `gt_video_transcode_queue`; a varredura de capas
+ * depende só de `_files`. Quando as duas dividiam o mesmo tratamento de erro, o
+ * banco sem a tabela da fila fazia o ciclo estourar na PRIMEIRA linha e nenhuma
+ * capa chegava a ser gerada — um recurso parado por causa de outro que não tem
+ * relação com ele (18/09/2026).
+ *
+ * A ordem também não é arbitrária: conversão é o que alguém está esperando,
+ * capa é manutenção.
+ */
+async function tick() {
+    try { await transcodeTick(); }
+    catch (err) { logQueueError(err.message); }
+
+    if (shuttingDown) return;
+
+    try { await posterTick(); }
+    catch (err) { logPosterError(err.message); }
 }
 
 async function main() {

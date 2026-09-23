@@ -6,9 +6,10 @@ const { apiLimiter } = require('./middlewares/rate-limit.middleware');
 
 const app = express();
 
-// Necessário quando a API está atrás de um proxy reverso (nginx, etc.)
-// Permite que express-rate-limit use o IP real do cliente via X-Forwarded-For
-app.set('trust proxy', 1);
+// Proxies confiáveis por ENDEREÇO — ver o comentário longo em `app.factory.js`,
+// que é o arquivo vivo. Este monolito está parado desde 06/08/2026; alinhado
+// aqui só para não sugerir que `trust proxy = 1` ainda é o valor correto.
+app.set('trust proxy', ['loopback', '172.16.0.0/12', '10.10.10.99']);
 
 // Carregar middlewares básicos
 /**

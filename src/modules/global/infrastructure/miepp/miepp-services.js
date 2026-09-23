@@ -28,10 +28,10 @@ const mediaTokenService = new MieppMediaTokenService({
     ttlHours: mieppConfig.mediaTokenTtlHours,
 });
 
-/** Emite e valida os códigos de pareamento. */
+/** Emite e consome os códigos de pareamento (persistidos em `miepp_pairing_codes`). */
 const pairingService = new MieppPairingCodeService({
-    secret: mieppConfig.pairingSecret,
     ttlMinutes: mieppConfig.pairingTtlMinutes,
+    codeLength: mieppConfig.pairingCodeLength,
 });
 
 /** Ponto de integração com o sistema `_files`. */

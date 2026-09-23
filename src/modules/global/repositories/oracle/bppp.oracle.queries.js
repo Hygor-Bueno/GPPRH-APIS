@@ -40,6 +40,27 @@ const PRODUCT_CODES_SQL = `
 `;
 
 /**
+ * "Ativo para venda nesta loja" — o critério do DAO legado, extraído para
+ * constante porque agora tem dois usuários: a listagem por departamento e a
+ * resolução da grade de produtos do miepp.
+ *
+ * ⚠️ Não confundir com o `STATUSCOMPRA` que as buscas devolvem no campo
+ * `status`: aquele diz se o item ainda é COMPRADO do fornecedor. Filtrar por
+ * ele para decidir o que vai à parede seria filtrar pela coisa errada, do jeito
+ * mais convincente possível — o nome bate e o valor parece razoável.
+ *
+ * Depende dos aliases `PE` (MRL_PRODUTOEMPRESA) estarem no escopo da query.
+ */
+const ACTIVE_FOR_SALE_SQL = `
+    EXISTS (SELECT 1
+              FROM CONSINCO.MAXV_MGMBASEPRODSEGESTQ A
+             WHERE A.SEQPRODUTO  = PE.SEQPRODUTO
+               AND A.NROEMPRESA  = PE.NROEMPRESA
+               AND A.STATUSVENDA = 'A'
+               AND A.NROSEGMENTO = 1)
+`;
+
+/**
  * Projeção comum às três buscas. O preço usa `PE.NROEMPRESA` (e não um bind
  * separado) para garantir que preço e estoque sejam sempre da mesma loja.
  */
@@ -147,12 +168,7 @@ async function findByShopAndDepartment(shopId, departmentId) {
          WHERE PE.NROEMPRESA      = :shopId
            AND PE.NRODEPARTAMENTO = :departmentId
            AND COD.COD_BALANCA   IS NOT NULL
-           AND EXISTS (SELECT 1
-                         FROM CONSINCO.MAXV_MGMBASEPRODSEGESTQ A
-                        WHERE A.SEQPRODUTO  = PE.SEQPRODUTO
-                          AND A.NROEMPRESA  = PE.NROEMPRESA
-                          AND A.STATUSVENDA = 'A'
-                          AND A.NROSEGMENTO = 1)
+           AND ${ACTIVE_FOR_SALE_SQL}
          ORDER BY P.DESCCOMPLETA
     `, { shopId, departmentId });
 }
@@ -163,4 +179,9 @@ module.exports = {
     findByDescription,
     findByShopAndDepartment,
     DESCRIPTION_MAX_ROWS,
+    // Reusados pela grade de produtos do miepp, que precisa da MESMA definição
+    // de código de acesso e de "ativo para venda". Duplicar os dois blocos faria
+    // a parede e a busca de preço divergirem na primeira mudança do ERP.
+    PRODUCT_CODES_SQL,
+    ACTIVE_FOR_SALE_SQL,
 };

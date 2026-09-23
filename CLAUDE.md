@@ -76,8 +76,15 @@ Duas camadas **mutuamente exclusivas** em `app.factory` (ver cabeçalho de
 
 Não volte a chavear rota autenticada por IP: era isso que fazia o uso de uma
 pessoa devolver 429 para todas as outras atrás do mesmo endereço (NAT do app
-mobile, terminal compartilhado). O `trust proxy = 1` está **correto** — foi
-verificado com `X-Forwarded-For` forjado; não mexa.
+mobile, terminal compartilhado). ⚠️ O `trust proxy` **estava errado** e foi corrigido em 15/09/2026. A cadeia
+tem DOIS saltos (Apache do 10.10.10.99 → Apache do 192 na :4090 → container),
+e `trust proxy = 1` fazia `req.ip` devolver `10.10.10.99` para todos — ou seja,
+todo limiter por IP num balde único. Agora a confiança é por ENDEREÇO
+(`app.factory.js`), o que cobre as duas cadeias e continua não-spoofável.
+
+O teste antigo ("forjei o header e o balde não mudou") não provava segurança:
+era indistinguível de "o balde é sempre o mesmo". Descoberto porque as telas do
+MIEPP gravaram todas o mesmo `last_ip`.
 
 No login são duas camadas também: `loginLimiter` (IP + username, 10 falhas) e
 `loginIpLimiter` (IP, 50 falhas). Chavear login só por username permitiria

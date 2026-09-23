@@ -79,6 +79,33 @@ const TEXT_MIMES   = new Set([
     'text/plain', 'text/csv', 'text/html', 'text/css', 'application/javascript',
 ]);
 const WEB_MIMES    = new Set(['text/html', 'text/css', 'application/javascript']);
+
+/**
+ * Extensões de texto puro dispensadas do `scanForCode` + `checkTextComplexity`.
+ *
+ * Um `.sql` reprova nos dois por construção, não por acidente: `scanForCode`
+ * tem o padrão `^(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER)` na lista, e
+ * `checkTextComplexity` recusa qualquer backtick — que no MySQL é como se
+ * escreve nome de tabela (`` `_user` ``). Liberar a extensão sem liberar o
+ * scan daria um 400 falando de "código ofuscado" num arquivo legítimo.
+ *
+ * ⚠️ A chave aqui é a EXTENSÃO DECLARADA, não o MIME — e extensão vem do nome
+ *    enviado pelo cliente. Isto é mais fraco que o `WEB_MIMES`, que decide pelo
+ *    conteúdo detectado: renomear `qualquer-coisa.txt` para `.sql` pula os dois
+ *    scans. O que sobra de proteção, e continua valendo para .sql:
+ *      - `scanForBinaryThreats` (ELF/Mach-O/MZ-PE) roda ANTES e não é pulado;
+ *      - o conteúdo precisa ser texto sem null byte para virar `text/plain`;
+ *      - o arquivo é gravado como `<hash>.txt` e servido `text/plain`, então o
+ *        navegador o exibe como texto — não há execução em lugar nenhum.
+ *    O que se perde é a barreira contra CSV Formula Injection para quem renomeie
+ *    a planilha para .sql e a vítima renomeie de volta antes de abrir no Excel.
+ *    Cenário remoto o bastante para valer a troca; se um dia deixar de ser,
+ *    o caminho é checar a extensão contra o módulo de destino.
+ *
+ * @type {Set<string>}
+ */
+const PLAIN_TEXT_SKIP_CODE_SCAN = new Set(['sql']);
+
 /** MIMEs OOXML que recebem verificação de zip bomb. */
 const OOXML_MIMES  = new Set([
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -232,7 +259,9 @@ class FileService {
         // ── Camada 4: scans específicos por tipo ──────────────────────────────
         if (mimeType === 'application/pdf') {
             scanPdfContent(buf);
-        } else if (TEXT_MIMES.has(mimeType) && !WEB_MIMES.has(mimeType)) {
+        } else if (TEXT_MIMES.has(mimeType)
+                && !WEB_MIMES.has(mimeType)
+                && !PLAIN_TEXT_SKIP_CODE_SCAN.has(claimedExtension)) {
             scanForCode(buf);
             checkTextComplexity(buf);
         } else if (IMAGE_MIMES.has(mimeType)) {

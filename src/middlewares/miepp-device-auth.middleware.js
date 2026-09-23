@@ -74,6 +74,14 @@ async function authenticateDevice(req, res, next) {
             id: record.player_id,
             uuid: record.player_uuid,
             name: record.player_name,
+            // Vem daqui, e não de uma consulta do caso de uso, porque o registro
+            // de exibições (`POST /device/plays`) grava o local como SNAPSHOT em
+            // cada evento — buscar o player de novo a cada lote seria uma ida ao
+            // banco por requisição de cada tela, no mesmo servidor de dados que
+            // já está apertado. `null` quando a tela não tem local cadastrado.
+            location_id: record.player_location_id === null || record.player_location_id === undefined
+                ? null
+                : Number(record.player_location_id),
         };
 
         // Carimbo de uso sem bloquear a resposta: é telemetria de suporte
