@@ -9,37 +9,114 @@
  * @module modules/global/repositories/mysql/miepp-media.queries
  */
 
+/**
+ * Com o alias `m` porque toda leitura daqui passou a sair de
+ * `miepp_media m` — as que fazem o JOIN da grade precisam do prefixo, e um
+ * segundo jogo de colunas sem ele só daria duas listas para sair de sincronia.
+ */
 const COLUMNS = `
-    id, uuid, title, type, file_id, mime_type, size_bytes, duration_seconds,
-    checksum, status, uploaded_by, created_at, updated_at
+    m.id, m.uuid, m.title, m.type, m.file_id, m.mime_type, m.size_bytes,
+    m.duration_seconds, m.checksum, m.status, m.uploaded_by, m.created_at,
+    m.updated_at
 `;
 
 /**
- * Parâmetros: `[type, type, status, status, limit, offset]`
+ * O LEFT JOIN que diz se a mídia é uma GRADE renderizada pelo servidor ou um
+ * upload do painel.
+ *
+ * Sem ele a grade se disfarça de imagem comum: ela nasce com `type = 'image'`
+ * (de propósito — ver `SQL_INSERT_GRID_MEDIA`), então nada na linha de
+ * `miepp_media` a distingue. É 1:1 (`uq_miepp_product_grids_media`), logo não
+ * multiplica linha nem desconta do `COUNT`.
+ *
+ * Não vira coluna `origin` em `miepp_media`: seria um denormalizado com uma
+ * única fonte de verdade — este join — para discordar.
+ */
+const GRID_JOIN = 'LEFT JOIN miepp_product_grids g ON g.media_id = m.id';
+
+/**
+ * Filtro por ORIGEM, aplicado sobre o join e não sobre uma coluna.
+ *
+ * Existe porque a lista é paginada: sem ele o painel que quer "só as grades"
+ * (ou "só os uploads") teria que filtrar a página que recebeu, e o resultado
+ * seria uma página de 20 com 6 itens. Quem filtra o conjunto é o banco.
+ *
+ * `NULL` = sem filtro, no mesmo padrão dos outros dois.
+ */
+const ORIGIN_FILTER = "(? IS NULL OR (? = 'generated') = (g.id IS NOT NULL))";
+
+/**
+ * `grid_id` vem do LEFT JOIN e é o que o painel lê para saber que aquela
+ * "imagem" é uma grade — e para levar quem clicou ao editor certo.
+ *
+ * Parâmetros: `[type, type, status, status, origin, origin, limit, offset]`
  */
 const SQL_LIST_MEDIA = `
-    SELECT ${COLUMNS}
-    FROM miepp_media
-    WHERE (? IS NULL OR type = ?)
-      AND (? IS NULL OR status = ?)
-    ORDER BY created_at DESC
+    SELECT ${COLUMNS},
+           g.id AS grid_id
+    FROM miepp_media m
+    ${GRID_JOIN}
+    WHERE (? IS NULL OR m.type = ?)
+      AND (? IS NULL OR m.status = ?)
+      AND ${ORIGIN_FILTER}
+    ORDER BY m.created_at DESC
     LIMIT ? OFFSET ?
 `;
 
+/**
+ * O MESMO `WHERE` da listagem, join incluído: um total que não conhecesse o
+ * filtro de origem paginaria em cima de um número que a lista não devolve.
+ *
+ * Parâmetros: `[type, type, status, status, origin, origin]`
+ */
 const SQL_COUNT_MEDIA = `
     SELECT COUNT(*) AS total
-    FROM miepp_media
-    WHERE (? IS NULL OR type = ?)
-      AND (? IS NULL OR status = ?)
+    FROM miepp_media m
+    ${GRID_JOIN}
+    WHERE (? IS NULL OR m.type = ?)
+      AND (? IS NULL OR m.status = ?)
+      AND ${ORIGIN_FILTER}
 `;
 
+/**
+ * Leva `grid_id` pelo mesmo motivo da listagem — e porque é esta a linha que
+ * volta no POST e no PUT de mídia, onde o front precisa do mesmo campo.
+ */
 const SQL_GET_MEDIA_BY_ID = `
-    SELECT ${COLUMNS} FROM miepp_media WHERE id = ?
+    SELECT ${COLUMNS},
+           g.id AS grid_id
+    FROM miepp_media m
+    ${GRID_JOIN}
+    WHERE m.id = ?
 `;
 
-/** A rota de entrega assinada resolve a mídia pelo uuid público, nunca pelo id. */
+/**
+ * A rota de entrega assinada resolve a mídia pelo uuid público, nunca pelo id.
+ *
+ * Sem o join da grade de propósito: aqui a resposta é o BINÁRIO, não JSON —
+ * ninguém lê `origin` nesta consulta, e ela roda a cada download de cada tela.
+ */
 const SQL_GET_MEDIA_BY_UUID = `
-    SELECT ${COLUMNS} FROM miepp_media WHERE uuid = ?
+    SELECT ${COLUMNS} FROM miepp_media m WHERE m.uuid = ?
+`;
+
+/**
+ * A mídia de RESERVA, no mesmo formato de linha que
+ * `SQL_GET_PLAYLIST_ITEMS` — é o que permite passá-la pelo mesmo shaper do
+ * item, em vez de montar um segundo formato de `media` que sairia de sincronia
+ * na primeira mudança do contrato.
+ *
+ * Daí os apelidos: `media_uuid` (e não `uuid`) e o LEFT JOIN da grade, que o
+ * shaper lê para derivar o `origin`. O caso de uso recusa reserva com
+ * `grid_id` — grade mostra preço e preço não serve de conteúdo perene.
+ */
+const SQL_GET_DEVICE_MEDIA_BY_ID = `
+    SELECT m.id, m.uuid AS media_uuid, m.title, m.type, m.mime_type, m.size_bytes,
+           m.duration_seconds, m.checksum, m.status, m.file_id,
+           g.id AS grid_id
+    FROM miepp_media m
+    LEFT JOIN miepp_product_grids g ON g.media_id = m.id
+    WHERE m.id = ?
 `;
 
 const SQL_INSERT_MEDIA = `
@@ -103,6 +180,7 @@ module.exports = {
     SQL_COUNT_MEDIA,
     SQL_GET_MEDIA_BY_ID,
     SQL_GET_MEDIA_BY_UUID,
+    SQL_GET_DEVICE_MEDIA_BY_ID,
     SQL_INSERT_MEDIA,
     SQL_UPDATE_MEDIA,
     SQL_UPDATE_MEDIA_STATUS,

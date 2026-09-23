@@ -10,6 +10,18 @@
  *
  * Mensagens de grupo (`id_group IS NOT NULL`) são ignoradas por todas as queries.
  *
+ * ⚠️  DATAS SAEM COMO STRING, NÃO COMO `Date`:
+ * `cl_message.date` é `DATETIME` e o MySQL grava/lê em horário LOCAL (-03).
+ * Se ela chegasse ao Node como `Date`, o `JSON.stringify` da resposta a
+ * converteria para ISO em UTC — uma mensagem das 09:00 sairia como
+ * `2026-09-18T12:00:00.000Z`: certa no banco, errada para quem consome.
+ * Por isso todo SELECT daqui formata com `DATE_FORMAT(...)`: o valor sai como
+ * `'YYYY-MM-DD HH:MM:SS'`, exatamente o que está gravado, sem conversão de
+ * fuso no caminho.
+ * Não trocar isso por `dateStrings: true` no pool — `poolGlobal` é
+ * compartilhado com os outros módulos do `global` (o MIEPP, por exemplo,
+ * depende de receber `Date` nas datas de agendamento).
+ *
  * @module modules/global/repositories/mysql/chat.queries
  */
 
@@ -48,7 +60,7 @@ function sqlGetConversations() {
             SELECT
                 IF(m.id_user = ?, m.id_sender, m.id_user)             AS partner_id,
                 UPPER(TRIM(COALESCE(e.name, u.name, 'Desconhecido'))) AS partner_name,
-                MAX(m.date)                                             AS last_message_date
+                DATE_FORMAT(MAX(m.date), '%Y-%m-%d %H:%i:%s')         AS last_message_date
             FROM cl_message m
             LEFT JOIN _employee e ON e.id = IF(m.id_user = ?, m.id_sender, m.id_user)
             LEFT JOIN _user     u ON u.id = IF(m.id_user = ?, m.id_sender, m.id_user)
@@ -103,7 +115,7 @@ function sqlGetMessages(offset) {
             type,
             file_id,
             file_name,
-            date
+            DATE_FORMAT(date, '%Y-%m-%d %H:%i:%s') AS date
         FROM cl_message
         WHERE ((id_user = ? AND id_sender = ?) OR (id_user = ? AND id_sender = ?))
           AND id_group IS NULL
@@ -149,7 +161,7 @@ function sqlGetMessageById() {
             type,
             file_id,
             file_name,
-            date
+            DATE_FORMAT(date, '%Y-%m-%d %H:%i:%s') AS date
         FROM cl_message
         WHERE id = ?
     `;

@@ -13,6 +13,7 @@ const crypto = require('crypto');
 const { AppError } = require('../../../../../errors/app.error');
 const { MediaType, MediaStatus } = require('../../../domain/miepp/miepp.enums');
 const { normalizePagination, paginated } = require('../../../domain/miepp/pagination.rules');
+const { normalizeOrigin, withOrigin } = require('../../../domain/miepp/media/media-origin.rules');
 
 /** Tipos que exigem um arquivo enviado; `weburl` aponta para fora. */
 const TYPES_REQUIRING_FILE = new Set([MediaType.IMAGE, MediaType.VIDEO, MediaType.HTML]);
@@ -35,18 +36,29 @@ class MieppMediaUseCases {
         return media;
     }
 
+    /**
+     * `?origin=upload|generated` filtra por ORIGEM, e cada linha volta com o
+     * campo `origin` resolvido.
+     *
+     * Sem isso a biblioteca do painel mostra grade e imagem comum como a mesma
+     * coisa — as duas são `type: 'image'` —, e quem clica numa grade cai no
+     * formulário de mídia, que edita título e duração e não tem como mexer nos
+     * produtos. O player já distinguia pelo mesmo campo; era só o painel que
+     * não tinha como.
+     */
     async list(query = {}) {
         const pagination = normalizePagination(query);
         const { rows, total } = await this.repository.list({
             ...pagination,
             type: query.type ?? null,
             status: query.status ?? null,
+            origin: normalizeOrigin(query.origin),
         });
-        return paginated(rows, total, pagination);
+        return paginated(rows.map(withOrigin), total, pagination);
     }
 
     async getById(id) {
-        return this._requireMedia(id);
+        return withOrigin(await this._requireMedia(id));
     }
 
     /**
@@ -84,7 +96,7 @@ class MieppMediaUseCases {
                 uploaded_by: actor?.id ?? null,
             });
 
-            return this.repository.findById(created.id);
+            return withOrigin(await this.repository.findById(created.id));
         }
 
         if (!TYPES_REQUIRING_FILE.has(type)) {
@@ -113,7 +125,7 @@ class MieppMediaUseCases {
             uploaded_by: actor?.id ?? null,
         });
 
-        return this.repository.findById(created.id);
+        return withOrigin(await this.repository.findById(created.id));
     }
 
     /**
@@ -132,7 +144,7 @@ class MieppMediaUseCases {
             status: payload.status ?? current.status,
         });
 
-        return this.repository.findById(id);
+        return withOrigin(await this.repository.findById(id));
     }
 
     /**

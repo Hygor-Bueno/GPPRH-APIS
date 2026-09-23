@@ -129,7 +129,8 @@ const SQL_GET_PLAYER_GROUP_IDS = `
  */
 const SQL_FIND_DEVICE_TOKEN = `
     SELECT t.id, t.player_id, t.expires_at, t.revoked_at,
-           p.uuid AS player_uuid, p.name AS player_name, p.active AS player_active
+           p.uuid AS player_uuid, p.name AS player_name, p.active AS player_active,
+           p.location_id AS player_location_id
     FROM miepp_device_tokens t
     INNER JOIN miepp_players p ON p.id = t.player_id
     WHERE t.token_hash = ?

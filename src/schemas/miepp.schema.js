@@ -115,6 +115,43 @@ const putMediaSchema = {
     status:           { type: 'string', required: false, enum: values(MediaStatus) },
 };
 
+// ─── Grade de produtos ───────────────────────────────────────────────────────
+
+/**
+ * `items` NÃO aparece aqui de propósito. Este validador conhece string, number
+ * e boolean — lista de objeto não se expressa nele. A validação dos itens (PLU
+ * inteiro, sem repetição, cabendo no layout, e a RECUSA de campo de produto)
+ * mora no `MieppProductGridUseCases`, que é onde a regra pode ser testada.
+ *
+ * Também não existe campo de preço, descrição ou EAN, e isso é o contrato: a
+ * grade guarda o PLU, e o dado do produto é lido do Consinco no render.
+ */
+const postProductGridSchema = {
+    title:               { type: 'string',  required: true,  minLength: 1, maxLength: 150 },
+    // NROEMPRESA da loja no Consinco — o `number` de `GET /bppp/shops`.
+    shop_id:             { type: 'number',  required: true,  min: 1 },
+    grid_columns:        { type: 'number',  required: false, min: 1, max: 6 },
+    grid_rows:           { type: 'number',  required: false, min: 1, max: 6 },
+    // Teto de 1 dia: acima disso "vencida" deixa de proteger de qualquer coisa.
+    stale_after_minutes: { type: 'number',  required: false, min: 1, max: 1440 },
+    duration_seconds:    { type: 'number',  required: false, min: 1, max: 86400 },
+    active:              { type: 'boolean', required: false },
+    // `items` e `style` NÃO aparecem aqui, e não é esquecimento: este formato
+    // só conhece string, number e boolean. Os dois são validados no caso de uso
+    // — `style` por `grid-style.rules.findStyleError`, que recusa cor fora do
+    // hexadecimal, fonte fora das instaladas e tamanho fora dos degraus.
+};
+
+const putProductGridSchema = {
+    title:               { type: 'string',  required: false, minLength: 1, maxLength: 150 },
+    shop_id:             { type: 'number',  required: false, min: 1 },
+    grid_columns:        { type: 'number',  required: false, min: 1, max: 6 },
+    grid_rows:           { type: 'number',  required: false, min: 1, max: 6 },
+    stale_after_minutes: { type: 'number',  required: false, min: 1, max: 1440 },
+    duration_seconds:    { type: 'number',  required: false, min: 1, max: 86400 },
+    active:              { type: 'boolean', required: false },
+};
+
 // ─── Playlists ───────────────────────────────────────────────────────────────
 
 const postPlaylistSchema = {
@@ -205,6 +242,15 @@ const postHeartbeatSchema = {
     // declarar de onde está falando.
 };
 
+// `POST /device/plays` NÃO tem schema aqui, e não é esquecimento.
+//
+// O corpo é `{ plays: [ ... ] }` — inteiramente um array de objetos, que este
+// formato não expressa (mesma limitação de `items` da grade de produtos). Mas
+// aqui há um motivo a mais, de produto: a crítica precisa ser POR EVENTO, com
+// motivo, e não pelo lote. Recusar o lote inteiro travaria a fila local do
+// player, que reenviaria o mesmo corpo para sempre. Quem valida é
+// `domain/miepp/play/play-event.rules`.
+
 const postCommandAckSchema = {
     status: {
         type: 'string',
@@ -226,6 +272,8 @@ module.exports = {
     postGroupMemberSchema,
     postMediaSchema,
     putMediaSchema,
+    postProductGridSchema,
+    putProductGridSchema,
     postPlaylistSchema,
     putPlaylistSchema,
     postPlaylistItemSchema,

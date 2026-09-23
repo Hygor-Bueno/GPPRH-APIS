@@ -19,6 +19,7 @@ require('dotenv').config();
  * @property {number}      pairingTtlMinutes
  * @property {number|null} deviceTokenTtlDays - `null` = token sem expiração.
  * @property {number|null} fallbackPlaylistId - playlist padrão quando nada casa.
+ * @property {number|null} fallbackMediaId    - mídia de reserva quando o conteúdo vence.
  */
 
 /** @param {string} name @param {number} fallback @returns {number} */
@@ -59,11 +60,47 @@ const mieppConfig = {
     // Ausente = o player mantém o último conteúdo em cache.
     fallbackPlaylistId: optionalNumberFromEnv('MIEPP_FALLBACK_PLAYLIST_ID'),
 
+    // Mídia de RESERVA — não é a mesma coisa que a playlist de fallback acima.
+    // Os gatilhos são diferentes:
+    //
+    //   fallbackPlaylistId → "nenhum agendamento casou"      (não há o que tocar)
+    //   fallbackMediaId    → "o que havia para tocar venceu" (há, mas não vale)
+    //
+    // É o conteúdo perene e SEM PREÇO que entra quando a grade vence: na tela
+    // offline por decisão do app, na tela online por decisão daqui (ver
+    // `shapeItems`). Sem esta variável o servidor não consegue derrubar uma
+    // grade vencida sem apagar a parede, e a grade fica no ar com preço velho.
+    //
+    // Precisa apontar para mídia `ready` que NÃO seja grade — o caso de uso
+    // recusa as duas coisas e responde como se não houvesse reserva.
+    fallbackMediaId: optionalNumberFromEnv('MIEPP_FALLBACK_MEDIA_ID'),
+
     // Sem heartbeat por este tempo, a tela é considerada offline na leitura
     // (ver `PLAYER_STATUS_EXPRESSION`). Precisa ser folgado em relação à
     // cadência do heartbeat do app — com heartbeat de 1 min, 5 min tolera
     // quatro perdas seguidas antes de acusar queda.
     offlineAfterMinutes: numberFromEnv('MIEPP_OFFLINE_AFTER_MINUTES', 5),
+
+    // ─── Renderizador da grade de produtos ───────────────────────────────────
+    //
+    // ⚠️ O intervalo NÃO é o atraso que o cliente vê na parede. O atraso real é
+    //    `intervalo do render + intervalo de poll do player + resto da volta do
+    //    carrossel`. Encurtar só este número, sem encurtar o poll do app, gasta
+    //    Oracle sem adiantar nada na loja.
+    //
+    // 5 min é o padrão porque a grade mostra PREÇO. Para grade sem preço, 30
+    // min seria folgado — descrição muda raro.
+    gridRenderIntervalMs: numberFromEnv('MIEPP_GRID_RENDER_INTERVAL_MS', 5 * 60 * 1000),
+
+    // Grades visitadas por ciclo. O Chromium abre uma vez para o lote inteiro,
+    // então cada grade a mais custa só o screenshot.
+    gridRenderBatch: numberFromEnv('MIEPP_GRID_RENDER_BATCH', 20),
+
+    // Resolução da imagem gerada. Mudar aqui troca o binário de TODAS as grades
+    // no próximo ciclo: a resolução não entra no `data_hash` (não é conteúdo, é
+    // meio), então o hash não muda, mas o arquivo sim — e as telas rebaixam.
+    gridRenderWidth: numberFromEnv('MIEPP_GRID_RENDER_WIDTH', 1920),
+    gridRenderHeight: numberFromEnv('MIEPP_GRID_RENDER_HEIGHT', 1080),
 };
 
 /**

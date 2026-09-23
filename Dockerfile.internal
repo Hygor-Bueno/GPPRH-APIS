@@ -53,6 +53,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrandr2 libxrender1 libxss1 libxtst6 \
     # Fontes — sem elas o PDF do recibo sai com caixas no lugar dos acentos
     fonts-liberation fonts-dejavu-core \
+    # Banco de fusos horarios. A imagem slim NAO traz o /usr/share/zoneinfo
+    # completo, e sem ele o TZ do compose e ignorado em silencio: o processo
+    # continua em UTC e nada indica o motivo. Ver o comentario do TZ no
+    # docker-compose.yml.
+    tzdata \
  && rm -rf /var/lib/apt/lists/*
 
 # pm2-runtime para preservar o cluster mode e os limites já validados

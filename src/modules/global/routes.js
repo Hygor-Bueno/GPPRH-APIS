@@ -797,6 +797,16 @@ router.get('/files/:fileId',
     asyncHandler(filesController.serveFile));
 
 /**
+ * @route GET /files/:fileId/poster
+ * @description Quadro de capa de um vídeo, como imagem. Evita que a miniatura
+ *              do painel abra streaming do `.mp4` — ver o controller.
+ * @access Autenticado
+ */
+router.get('/files/:fileId/poster',
+    authMiddleware,
+    asyncHandler(filesController.servePoster));
+
+/**
  * @route DELETE /files/:fileId
  * @description Soft-delete de um arquivo (status = 0). Arquivo físico preservado.
  * @access Autenticado

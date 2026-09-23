@@ -2,6 +2,7 @@
  * @fileoverview Controller de Arquivos — Serving e soft-delete.
  *
  * @route GET  /global/files/:fileId  — Serve o arquivo pelo ID (auth obrigatória)
+ * @route GET  /global/files/:fileId/poster — Quadro de capa do vídeo (auth obrigatória)
  * @route DELETE /global/files/:fileId — Soft-delete (status = 0)
  *
  * @module modules/global/controllers/files.controller
@@ -38,6 +39,19 @@ const { respond }     = require('../../../utils/respond');
 const FILE_CACHE_SECONDS = 3600;
 
 /**
+ * Códigos que significam "o cliente foi embora", e não "o arquivo tem problema".
+ *
+ * `ECONNABORTED` é o que o `send` reporta quando a requisição é abortada;
+ * `EPIPE` e `ECANCELED` aparecem quando o socket fecha no meio da escrita.
+ */
+const CLIENT_GAVE_UP = new Set([
+    'ECONNABORTED',
+    'EPIPE',
+    'ECANCELED',
+    'ERR_STREAM_PREMATURE_CLOSE',
+]);
+
+/**
  * Serve um arquivo de `_files` pelo ID.
  *
  * Verifica se o arquivo existe, está ativo (status = 1) e envia o conteúdo.
@@ -61,10 +75,68 @@ async function serveFile(req, res) {
     res.set('Cache-Control', `private, max-age=${FILE_CACHE_SECONDS}`);
 
     res.sendFile(absolutePath, { cacheControl: false }, err => {
-        if (err) {
-            console.error(`[files] File missing on disk: ${absolutePath}`, err.message);
-            res.status(404).json({ error: true, message: 'Arquivo não encontrado.' });
-        }
+        if (!err) return;
+
+        // Desistência do cliente NÃO é falha do servidor, e aqui é o caso mais
+        // comum: o navegador monta a miniatura de um vídeo pedindo o Range do
+        // primeiro quadro e corta a conexão assim que o desenha. Tratar isso
+        // como arquivo ausente encheu o log de 239 alarmes falsos numa semana
+        // — todos `.mp4`, todos com o arquivo intacto no disco, e todos
+        // escondendo as falhas de verdade no meio.
+        //
+        // `headersSent` cobre o resto: depois do primeiro byte não há resposta
+        // a dar, e tentar trocaria um erro de transporte por um
+        // ERR_HTTP_HEADERS_SENT em cima dele.
+        if (CLIENT_GAVE_UP.has(err.code) || res.headersSent) return;
+
+        console.error(`[files] Falha ao servir ${absolutePath}:`, err.message);
+        res.status(404).json({ error: true, message: 'Arquivo não encontrado.' });
+    });
+}
+
+/**
+ * Serve o quadro de capa de um vídeo.
+ *
+ * Existe para tirar a miniatura de vídeo do caminho do streaming. Antes disso,
+ * o painel desenhava a miniatura pedindo um Range do próprio `.mp4`: cada card
+ * abria uma conexão que atravessava Apache → Node → disco e era cortada assim
+ * que o quadro aparecia. Com dezenas de mídias por página, os processos de
+ * proxy do Apache ficavam presos segurando vídeo e qualquer requisição nova
+ * levava 502 (incidente de 18/09/2026).
+ *
+ * A capa é um JPEG de poucos KB servido como imagem comum — sem Range, sem
+ * conexão longa, e com o mesmo cache de uma hora do arquivo original, que é
+ * seguro pelo mesmo motivo: o conteúdo de um `fileId` nunca muda.
+ *
+ * Quem gera é o worker `video-transcoder`, em varredura. Vídeo recém-enviado
+ * pode não ter capa ainda — daí o 404 explícito, que o painel trata caindo no
+ * ícone do tipo em vez de esperar.
+ *
+ * @route GET /files/:fileId/poster
+ * @param {import('express').Request}  req - `params.fileId`.
+ * @param {import('express').Response} res
+ * @returns {Promise<void>}
+ */
+async function servePoster(req, res) {
+    const fileId = parseInt(req.params.fileId, 10);
+    const record = await FileService.findById(fileId);
+
+    if (!record.poster_path) {
+        return res.status(404).json({ error: true, message: 'Capa ainda não gerada.' });
+    }
+
+    // A capa mora sob a mesma raiz de armazenamento do vídeo — só muda o
+    // caminho relativo, então o resolvedor de `_files` serve para as duas.
+    const absolutePath = FileService.absolutePath({ file_path: record.poster_path });
+
+    res.set('Cache-Control', `private, max-age=${FILE_CACHE_SECONDS}`);
+
+    res.sendFile(absolutePath, { cacheControl: false }, err => {
+        if (!err) return;
+        if (CLIENT_GAVE_UP.has(err.code) || res.headersSent) return;
+
+        console.error(`[files] Falha ao servir capa ${absolutePath}:`, err.message);
+        res.status(404).json({ error: true, message: 'Capa não encontrada.' });
     });
 }
 
@@ -85,4 +157,4 @@ async function deleteFile(req, res) {
     return respond.ok(res, { message: 'Arquivo removido com sucesso.' });
 }
 
-module.exports = { serveFile, deleteFile };
+module.exports = { serveFile, servePoster, deleteFile };

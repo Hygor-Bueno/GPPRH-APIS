@@ -11,6 +11,8 @@ const { MieppDeviceUseCases } = require('../application/miepp/device/miepp-devic
 const { MysqlMieppPlayerRepository } = require('../infrastructure/miepp/mysql-miepp-player.repository');
 const { MysqlMieppScheduleRepository } = require('../infrastructure/miepp/mysql-miepp-schedule.repository');
 const { MysqlMieppPlaylistRepository } = require('../infrastructure/miepp/mysql-miepp-playlist.repository');
+const { MysqlMieppMediaRepository } = require('../infrastructure/miepp/mysql-miepp-media.repository');
+const { MysqlMieppPlayRepository } = require('../infrastructure/miepp/mysql-miepp-play.repository');
 const { pairingService, mediaTokenService } = require('../infrastructure/miepp/miepp-services');
 const { mieppConfig } = require('../../../config/miepp');
 const { respond } = require('../../../utils/respond');
@@ -19,11 +21,17 @@ const useCases = new MieppDeviceUseCases({
     playerRepository: new MysqlMieppPlayerRepository(),
     scheduleRepository: new MysqlMieppScheduleRepository(),
     playlistRepository: new MysqlMieppPlaylistRepository(),
+    // Só para resolver a mídia de reserva (`MIEPP_FALLBACK_MEDIA_ID`); a mídia
+    // dos itens continua vindo pelo join da playlist.
+    mediaRepository: new MysqlMieppMediaRepository(),
+    // Proof-of-play: só a rota `POST /device/plays` usa.
+    playRepository: new MysqlMieppPlayRepository(),
     pairingService,
     mediaTokenService,
     config: {
         deviceTokenTtlDays: mieppConfig.deviceTokenTtlDays,
         fallbackPlaylistId: mieppConfig.fallbackPlaylistId,
+        fallbackMediaId: mieppConfig.fallbackMediaId,
     },
 });
 
@@ -68,6 +76,20 @@ async function heartbeat(req, res) {
 }
 
 /**
+ * Registra as exibições já feitas pela tela.
+ *
+ * Responde 200 e não 201: o corpo não é a representação de um recurso criado, é
+ * o resultado do processamento do lote (quantas entraram, quantas eram reenvio,
+ * quais foram recusadas e por quê). O app precisa LER essa resposta para limpar
+ * a fila local — ver `MieppDeviceUseCases#recordPlays`.
+ *
+ * @route POST /miepp/device/plays
+ */
+async function recordPlays(req, res) {
+    return respond.ok(res, await useCases.recordPlays(req.device, req.body));
+}
+
+/**
  * @route GET /miepp/device/commands/pending
  */
 async function pendingCommands(req, res) {
@@ -82,4 +104,4 @@ async function ackCommand(req, res) {
     return respond.ok(res, result);
 }
 
-module.exports = { pair, getPlaylist, heartbeat, pendingCommands, ackCommand };
+module.exports = { pair, getPlaylist, heartbeat, recordPlays, pendingCommands, ackCommand };

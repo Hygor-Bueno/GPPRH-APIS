@@ -126,6 +126,53 @@ const SQL_FIND_AFFECTED_TASKS = `
    WHERE rf.file_id = ? AND rf.status = 1
 `;
 
+
+// ─── Quadro de capa do vídeo ─────────────────────────────────────────────────
+
+/**
+ * Vídeos que ainda não têm capa.
+ *
+ * Independente da fila de transcodificação de propósito: um vídeo que chegou
+ * já em H.264 pequeno nunca entra naquela fila, mas aparece na biblioteca do
+ * painel igual aos outros — e a miniatura dele pesa o mesmo no proxy. Varrer
+ * `_files` cobre os antigos e os novos com um caminho só.
+ *
+ * `poster_attempts` evita o laço eterno: vídeo corrompido falha, conta a
+ * tentativa e sai da varredura em vez de voltar a cada ciclo para sempre.
+ *
+ * Mais novos primeiro — são os que alguém está olhando agora.
+ *
+ * Parâmetros: [max_attempts, limit]
+ */
+const SQL_LIST_VIDEOS_WITHOUT_POSTER = `
+  SELECT id, file_path, file_type
+    FROM _files
+   WHERE status = 1
+     AND file_type LIKE 'video/%'
+     AND poster_path IS NULL
+     AND poster_attempts < ?
+   ORDER BY id DESC
+   LIMIT ?
+`;
+
+/** Parâmetros: [poster_path, file_id] */
+const SQL_SET_POSTER_PATH = `
+  UPDATE _files SET poster_path = ?, updated_at = NOW() WHERE id = ?
+`;
+
+/**
+ * Conta a tentativa ANTES de chamar o ffmpeg.
+ *
+ * Contar depois não protegeria de nada: o caso que precisa de teto é
+ * justamente o arquivo que derruba ou pendura o worker no meio da extração, e
+ * aí o `UPDATE` posterior nunca roda.
+ *
+ * Parâmetros: [file_id]
+ */
+const SQL_BUMP_POSTER_ATTEMPT = `
+  UPDATE _files SET poster_attempts = poster_attempts + 1 WHERE id = ?
+`;
+
 module.exports = {
     SQL_ENQUEUE,
     SQL_CLAIM_SELECT,
@@ -136,4 +183,7 @@ module.exports = {
     SQL_REPLACE_FILE,
     SQL_SET_ATTACHMENT_STATUS,
     SQL_FIND_AFFECTED_TASKS,
+    SQL_LIST_VIDEOS_WITHOUT_POSTER,
+    SQL_SET_POSTER_PATH,
+    SQL_BUMP_POSTER_ATTEMPT,
 };
