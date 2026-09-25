@@ -193,6 +193,7 @@ const OLE2_STREAMS = [
     ['Book',                'application/vnd.ms-excel'],      // Excel 5.0/95
     ['WordDocument',        'application/msword'],
     ['PowerPoint Document', 'application/vnd.ms-powerpoint'],
+    ['Package',             'application/vnd.ms-excel'],
 ];
 
 /**

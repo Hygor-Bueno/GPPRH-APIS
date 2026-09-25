@@ -114,7 +114,7 @@ const EXT_TO_EXPECTED_MIME = {
     jpeg: ['image/jpeg'],
     webp: ['image/webp'],
     doc:  ['application/msword'],
-    xls:  ['application/msword', 'application/vnd.ms-excel'],
+    xls:  ['application/vnd.ms-excel'],
     // Sem exceção para o formato legado: quando nome e conteúdo divergem, o
     // `reconcileExtension` corrige a extensão do nome em vez de recusar — e
     // isso vale igual para .xlsx que é .xls e para .png que é WebP.
