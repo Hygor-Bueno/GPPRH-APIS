@@ -14,19 +14,27 @@ const { AppError } = require('../../../../../errors/app.error');
 const { MediaType, MediaStatus } = require('../../../domain/miepp/miepp.enums');
 const { normalizePagination, paginated } = require('../../../domain/miepp/pagination.rules');
 const { normalizeOrigin, withOrigin } = require('../../../domain/miepp/media/media-origin.rules');
+const { normalizeFolderFilter, normalizeFolderId } = require('../../../domain/miepp/media/media-folder.rules');
 
 /** Tipos que exigem um arquivo enviado; `weburl` aponta para fora. */
 const TYPES_REQUIRING_FILE = new Set([MediaType.IMAGE, MediaType.VIDEO, MediaType.HTML]);
+
+/** Teto do mover em lote — o mesmo de uma página cheia da listagem. */
+const MAX_MOVE_BATCH = 200;
 
 class MieppMediaUseCases {
     /**
      * @param {object} deps
      * @param {import('./ports/media-repository.port').MediaRepositoryPort} deps.repository
      * @param {object} deps.storage - `MieppMediaStorageService`.
+     * @param {import('./ports/media-folder-repository.port').MediaFolderRepositoryPort} [deps.folderRepository]
+     *        - para conferir a pasta de destino antes de gravar. Sem ele a FK
+     *        ainda recusa, mas a resposta é a do adapter.
      */
-    constructor({ repository, storage }) {
+    constructor({ repository, storage, folderRepository = null }) {
         this.repository = repository;
         this.storage = storage;
+        this.folderRepository = folderRepository;
     }
 
     /** @private */
@@ -34,6 +42,20 @@ class MieppMediaUseCases {
         const media = await this.repository.findById(id);
         if (!media) throw new AppError('Mídia não encontrada.', 404);
         return media;
+    }
+
+    /**
+     * A pasta de destino, normalizada e conferida. `undefined` = campo ausente,
+     * `null` = raiz; nos dois casos não há o que conferir.
+     * @private
+     */
+    async _resolveFolderId(value) {
+        const folderId = normalizeFolderId(value);
+        if (folderId && this.folderRepository) {
+            const folder = await this.folderRepository.findById(folderId);
+            if (!folder) throw new AppError('Pasta não encontrada.', 404);
+        }
+        return folderId;
     }
 
     /**
@@ -45,14 +67,20 @@ class MieppMediaUseCases {
      * formulário de mídia, que edita título e duração e não tem como mexer nos
      * produtos. O player já distinguia pelo mesmo campo; era só o painel que
      * não tinha como.
+     *
+     * `?folder_id=<id>|root` abre uma pasta. Sem o parâmetro a listagem segue
+     * devolvendo a biblioteca inteira, como antes das pastas existirem.
      */
     async list(query = {}) {
         const pagination = normalizePagination(query);
+        const folder = normalizeFolderFilter(query.folder_id);
         const { rows, total } = await this.repository.list({
             ...pagination,
             type: query.type ?? null,
             status: query.status ?? null,
             origin: normalizeOrigin(query.origin),
+            folderMode: folder.mode,
+            folderId: folder.folderId,
         });
         return paginated(rows.map(withOrigin), total, pagination);
     }
@@ -78,6 +106,10 @@ class MieppMediaUseCases {
     async create(payload, file, actor) {
         const type = payload.type;
 
+        // Antes do upload: pasta inexistente depois de gravar o arquivo deixaria
+        // um binário em `_files` sem mídia apontando para ele.
+        const folderId = (await this._resolveFolderId(payload.folder_id)) ?? null;
+
         if (type === MediaType.WEBURL) {
             if (!payload.url) {
                 throw new AppError('Mídia do tipo "weburl" exige o campo "url".', 400);
@@ -86,6 +118,7 @@ class MieppMediaUseCases {
             const created = await this.repository.create({
                 uuid: crypto.randomUUID(),
                 title: payload.title,
+                folder_id: folderId,
                 type,
                 file_id: payload.url,
                 mime_type: null,
@@ -112,6 +145,7 @@ class MieppMediaUseCases {
         const created = await this.repository.create({
             uuid: crypto.randomUUID(),
             title: payload.title,
+            folder_id: folderId,
             type,
             file_id: String(stored.file_id),
             mime_type: stored.mime_type,
@@ -132,12 +166,16 @@ class MieppMediaUseCases {
      * Só título, duração e status são editáveis — os campos que descrevem o
      * binário mudam apenas por novo upload. Trocar o arquivo de uma mídia já em
      * playlist é cadastrar outra mídia, não editar esta.
+     *
+     * `folder_id` ausente mantém a pasta; `null` manda para a raiz.
      */
     async update(id, payload) {
         const current = await this._requireMedia(id);
+        const folderId = await this._resolveFolderId(payload.folder_id);
 
         await this.repository.update(id, {
             title: payload.title ?? current.title,
+            folder_id: folderId === undefined ? current.folder_id ?? null : folderId,
             duration_seconds: payload.duration_seconds === undefined
                 ? current.duration_seconds
                 : Number(payload.duration_seconds),
@@ -145,6 +183,47 @@ class MieppMediaUseCases {
         });
 
         return withOrigin(await this.repository.findById(id));
+    }
+
+    /**
+     * Move várias mídias para a mesma pasta de uma vez — o "selecionar e
+     * arrastar" do painel. Body: `{ media_ids: [..], folder_id: <id>|null }`.
+     *
+     * Tudo ou nada: se algum id não existe, nada é movido e a resposta diz
+     * quais faltaram. Mover a parte que existe deixaria o usuário achando que
+     * a seleção inteira foi, sem ter como descobrir o que ficou para trás.
+     *
+     * `folder_id` é obrigatório (e `null` = raiz): ausente aqui não tem
+     * "manter" que faça sentido, e tratar como raiz tiraria da pasta, em
+     * silêncio, tudo o que foi selecionado.
+     */
+    async moveMany(payload = {}) {
+        const rawIds = payload.media_ids;
+        if (!Array.isArray(rawIds) || rawIds.length === 0) {
+            throw new AppError("O campo 'media_ids' deve ser uma lista com ao menos um id.", 400);
+        }
+        if (rawIds.length > MAX_MOVE_BATCH) {
+            throw new AppError(`No máximo ${MAX_MOVE_BATCH} mídias por vez.`, 400);
+        }
+
+        const ids = [...new Set(rawIds.map(Number))];
+        if (ids.some((id) => !Number.isInteger(id) || id < 1)) {
+            throw new AppError("O campo 'media_ids' deve conter apenas ids numéricos.", 400);
+        }
+
+        if (!('folder_id' in payload)) {
+            throw new AppError("O campo 'folder_id' é obrigatório (use null para a raiz).", 400);
+        }
+        const folderId = (await this._resolveFolderId(payload.folder_id)) ?? null;
+
+        const existing = new Set(await this.repository.findExistingIds(ids));
+        const missing = ids.filter((id) => !existing.has(id));
+        if (missing.length > 0) {
+            throw new AppError(`Mídia(s) não encontrada(s): ${missing.join(', ')}. Nada foi movido.`, 404);
+        }
+
+        await this.repository.moveToFolder(ids, folderId);
+        return { folder_id: folderId, media_ids: ids, moved: ids.length };
     }
 
     /**
@@ -173,4 +252,4 @@ class MieppMediaUseCases {
     }
 }
 
-module.exports = { MieppMediaUseCases, TYPES_REQUIRING_FILE };
+module.exports = { MieppMediaUseCases, TYPES_REQUIRING_FILE, MAX_MOVE_BATCH };

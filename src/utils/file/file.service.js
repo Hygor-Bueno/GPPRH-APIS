@@ -56,9 +56,13 @@ const { sqlFindByHash, sqlFindById, sqlInsertFile, sqlSoftDeleteFile } = require
  * `file_path` é armazenado como `Storage/uploads/{MODULE}/…` (relativo a esta raiz),
  * mantendo o mesmo padrão dos registros criados pelo PHP (`Storage/GTPP/uploads/…`).
  *
+ * Módulo com raiz externa (hoje só o MIEPP, na pasta de rede do marketing)
+ * resolve o mesmo caminho relativo em outro disco — toda tradução de
+ * `file_path` para caminho absoluto passa por `resolveStoragePath`.
+ *
  * @constant {string}
  */
-const STORAGE_ROOT = path.resolve(__dirname, '..', '..', '..');
+const { STORAGE_ROOT, resolveStoragePath, assertStorageReady } = require('./storage-paths');
 
 /**
  * Enfileirar vídeo para conversão é OPT-IN por variável de ambiente.
@@ -563,7 +567,7 @@ class FileService {
      * @returns {string} Caminho absoluto.
      */
     static absolutePath(fileRecord) {
-        return path.join(STORAGE_ROOT, fileRecord.file_path);
+        return resolveStoragePath(fileRecord.file_path);
     }
 
     /**
@@ -601,9 +605,16 @@ class FileService {
      * @param {string} hash      - Hash SHA-256 do arquivo.
      * @param {string} extension - Extensão normalizada.
      * @param {string} module    - Nome do módulo em maiúsculas.
+     * O `relativePath` (o que vai para `_files.file_path`) é igual para todo
+     * módulo; só o absoluto muda quando o módulo tem raiz externa — ver
+     * `storage-paths`. É chamado imediatamente antes de gravar, então é aqui
+     * que se recusa gravar numa pasta de rede desmontada (503).
+     *
      * @returns {{ relativePath: string, absolutePath: string, absoluteDir: string }}
      */
     static _buildPaths(hash, extension, module) {
+        assertStorageReady(module);
+
         const now      = new Date();
         const yyyy     = now.getFullYear();
         const mm       = String(now.getMonth() + 1).padStart(2, '0');
@@ -612,8 +623,8 @@ class FileService {
         const subPath      = `storage/uploads/${module}/${yyyy}/${mm}/${dd}`;
         const fileName     = `${hash}.${extension}`;
         const relativePath = `${subPath}/${fileName}`;
-        const absoluteDir  = path.join(STORAGE_ROOT, subPath);
-        const absolutePath = path.join(absoluteDir, fileName);
+        const absolutePath = resolveStoragePath(relativePath);
+        const absoluteDir  = path.dirname(absolutePath);
 
         return { relativePath, absolutePath, absoluteDir };
     }

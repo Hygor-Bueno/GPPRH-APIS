@@ -112,6 +112,9 @@ services:
     environment:
       <<: *internal-env
       PORT_INTERNAL: 4002
+      # Raiz dos arquivos do MIEPP DENTRO do container (o bind mount acima).
+      # Sem a variável, o MIEPP volta a gravar em ./storage como os demais módulos.
+      MIEPP_STORAGE_ROOT: /app/midias_marketing
 
     volumes:
       # Oracle Instant Client do host, somente leitura. Deliberadamente NÃO
@@ -122,6 +125,16 @@ services:
       # Estado em disco — anexos de chat e arquivos de módulos
       - ./uploads:/app/uploads
       - ./storage:/app/storage
+      # Mídias do MIEPP: pasta de rede do marketing (\\10.10.10.35\midias_marketing$),
+      # montada no HOST via /etc/fstab em /mnt/midias_marketing. Ver
+      # `src/utils/file/storage-paths.js` e MIEPP_STORAGE_ROOT abaixo.
+      # `rslave`: se a pasta de rede cair e voltar a montar no host com o
+      # container de pé, o container enxerga a remontagem sem precisar recriar.
+      - type: bind
+        source: /mnt/midias_marketing
+        target: /app/midias_marketing
+        bind:
+          propagation: rslave
       # Trilha de auditoria em CSV do fechamento de jornada (GIPP). Mount
       # próprio, separado de `storage/`: log operacional e anexo de usuário têm
       # ciclos de backup e limpeza diferentes.
@@ -206,11 +219,18 @@ services:
       # ler etiqueta de produto no vídeo (arquivo ~2x maior).
       VIDEO_TARGET_CRF: "26"
       VIDEO_TARGET_WIDTH: "1280"
+      # Igual ao backend interno: vídeo do MIEPP é convertido na pasta de rede.
+      MIEPP_STORAGE_ROOT: /app/midias_marketing
 
     volumes:
       # Mesmo bind mount do backend interno: é onde os vídeos a converter estão.
       # Precisa ser leitura E escrita — o worker grava a saída e apaga o original.
       - ./storage:/app/storage
+      - type: bind
+        source: /mnt/midias_marketing
+        target: /app/midias_marketing
+        bind:
+          propagation: rslave
 
     # Um ffmpeg em 720p cabe folgado nisto. O limite existe para o worker não
     # competir por memória com os 2 workers da API no mesmo host.

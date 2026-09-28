@@ -35,6 +35,7 @@ const locationController = require('./controllers/miepp-location.controller');
 const playerController = require('./controllers/miepp-player.controller');
 const groupController = require('./controllers/miepp-player-group.controller');
 const mediaController = require('./controllers/miepp-media.controller');
+const mediaFolderController = require('./controllers/miepp-media-folder.controller');
 const productGridController = require('./controllers/miepp-product-grid.controller');
 const playlistController = require('./controllers/miepp-playlist.controller');
 const scheduleController = require('./controllers/miepp-schedule.controller');
@@ -61,6 +62,7 @@ const {
     postPlayerSchema, putPlayerSchema, postCommandSchema,
     postGroupSchema, putGroupSchema, postGroupMemberSchema,
     postMediaSchema, putMediaSchema,
+    postMediaFolderSchema, putMediaFolderSchema,
     postProductGridSchema, putProductGridSchema,
     postPlaylistSchema, putPlaylistSchema, postPlaylistItemSchema, putPlaylistItemSchema,
     postScheduleSchema, putScheduleSchema, postScheduleTargetSchema,
@@ -332,10 +334,88 @@ router.delete('/player-groups/:id/players/:playerId',
     audit('player_group', { action: 'remove_member' }),
     asyncHandler(groupController.removeMember));
 
+// ─── Pastas de mídia ─────────────────────────────────────────────────────────
+//
+// Organização da biblioteca, só do painel: o player não vê pasta, e mover
+// mídia de pasta não muda uuid nem checksum. Mesmas permissões da mídia — ler
+// com `CAN_READ`, criar/renomear/mover/excluir com `CAN_WRITE`.
+
+/**
+ * @route GET /miepp/media-folders
+ * @description A árvore inteira, achatada e sem paginação: `{ items, root }`.
+ * Cada item traz `parent_id`, `folder_count` e `media_count`; `root` traz as
+ * contagens do nó raiz.
+ * @access viewer
+ */
+router.get('/media-folders',
+    authMiddleware, canAny(CAN_READ),
+    asyncHandler(mediaFolderController.list));
+
+/**
+ * @route GET /miepp/media-folders/:id
+ * @description A pasta com `path` (raiz → pasta), para o breadcrumb.
+ * @access viewer
+ */
+router.get('/media-folders/:id',
+    authMiddleware, canAny(CAN_READ),
+    asyncHandler(mediaFolderController.getById));
+
+/**
+ * @route POST /miepp/media-folders
+ * @description Body: `{ name, parent_id }` — `parent_id` ausente ou `null` cria
+ * na raiz. Nome repetido entre irmãs → 409; passar de 5 níveis → 409.
+ * @access editor
+ */
+router.post('/media-folders',
+    authMiddleware, canAny(CAN_WRITE),
+    validate(postMediaFolderSchema), audit('media_folder'),
+    asyncHandler(mediaFolderController.create));
+
+/**
+ * @route PUT /miepp/media-folders/:id
+ * @description Renomeia e/ou move. `parent_id` ausente mantém o lugar, `null`
+ * leva para a raiz. Mover para dentro de si mesma ou de uma subpasta → 409.
+ * @access editor
+ */
+router.put('/media-folders/:id',
+    authMiddleware, canAny(CAN_WRITE),
+    validate(putMediaFolderSchema), audit('media_folder'),
+    asyncHandler(mediaFolderController.update));
+
+/**
+ * @route DELETE /miepp/media-folders/:id
+ * @description Só pasta vazia; com subpasta ou mídia dentro → 409 dizendo
+ * quanto há. Não existe exclusão em cascata.
+ * @access editor
+ */
+router.delete('/media-folders/:id',
+    authMiddleware, canAny(CAN_WRITE),
+    audit('media_folder'),
+    asyncHandler(mediaFolderController.remove));
+
 // ─── Mídia ───────────────────────────────────────────────────────────────────
 
 /**
- * @route GET /miepp/media?type=image&status=ready&origin=upload
+ * @route PATCH /miepp/media/move
+ * @description Move várias mídias para uma pasta. Body:
+ * `{ media_ids: [1, 2, 3], folder_id: 7 }` — `folder_id: null` = raiz, e o
+ * campo é obrigatório. Tudo ou nada: id inexistente → 404 e nada se move.
+ * Máximo de 200 por chamada.
+ *
+ * Sem `validate(...)`: o corpo tem lista, que o validador não expressa (mesmo
+ * caso do `reorder` da playlist). Quem valida é `moveMany`.
+ *
+ * Declarada ANTES das rotas `/media/:id` por clareza — hoje não há PATCH em
+ * `/media/:id`, mas se um dia houver, `move` casaria como `:id`.
+ * @access editor
+ */
+router.patch('/media/move',
+    authMiddleware, canAny(CAN_WRITE),
+    audit('media', { action: 'move' }),
+    asyncHandler(mediaController.moveMany));
+
+/**
+ * @route GET /miepp/media?type=image&status=ready&origin=upload&folder_id=7
  * @description Biblioteca de mídia. Cada linha sai com `origin`
  * (`upload` | `generated`) e `grid_id`: a grade de produtos é uma mídia
  * `image` como qualquer outra, e sem esses dois campos o painel não tem como
@@ -344,6 +424,10 @@ router.delete('/player-groups/:id/players/:playerId',
  *
  * `?origin=` filtra no banco, com a contagem usando o mesmo `WHERE`; filtrar a
  * página já recebida devolveria páginas incompletas.
+ *
+ * `?folder_id=<id>` abre uma pasta e `?folder_id=root` lista o que está fora de
+ * pasta; sem o parâmetro volta a biblioteca inteira. Não inclui subpastas.
+ * Valor inválido → 400. Cada linha sai com `folder_id`.
  * @access viewer
  */
 router.get('/media',
@@ -358,6 +442,8 @@ router.get('/media/:id',
  * @route POST /miepp/media
  * @description Cadastra uma mídia. `image`/`video`/`html` exigem o arquivo no
  * campo `file` (multipart); `weburl` exige o campo `url` e não tem binário.
+ * `folder_id` opcional (id da pasta; ausente, vazio ou `"root"` = raiz). No
+ * `PUT /media/:id`, `folder_id` ausente mantém a pasta e `null` leva à raiz.
  * @access editor
  */
 router.post('/media',

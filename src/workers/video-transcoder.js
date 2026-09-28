@@ -49,8 +49,13 @@ const {
 /** Tentativas de capa antes de desistir daquele vídeo. */
 const POSTER_MAX_ATTEMPTS = Number(process.env.VIDEO_POSTER_MAX_ATTEMPTS || 3);
 
-/** Mesma raiz usada pelo FileService para resolver `file_path`. */
-const STORAGE_ROOT = path.resolve(__dirname, '..', '..');
+/**
+ * A MESMA tradução de `file_path` → disco que o FileService usa. Vídeo do
+ * MIEPP mora na pasta de rede do marketing, e a saída convertida e a capa vão
+ * para o lado dele — calcular a raiz aqui por conta própria faria o worker
+ * procurar o vídeo no disco local e desistir com "arquivo ausente".
+ */
+const { resolveStoragePath } = require('../utils/file/storage-paths');
 
 const FFMPEG_BIN     = process.env.FFMPEG_PATH || 'ffmpeg';
 const POLL_INTERVAL  = Number(process.env.VIDEO_POLL_INTERVAL_MS || 10000);
@@ -139,7 +144,7 @@ function hashFile(filePath) {
 function buildOutputPaths(originalRelativePath, newHash) {
     const dir          = path.dirname(originalRelativePath);
     const relativePath = path.posix.join(dir.split(path.sep).join('/'), `${newHash}.${TARGET_EXTENSION}`);
-    return { relativePath, absolutePath: path.join(STORAGE_ROOT, relativePath) };
+    return { relativePath, absolutePath: resolveStoragePath(relativePath) };
 }
 
 /**
@@ -207,7 +212,7 @@ async function setMieppMediaStatus(status, fileId) {
  * e a evidência do usuário estaria perdida.
  */
 async function processJob(job) {
-    const inputAbsolute = path.join(STORAGE_ROOT, job.file_path);
+    const inputAbsolute = resolveStoragePath(job.file_path);
 
     if (!fs.existsSync(inputAbsolute)) {
         throw new Error(`Arquivo ausente em disco: ${job.file_path}`);
@@ -335,7 +340,7 @@ function runPosterFfmpeg(inputPath, outputPath, seekSeconds) {
  * @returns {Promise<boolean>} true quando a capa foi gravada.
  */
 async function generatePoster(file) {
-    const inputAbsolute = path.join(STORAGE_ROOT, file.file_path);
+    const inputAbsolute = resolveStoragePath(file.file_path);
 
     await poolGlobal.execute(SQL_BUMP_POSTER_ATTEMPT, [file.id]);
 
@@ -345,7 +350,7 @@ async function generatePoster(file) {
     }
 
     const posterRelative = posterPathFor(file.file_path);
-    const posterAbsolute = path.join(STORAGE_ROOT, posterRelative);
+    const posterAbsolute = resolveStoragePath(posterRelative);
 
     fs.mkdirSync(path.dirname(posterAbsolute), { recursive: true });
 

@@ -15,9 +15,9 @@
  * segundo jogo de colunas sem ele só daria duas listas para sair de sincronia.
  */
 const COLUMNS = `
-    m.id, m.uuid, m.title, m.type, m.file_id, m.mime_type, m.size_bytes,
-    m.duration_seconds, m.checksum, m.status, m.uploaded_by, m.created_at,
-    m.updated_at
+    m.id, m.uuid, m.title, m.folder_id, m.type, m.file_id, m.mime_type,
+    m.size_bytes, m.duration_seconds, m.checksum, m.status, m.uploaded_by,
+    m.created_at, m.updated_at
 `;
 
 /**
@@ -46,10 +46,21 @@ const GRID_JOIN = 'LEFT JOIN miepp_product_grids g ON g.media_id = m.id';
 const ORIGIN_FILTER = "(? IS NULL OR (? = 'generated') = (g.id IS NOT NULL))";
 
 /**
+ * Filtro por PASTA, em três modos (`media-folder.rules#normalizeFolderFilter`):
+ * `all` não filtra, `root` pede `folder_id IS NULL` e `folder` compara o id.
+ *
+ * Não cabe no padrão `(? IS NULL OR col = ?)` dos outros filtros porque ali
+ * `NULL` já significa "sem filtro" — e aqui "raiz" também é NULL.
+ *
+ * Parâmetros: `[mode, mode, folderId]`
+ */
+const FOLDER_FILTER = "(? = 'all' OR (? = 'root' AND m.folder_id IS NULL) OR m.folder_id = ?)";
+
+/**
  * `grid_id` vem do LEFT JOIN e é o que o painel lê para saber que aquela
  * "imagem" é uma grade — e para levar quem clicou ao editor certo.
  *
- * Parâmetros: `[type, type, status, status, origin, origin, limit, offset]`
+ * Parâmetros: `[type, type, status, status, origin, origin, mode, mode, folderId, limit, offset]`
  */
 const SQL_LIST_MEDIA = `
     SELECT ${COLUMNS},
@@ -59,6 +70,7 @@ const SQL_LIST_MEDIA = `
     WHERE (? IS NULL OR m.type = ?)
       AND (? IS NULL OR m.status = ?)
       AND ${ORIGIN_FILTER}
+      AND ${FOLDER_FILTER}
     ORDER BY m.created_at DESC
     LIMIT ? OFFSET ?
 `;
@@ -67,7 +79,7 @@ const SQL_LIST_MEDIA = `
  * O MESMO `WHERE` da listagem, join incluído: um total que não conhecesse o
  * filtro de origem paginaria em cima de um número que a lista não devolve.
  *
- * Parâmetros: `[type, type, status, status, origin, origin]`
+ * Parâmetros: `[type, type, status, status, origin, origin, mode, mode, folderId]`
  */
 const SQL_COUNT_MEDIA = `
     SELECT COUNT(*) AS total
@@ -76,6 +88,7 @@ const SQL_COUNT_MEDIA = `
     WHERE (? IS NULL OR m.type = ?)
       AND (? IS NULL OR m.status = ?)
       AND ${ORIGIN_FILTER}
+      AND ${FOLDER_FILTER}
 `;
 
 /**
@@ -121,20 +134,46 @@ const SQL_GET_DEVICE_MEDIA_BY_ID = `
 
 const SQL_INSERT_MEDIA = `
     INSERT INTO miepp_media
-        (uuid, title, type, file_id, mime_type, size_bytes, duration_seconds,
-         checksum, status, uploaded_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (uuid, title, folder_id, type, file_id, mime_type, size_bytes,
+         duration_seconds, checksum, status, uploaded_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /**
  * Só os campos editáveis pelo painel. `file_id`, `checksum`, `mime_type` e
  * `size_bytes` descrevem o binário e mudam apenas por novo upload — deixá-los
  * fora do UPDATE evita que uma edição de título desalinhe o registro do arquivo.
+ *
+ * `folder_id` entra: mudar de pasta é organização do painel e não toca em
+ * uuid nem checksum, então nenhuma tela rebaixa o arquivo.
  */
 const SQL_UPDATE_MEDIA = `
     UPDATE miepp_media
-    SET title = ?, duration_seconds = ?, status = ?
+    SET title = ?, folder_id = ?, duration_seconds = ?, status = ?
     WHERE id = ?
+`;
+
+/**
+ * Quais destes ids existem — guarda do "mover em lote", para responder quais
+ * faltaram em vez de mover metade em silêncio.
+ *
+ * `IN (?)` com array: o `query()` do mysql2 expande a lista no cliente, cada
+ * item escapado.
+ *
+ * Parâmetros: `[ids]`
+ */
+const SQL_FIND_EXISTING_MEDIA_IDS = `
+    SELECT id FROM miepp_media WHERE id IN (?)
+`;
+
+/**
+ * Move várias mídias para a mesma pasta (`NULL` = raiz) num comando só —
+ * atômico sem transação explícita.
+ *
+ * Parâmetros: `[folderId, ids]`
+ */
+const SQL_MOVE_MEDIA = `
+    UPDATE miepp_media SET folder_id = ? WHERE id IN (?)
 `;
 
 const SQL_UPDATE_MEDIA_STATUS = `
@@ -183,6 +222,8 @@ module.exports = {
     SQL_GET_DEVICE_MEDIA_BY_ID,
     SQL_INSERT_MEDIA,
     SQL_UPDATE_MEDIA,
+    SQL_FIND_EXISTING_MEDIA_IDS,
+    SQL_MOVE_MEDIA,
     SQL_UPDATE_MEDIA_STATUS,
     SQL_SET_MEDIA_STATUS_BY_FILE,
     SQL_DELETE_MEDIA,

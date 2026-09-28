@@ -15,7 +15,7 @@ class MediaRepositoryPort {
      * caso de uso derivar `origin`. Sem essa coluna a grade, que é uma mídia
      * `image` como qualquer outra, volta indistinguível de um upload.
      *
-     * @param {{type: ?string, status: ?string, origin: ?string, limit: number, offset: number}} filters
+     * @param {{type: ?string, status: ?string, origin: ?string, folderMode: 'all'|'root'|'folder', folderId: ?number, limit: number, offset: number}} filters
      * @returns {Promise<{rows: object[], total: number}>}
      */
     list(filters) { throw new Error('Not implemented'); }
@@ -50,6 +50,19 @@ class MediaRepositoryPort {
 
     /** @param {number} id @param {object} payload @returns {Promise<void>} */
     update(id, payload) { throw new Error('Not implemented'); }
+
+    /**
+     * Quais destes ids existem — guarda do mover em lote.
+     * @param {number[]} ids @returns {Promise<number[]>}
+     */
+    findExistingIds(ids) { throw new Error('Not implemented'); }
+
+    /**
+     * Move as mídias para a pasta (`null` = raiz). Pasta inexistente vira 404
+     * no adapter (FK).
+     * @param {number[]} ids @param {number|null} folderId @returns {Promise<number>} linhas afetadas.
+     */
+    moveToFolder(ids, folderId) { throw new Error('Not implemented'); }
 
     /** @param {number} id @returns {Promise<void>} */
     remove(id) { throw new Error('Not implemented'); }

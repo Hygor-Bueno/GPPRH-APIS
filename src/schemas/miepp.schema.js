@@ -113,6 +113,24 @@ const putMediaSchema = {
     title:            { type: 'string', required: false, minLength: 1, maxLength: 150 },
     duration_seconds: { type: 'number', required: false, min: 1, max: 86400 },
     status:           { type: 'string', required: false, enum: values(MediaStatus) },
+    // `folder_id` (no POST e no PUT) fica FORA do schema: aceita id, `null` e
+    // `"root"`, e `null` precisa chegar ao caso de uso como "raiz" — o
+    // validador trata `null` como campo ausente. Quem valida é
+    // `domain/miepp/media/media-folder.rules#normalizeFolderId`.
+};
+
+// ─── Pastas de mídia ─────────────────────────────────────────────────────────
+
+/**
+ * 100 = `miepp_media_folders.name`. `parent_id` fica fora pelo mesmo motivo do
+ * `folder_id` da mídia: `null` é valor (raiz), não ausência.
+ */
+const postMediaFolderSchema = {
+    name: { type: 'string', required: true, minLength: 1, maxLength: 100 },
+};
+
+const putMediaFolderSchema = {
+    name: { type: 'string', required: false, minLength: 1, maxLength: 100 },
 };
 
 // ─── Grade de produtos ───────────────────────────────────────────────────────
@@ -272,6 +290,8 @@ module.exports = {
     postGroupMemberSchema,
     postMediaSchema,
     putMediaSchema,
+    postMediaFolderSchema,
+    putMediaFolderSchema,
     postProductGridSchema,
     putProductGridSchema,
     postPlaylistSchema,

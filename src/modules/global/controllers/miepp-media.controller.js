@@ -6,6 +6,7 @@
 
 const { MieppMediaUseCases } = require('../application/miepp/media/miepp-media.use-cases');
 const { MysqlMieppMediaRepository } = require('../infrastructure/miepp/mysql-miepp-media.repository');
+const { MysqlMieppMediaFolderRepository } = require('../infrastructure/miepp/mysql-miepp-media-folder.repository');
 const { mediaStorage, mediaTokenService } = require('../infrastructure/miepp/miepp-services');
 const { MediaType } = require('../domain/miepp/miepp.enums');
 const { AppError } = require('../../../errors/app.error');
@@ -16,6 +17,7 @@ const repository = new MysqlMieppMediaRepository();
 const useCases = new MieppMediaUseCases({
     repository,
     storage: mediaStorage,
+    folderRepository: new MysqlMieppMediaFolderRepository(),
 });
 
 /**
@@ -45,6 +47,10 @@ async function create(req, res) {
 
 async function update(req, res) {
     return respond.ok(res, await useCases.update(Number(req.params.id), req.body));
+}
+
+async function moveMany(req, res) {
+    return respond.ok(res, await useCases.moveMany(req.body));
 }
 
 async function remove(req, res) {
@@ -98,4 +104,4 @@ async function serveFile(req, res) {
     });
 }
 
-module.exports = { list, getById, create, update, remove, serveFile, MEDIA_CACHE_SECONDS };
+module.exports = { list, getById, create, update, moveMany, remove, serveFile, MEDIA_CACHE_SECONDS };

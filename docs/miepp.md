@@ -211,6 +211,36 @@ conhece o `_files`: trocar o armazenamento um dia mexe só nele.
 Excluir uma mídia **não** apaga o binário: o `_files` deduplica por SHA-256 e o
 mesmo arquivo pode estar referenciado por outro módulo.
 
+### Onde o binário fica: pasta de rede do marketing
+
+Desde 28/09/2026 os arquivos do MIEPP ficam em `\\10.10.10.35\midias_marketing$`,
+e não em `./storage`. O caminho percorre três camadas:
+
+| Camada | Caminho |
+|---|---|
+| Host 192.168.0.99 (`/etc/fstab`, CIFS, credenciais em `/root/.cred-midias-marketing`) | `/mnt/midias_marketing` |
+| Containers `api-gipp-enterprises` e `video-transcoder` (bind `rslave`) | `/app/midias_marketing` = `MIEPP_STORAGE_ROOT` |
+| Arquivo | `MIEPP/AAAA/MM/DD/<hash>.<ext>` |
+
+**`_files.file_path` não mudou** e continua `storage/uploads/MIEPP/...`. Quem
+traduz o caminho para o disco é `src/utils/file/storage-paths.js`, usado pelo
+FileService e pelo transcodificador. Para voltar ao disco local, basta remover
+`MIEPP_STORAGE_ROOT` do compose e subir de novo, sem nenhum UPDATE.
+
+- **Marcador `.gipp-storage`:** precisa existir na raiz da pasta de rede. Se
+  ela não montar (o `fstab` usa `nofail`), o ponto de montagem fica vazio e
+  gravável no disco local. Sem o marcador, o upload do MIEPP responde 503 em vez
+  de gravar ali e o arquivo sumir quando a rede voltar.
+- **Deduplicação:** um arquivo idêntico a outro já enviado por OUTRO módulo
+  reaproveita o registro existente e continua no disco local. Funciona, porque
+  a entrega resolve pelo `file_path` de cada registro, mas esse arquivo não
+  aparece na pasta de rede.
+- **Dependência do 10.10.10.35:** se a pasta de rede cair, telas sem o arquivo
+  em cache recebem 404 e uploads recebem 503. As telas que já têm o arquivo
+  continuam tocando.
+- **Conta:** hoje a montagem usa uma conta pessoal. Trocar por uma conta de
+  serviço no arquivo de credenciais (não é preciso mexer em código).
+
 ---
 
 ## Estado de uma tela: `online` / `offline`
@@ -267,6 +297,52 @@ proposital — o codec que motivou a conversão é justamente o que a caixa Andr
 tende a não decodificar, e o resultado seria um quadro preto na loja. Com
 `error`, a mídia sai da playlist e aparece marcada no painel. Se preferir
 "tenta tocar assim mesmo", é uma linha em `failJob`.
+
+---
+
+## Pastas da biblioteca de mídia
+
+Schema em `GIPP-SQL/miepp-pastas-midia.sql` (aplicado em 28/09/2026):
+`miepp_media_folders` (subpastas via `parent_id`) e `miepp_media.folder_id`
+(uma pasta por mídia; `NULL` = raiz).
+
+**Pasta é organização do painel.** O player não vê pasta nenhuma, e mover mídia
+não muda uuid nem checksum, então nenhuma tela baixa o arquivo de novo. Não
+existe "tocar a pasta": quem agrupa o que vai para a tela continua sendo a playlist.
+
+| Rota | Permissão | O que faz |
+|---|---|---|
+| `GET /miepp/media-folders` | leitura | Árvore inteira achatada, sem paginação: `{ items, root }` |
+| `GET /miepp/media-folders/:id` | leitura | Pasta + `path` (raiz → pasta) para breadcrumb |
+| `POST /miepp/media-folders` | escrita | `{ name, parent_id }`; `parent_id` ausente/`null` = raiz |
+| `PUT /miepp/media-folders/:id` | escrita | Renomeia e/ou move; `parent_id` ausente mantém, `null` = raiz |
+| `DELETE /miepp/media-folders/:id` | escrita | Só pasta vazia (409 dizendo quanto há dentro) |
+| `PATCH /miepp/media/move` | escrita | `{ media_ids, folder_id }`, tudo ou nada, máx. 200 |
+| `GET /miepp/media?folder_id=<id>\|root` | leitura | Conteúdo direto da pasta (sem subpastas) |
+
+`POST /media` e `PUT /media/:id` aceitam `folder_id`.
+
+### O que o banco garante e o que só a aplicação garante
+
+- **Banco:** nome único entre irmãs, sem diferenciar maiúsculas nem acentos
+  (a coluna gerada `parent_key` resolve o caso da raiz NULL), e pasta com
+  conteúdo não se exclui (`ON DELETE RESTRICT` nas duas FKs).
+- **Aplicação** (`domain/miepp/media/media-folder.rules`): **sem ciclo**, porque
+  mover pasta para dentro de uma descendente não é barrado por FK, e **no máximo
+  5 níveis**, contando as subpastas que vão junto quando se move uma pasta.
+
+A FK de `parent_id` é `ON UPDATE RESTRICT`, e não `CASCADE` como o resto do
+módulo: o MySQL proíbe CASCADE em FK sobre coluna base de coluna gerada STORED
+(erro 1215).
+
+### `null` é valor, ausência é "não mexer"
+
+No PUT, `folder_id`/`parent_id` **ausente** mantém o lugar e **`null`** leva
+para a raiz. Por isso os dois ficam fora dos schemas do `validate.middleware`,
+que trata `null` como ausência. No multipart do upload, que não tem como mandar
+`null`, `""` e `"root"` também valem raiz. No `PATCH /media/move`, `folder_id` é
+obrigatório: se ausente virasse raiz, a seleção inteira sairia da pasta sem
+ninguém perceber.
 
 ---
 
@@ -711,6 +787,7 @@ src/modules/global/
     schedule/schedule-resolver.rules.js                # ← a regra central
     schedule/days-of-week.js
     media/media-origin.rules.js                        # upload × grade, derivado do join
+    media/media-folder.rules.js                        # pastas: raiz, ciclo, profundidade
     playlist/playlist-item.shaper.js
     play/play-event.rules.js                           # crítica do lote do player
     play/play-range.rules.js                           # janela dos relatórios
