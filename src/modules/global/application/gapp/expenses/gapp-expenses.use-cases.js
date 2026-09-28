@@ -75,7 +75,7 @@ class GappExpensesUseCases {
             const totalParts = Number(maintenanceData.value_parts) ?? 0;
             const serviceValue = Number(maintenanceData.service_value) ?? 0;
 
-            if (((totalWithDiscount - totalParts) - Number(serviceValue)) !== 0) {
+            if ((totalWithDiscount - ((totalParts + serviceValue) - Number(data.discount))) !== 0) {
                 throw new AppError('A somatoria total dos valores é divergente do valor total da despesa!', 400)
             }
 
