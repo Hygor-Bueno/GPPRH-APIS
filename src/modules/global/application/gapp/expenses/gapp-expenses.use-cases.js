@@ -55,7 +55,7 @@ class GappExpensesUseCases {
      * resolve `liter_value` quando ausente — pura orquestração de domínio,
      * sem I/O.
      */
-    _resolveDetail(data, expTypeId) {
+    async _resolveDetail(data, expTypeId) {
         const detail = pickTypeDetail(data);
 
         if (data.total_value < data.discount) {
@@ -63,9 +63,20 @@ class GappExpensesUseCases {
         }
 
         if (detail && Number(expTypeId) === ExpenseType.FUEL) {
+            const tank = await this.repository.findTankCapacity(data.active_id_fk);
+            const lastKm = await this.repository.findLastKm(data.active_id_fk)
+
             if (!Number(detail.km_day) || !Number(detail.liter_qtd)) {
                 throw new AppError(`Campo '${Number(detail.km_day) ? 'liter_qtd' : 'km_day'}' é obrigatorio e não podem ser zerado!`, 400);
             }
+
+            if (Number(detail.liter_qtd) > tank.tank_capacity) {
+                throw new AppError(`Quantidade de litros superios ao do veiculo (capacidade: ${tank.tank_capacity} litros)`, 400);
+            }
+            if (detail.km_day < lastKm.km_day) {
+                throw new AppError(`A quilometragem e inferior a ultima despesa registrada!`, 400);
+            }
+
             return resolveFuelDetail(detail, data.total_value);
         }
 
@@ -95,7 +106,7 @@ class GappExpensesUseCases {
         await this._assertActiveOwnership(data.active_id_fk, gappUser.work_group_fk);
 
         const payload = { ...data, user_id_fk: gappUser.user_id };
-        const detail = this._resolveDetail(data, data.exp_type_id_fk);
+        const detail = await this._resolveDetail(data, data.exp_type_id_fk);
 
         return this.repository.createExpenseWithDetail(payload, data.exp_type_id_fk, detail, data.active_id_fk);
     }
@@ -116,7 +127,7 @@ class GappExpensesUseCases {
         }
 
         const payload = { ...data, expen_id: id };
-        const detail = this._resolveDetail(data, current.exp_type_id_fk);
+        const detail = await this._resolveDetail(data, current.exp_type_id_fk);
 
         return this.repository.updateExpenseWithDetail(id, payload, current.exp_type_id_fk, detail, data.active_id_fk);
     }

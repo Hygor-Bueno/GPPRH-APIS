@@ -15,6 +15,12 @@ class ExpensesRepositoryPort {
     /** @param {number} id @returns {Promise<{exp_type_id_fk: number}|null>} */
     findExpenseType(id) { throw new Error('Not implemented'); }
 
+    /** @param {number} id @returns {Promise<{km_day: number}|{km_day: 0}>} */
+    findLastKm(id) { throw new Error('Not implemented'); }
+
+    /** @param {number} id @returns {Promise<{tank_capacity: number}|{tank_capacity: 0}>} */
+    findTankCapacity(id) { throw new Error('Not implemented'); }
+
     /**
      * @param {object} expensePayload
      * @param {number} expTypeId

@@ -554,6 +554,18 @@ function sqlGetExpenseById() {
     `;
 }
 
+function sqlGetKmOnLastExpense() {
+    return `SELECT km_day FROM global.gapp_expenses_register ex 
+                INNER JOIN global.gapp_fuel f ON (ex.expen_id = f.expen_id_fk) 
+            WHERE ex.exp_type_id_fk = 1 AND ex.status_expen = 1 AND ex.active_id_fk = ?
+                ORDER BY fuel_id DESC
+            LIMIT 1;`
+}
+
+function sqlGetTankCapacity() {
+    return `SELECT tank_capacity FROM global.gapp_vehicle WHERE active_id_fk = ?`
+}
+
 module.exports = {
     sqlInsertExpense, buildInsertExpenseParams,
     sqlUpdateExpense, buildUpdateExpenseParams,
@@ -569,5 +581,5 @@ module.exports = {
     sqlLinkInsuranceToExpense, sqlGetInsuranceIdByExpenseId,
     sqlListExpenses, sqlCountExpenses,
     sqlListVehicleExpenses, sqlCountVehicleExpenses,
-    sqlGetExpenseById
+    sqlGetExpenseById, sqlGetKmOnLastExpense, sqlGetTankCapacity
 };

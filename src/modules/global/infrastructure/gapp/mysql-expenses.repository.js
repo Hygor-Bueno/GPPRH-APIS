@@ -30,6 +30,8 @@ const {
     sqlListExpenses, sqlCountExpenses,
     sqlListVehicleExpenses, sqlCountVehicleExpenses,
     sqlGetExpenseById,
+    sqlGetKmOnLastExpense,
+    sqlGetTankCapacity,
 } = require('../../repositories/mysql/gapp-expenses.queries');
 const {
     sqlSaveInsurance, sqlSelectInsuranceIdOut, buildSaveInsuranceParams,
@@ -78,6 +80,16 @@ class MysqlExpensesRepository extends ExpensesRepositoryPort {
     async findExpenseById(id, workGroupFk) {
         const [rows] = await this._query(sqlGetExpenseById(), [id, workGroupFk]);
         return rows[0] ?? null;
+    }
+
+    async findLastKm(id) {
+        const [rows] = await this._query(sqlGetKmOnLastExpense(), id);
+        return rows[0] ?? 0
+    }
+    
+    async findTankCapacity(id) {
+        const [rows] = await this._query(sqlGetTankCapacity(), id);
+        return rows[0] ?? 0
     }
 
     async createExpenseWithDetail(expensePayload, expTypeId, detail, activeId) {

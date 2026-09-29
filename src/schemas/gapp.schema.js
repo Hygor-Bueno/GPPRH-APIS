@@ -44,7 +44,6 @@ const updateActiveSchema = {
 /**
  * Valida a coerência entre `is_vehicle` e os sub-objetos `vehicle`/`insurance`.
  * Não valida campo a campo dentro deles — isso fica a cargo da procedure.
- * ! *** MANUTENÇÃO DA FUNÇÃO ***
  */
 function validateVehicleAndInsurancePayload(req, res, next) {
     const { is_vehicle, vehicle, insurance } = req.body || {};

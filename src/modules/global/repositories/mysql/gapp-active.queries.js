@@ -8,7 +8,7 @@
  */
 
 function sqlSaveActive() {
-    const placeholders = Array(36).fill('?').join(', ');
+    const placeholders = Array(37).fill('?').join(', ');
     return `CALL sp_gapp_save_active_v2(${placeholders}, @p_active_id_out, @p_id_insurance_out)`;
 }
 
@@ -63,6 +63,7 @@ function buildSaveActiveParams(data) {
         vehicle.directed_by ?? null,
         vehicle.shielding ?? null,
         vehicle.fuel_type_id_fk ?? null,
+        vehicle.tank_capacity ?? null,
 
         // ===== SEGURO (opcional) =====
         // Objeto vazio ({}) conta como "sem seguro" — senão a procedure
