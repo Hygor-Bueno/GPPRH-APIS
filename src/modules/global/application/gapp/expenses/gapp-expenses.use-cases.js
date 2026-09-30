@@ -71,10 +71,10 @@ class GappExpensesUseCases {
             }
 
             if (Number(detail.liter_qtd) > tank.tank_capacity) {
-                throw new AppError(`Quantidade de litros superios ao do veiculo (capacidade: ${tank.tank_capacity} litros)`, 400);
+                throw new AppError(`Quantidade de litros excede a capacidade do veículo.`, 400);
             }
             if (detail.km_day < lastKm.km_day) {
-                throw new AppError(`A quilometragem e inferior a ultima despesa registrada!`, 400);
+                throw new AppError(`A quilometragem informada é inferior à da última despesa registrada.`, 400);
             }
 
             return resolveFuelDetail(detail, data.total_value);
