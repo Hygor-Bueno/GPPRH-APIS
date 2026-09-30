@@ -394,9 +394,10 @@ function sqlListExpenses(filters = {}) {
             reg.total_value, reg.discount, reg.provider, reg.exp_type_id_fk,
             exp.description_type, reg.driver_id_fk, reg.active_id_fk,
             reg.user_id_fk, reg.status_expen, reg.coupon_number,
-            reg.store_id_fk, reg.created_at, reg.updated_at
+            reg.store_id_fk, st.unit_name, reg.created_at, reg.updated_at
         FROM global.gapp_expenses_register reg
             INNER JOIN global.gapp_active act ON reg.active_id_fk = act.active_id
+            INNER JOIN global.gapp_units st ON act.units_id_fk = st.unit_id
             LEFT JOIN global.gapp_expenses_type exp ON exp.exp_type_id = reg.exp_type_id_fk
             ${where}
         ORDER BY reg.expen_id DESC
