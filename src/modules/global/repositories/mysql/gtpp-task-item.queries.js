@@ -43,7 +43,7 @@ const SQL_INSERT_TASK_ITEM = `
 `;
 
 const SQL_UPDATE_ITEM_CHECK       = `UPDATE gt_task_item SET \`check\` = ? WHERE id = ? AND task_id = ?`;
-const SQL_UPDATE_ITEM_YES_NO      = `UPDATE gt_task_item SET yes_no = ? WHERE id = ? AND task_id = ?`;
+const SQL_UPDATE_ITEM_YES_NO      = `UPDATE gt_task_item SET yes_no = ?, \`check\` = 1 WHERE id = ? AND task_id = ?`;
 const SQL_UPDATE_ITEM_ASSIGNED_TO = `UPDATE gt_task_item SET assigned_to = ? WHERE id = ? AND task_id = ?`;
 const SQL_UPDATE_ITEM_DESCRIPTION = `UPDATE gt_task_item SET description = ? WHERE id = ? AND task_id = ?`;
 const SQL_UPDATE_ITEM_DATES       = `UPDATE gt_task_item SET initial_date = ?, final_date = ? WHERE id = ? AND task_id = ?`;
