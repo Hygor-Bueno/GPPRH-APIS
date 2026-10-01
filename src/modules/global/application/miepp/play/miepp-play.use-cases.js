@@ -174,7 +174,7 @@ class MieppPlayUseCases {
         }));
 
         return {
-            player: { id: player.id, name: player.name },
+            player: { id: player.id, name: player.name, last_ip: player.last_ip ?? null },
             range,
             ...paginated(items, total, pagination),
         };

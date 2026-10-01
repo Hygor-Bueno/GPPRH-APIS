@@ -13,7 +13,7 @@ const { MysqlMieppScheduleRepository } = require('../infrastructure/miepp/mysql-
 const { MysqlMieppPlaylistRepository } = require('../infrastructure/miepp/mysql-miepp-playlist.repository');
 const { MysqlMieppMediaRepository } = require('../infrastructure/miepp/mysql-miepp-media.repository');
 const { MysqlMieppPlayRepository } = require('../infrastructure/miepp/mysql-miepp-play.repository');
-const { pairingService, mediaTokenService } = require('../infrastructure/miepp/miepp-services');
+const { pairingService, mediaTokenService, mediaStorage } = require('../infrastructure/miepp/miepp-services');
 const { mieppConfig } = require('../../../config/miepp');
 const { respond } = require('../../../utils/respond');
 
@@ -26,6 +26,8 @@ const useCases = new MieppDeviceUseCases({
     mediaRepository: new MysqlMieppMediaRepository(),
     // Proof-of-play: só a rota `POST /device/plays` usa.
     playRepository: new MysqlMieppPlayRepository(),
+    // Captura de tela: só a rota `POST /device/commands/:id/screenshot` usa.
+    mediaStorage,
     pairingService,
     mediaTokenService,
     config: {
@@ -104,4 +106,12 @@ async function ackCommand(req, res) {
     return respond.ok(res, result);
 }
 
-module.exports = { pair, getPlaylist, heartbeat, recordPlays, pendingCommands, ackCommand };
+/**
+ * @route POST /miepp/device/commands/:id/screenshot
+ */
+async function uploadScreenshot(req, res) {
+    const result = await useCases.uploadScreenshot(req.device, Number(req.params.id), req.file);
+    return respond.ok(res, result);
+}
+
+module.exports = { pair, getPlaylist, heartbeat, recordPlays, pendingCommands, ackCommand, uploadScreenshot };

@@ -298,8 +298,11 @@ class GippUseCases {
      *
      * @throws {AppError} 409 se nenhuma jornada da lista estiver aprovada
      * @throws {AppError} 404 se nenhum dado de pagamento for encontrado após o processamento
+     * @throws {AppError} 422 se o operador não tiver matrícula ou filial
      */
     async processWorkSchedules(codWorkSchedules, userId, userBranchCode, actor = null) {
+        this._assertOperatorIdentified(userId, userBranchCode);
+
         const requested = Array.isArray(codWorkSchedules) ? codWorkSchedules : codWorkSchedules.split(',');
 
         const current = await this.repository.findWorkSchedulesStatus(requested);
@@ -405,6 +408,8 @@ class GippUseCases {
      *   determinada, os registros de ponto forem inválidos ou os valores de pagamento não existirem
      */
     async closeWorkSchedules(codWorkSchedules, userId, userBranchCode, actor = null) {
+        this._assertOperatorIdentified(userId, userBranchCode);
+
         const scheduleList = Array.isArray(codWorkSchedules)
             ? codWorkSchedules
             : codWorkSchedules.split(',').map(s => s.trim());
@@ -423,6 +428,15 @@ class GippUseCases {
                 // filial 0208 ficaram órfãs entre 11 e 16/08.
                 const reverted = await this._revertFailedClose(codWorkSchedule, actor);
 
+                // O cliente recebe só a mensagem genérica do repositório ("Não foi
+                // possível inserir o item do recibo."); a causa do banco fica aqui.
+                console.error(`[gipp] fechamento falhou para a jornada ${codWorkSchedule}:`, {
+                    message: error.message,
+                    code: error.code,
+                    cause: error.details?.originalError?.info?.message ?? error.details?.message ?? null,
+                    reverted_to_payroll_queue: reverted,
+                });
+
                 results.push({
                     cod_work_schedule: codWorkSchedule,
                     status: 'failed',
@@ -433,6 +447,28 @@ class GippUseCases {
         }
 
         return results;
+    }
+
+    /**
+     * Quem finaliza precisa ter matrícula e filial: as duas vão para
+     * `created_by`/`created_by_branch_code` do recibo, que são NOT NULL. Sem esta
+     * checagem a falha só aparecia no INSERT do recibo, depois de a procedure já
+     * ter levado a jornada a 6. A jornada era revertida para 3 e a tela mostrava
+     * sucesso. Foi o caso da usuária 428 em 29/09/2026, cadastrada à mão sem
+     * matrícula.
+     *
+     * @throws {AppError} 422 OPERATOR_WITHOUT_REGISTRATION
+     * @private
+     */
+    _assertOperatorIdentified(userId, userBranchCode) {
+        if (!userId || !userBranchCode) {
+            throw new AppError(
+                'Seu usuário está sem matrícula ou filial no cadastro, e o recibo exige as duas. '
+                + 'Peça ao administrador para completar o cadastro e entre novamente.',
+                422,
+                { code: 'OPERATOR_WITHOUT_REGISTRATION' },
+            );
+        }
     }
 
     /**

@@ -11,7 +11,7 @@
 const crypto = require('crypto');
 
 const { AppError } = require('../../../../../errors/app.error');
-const { StatusLogEvent, CommandStatus } = require('../../../domain/miepp/miepp.enums');
+const { StatusLogEvent, CommandStatus, CommandType } = require('../../../domain/miepp/miepp.enums');
 const { resolveActiveSchedule } = require('../../../domain/miepp/schedule/schedule-resolver.rules');
 const {
     RejectReason,
@@ -50,6 +50,9 @@ class MieppDeviceUseCases {
      *        mantém a parede no ar, continuam de pé.
      * @param {object} deps.pairingService - valida o código de pareamento.
      * @param {object} deps.mediaTokenService - assina as URLs de mídia.
+     * @param {object} [deps.mediaStorage] - grava a captura de tela em `_files`.
+     *        Opcional pelo mesmo motivo do `playRepository`: sem ele só a rota
+     *        `POST /device/commands/:id/screenshot` deixa de funcionar.
      * @param {object} [deps.config] - `{ deviceTokenTtlDays, fallbackPlaylistId, fallbackMediaId }`.
      */
     constructor({
@@ -58,6 +61,7 @@ class MieppDeviceUseCases {
         playlistRepository,
         mediaRepository = null,
         playRepository = null,
+        mediaStorage = null,
         pairingService,
         mediaTokenService,
         config = {},
@@ -67,6 +71,7 @@ class MieppDeviceUseCases {
         this.playlistRepository = playlistRepository;
         this.mediaRepository = mediaRepository;
         this.playRepository = playRepository;
+        this.mediaStorage = mediaStorage;
         this.pairingService = pairingService;
         this.mediaTokenService = mediaTokenService;
         this.config = config;
@@ -394,6 +399,60 @@ class MieppDeviceUseCases {
         }
 
         return { id: Number(commandId), status };
+    }
+
+    /**
+     * Recebe a imagem de um comando `screenshot` e fecha o comando.
+     *
+     * Substitui o ACK para este tipo de comando: a imagem É a confirmação. O
+     * comando é conferido ANTES de gravar o arquivo, para que um id errado não
+     * deixe binário órfão na pasta de rede.
+     *
+     * O tipo é checado no que o `FileService` identificou pelo conteúdo, não no
+     * `Content-Type` que o device declarou — mesma regra do fundo da grade.
+     *
+     * @param {object} player - `req.device`
+     * @param {number} commandId
+     * @param {Express.Multer.File} file
+     * @returns {Promise<{id:number, status:string, file_id:number}>}
+     */
+    async uploadScreenshot(player, commandId, file) {
+        if (!this.mediaStorage) {
+            throw new AppError('Captura de tela não está disponível neste servidor.', 503);
+        }
+        if (!file) {
+            throw new AppError('Envie a imagem no campo "file".', 400);
+        }
+
+        const command = await this.playerRepository.findDeviceCommand(commandId, player.id);
+        if (!command) {
+            throw new AppError('Comando não encontrado para este player.', 404);
+        }
+        if (command.command_type !== CommandType.SCREENSHOT) {
+            throw new AppError('Este comando não é de captura de tela.', 400);
+        }
+        if (command.result_file_id) {
+            throw new AppError('Este comando já recebeu uma captura.', 409, { code: 'SCREENSHOT_ALREADY_SENT' });
+        }
+        if (command.status === CommandStatus.FAILED) {
+            throw new AppError('Este comando já foi encerrado como falha.', 409, { code: 'COMMAND_FAILED' });
+        }
+
+        const stored = await this.mediaStorage.save(file, null);
+        if (!String(stored?.mime_type ?? '').startsWith('image/')) {
+            throw new AppError(
+                `A captura precisa ser uma imagem (recebido: ${stored?.mime_type ?? 'desconhecido'}).`,
+                400,
+            );
+        }
+
+        const attached = await this.playerRepository.attachScreenshot(commandId, player.id, stored.file_id);
+        if (!attached) {
+            // Outro envio do mesmo comando chegou entre a conferência e aqui.
+            throw new AppError('Este comando já recebeu uma captura.', 409, { code: 'SCREENSHOT_ALREADY_SENT' });
+        }
+
+        return { id: Number(commandId), status: CommandStatus.ACKNOWLEDGED, file_id: stored.file_id };
     }
 }
 

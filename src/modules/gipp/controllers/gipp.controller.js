@@ -3,6 +3,7 @@ const { SqlServerGippRepository } = require('../infrastructure/sqlserver-gipp.re
 const { MysqlGippReplicationRepository } = require('../infrastructure/mysql-gipp-replication.repository');
 const { respond } = require('../../../utils/respond');
 const { BadRequestError } = require('../../../errors/bad-request.error');
+const { AppError } = require('../../../errors/app.error');
 const {
     DISCARDABLE_STATUSES,
     PAYROLL_DISCARDABLE_STATUSES,
@@ -171,6 +172,31 @@ async function approveTimeRecords(req, res) {
     });
 }
 
+/**
+ * `closeWorkSchedules` não lança: cada jornada que falha vira `status: 'failed'`
+ * e é revertida para 3. Até 09/2026 o controller respondia sucesso mesmo assim,
+ * e a jornada "sumia" e reaparecia na fila sem ninguém saber por quê.
+ *
+ * Se nenhuma jornada fechou, responde erro: não há nada a comemorar e a tela
+ * precisa mostrar o motivo. Se só parte falhou, devolve as falhas para o
+ * chamador pôr na mensagem.
+ *
+ * @returns {object[]} Resultados com `status: 'failed'`.
+ * @throws {AppError} 422 CLOSE_FAILED quando todas falharam
+ */
+function assertClosingNotAllFailed(results = []) {
+    const failed = results.filter(r => r.status === 'failed');
+    if (failed.length && failed.length === results.length) {
+        throw new AppError(
+            `Nenhuma jornada foi finalizada. ${failed[0].reason} `
+            + `A(s) jornada(s) voltaram para a fila de aprovados.`,
+            422,
+            { code: 'CLOSE_FAILED' },
+        );
+    }
+    return failed;
+}
+
 async function postPayments(req, res) {
     const { user, body } = req;
     // O app envia `cod_work_schedules` e o web envia `codWorkSchedules`. Até
@@ -208,9 +234,20 @@ async function postPayments(req, res) {
         );
     }
 
-    const message = pulados.length
-        ? `Marcações finalizadas. ${pulados.length} colaborador(es) sem cadastro ativo no MySQL — `
-          + `o recibo foi gerado, mas não replicado. Regularize o cadastro.`
+    const failed = assertClosingNotAllFailed(data.closing);
+
+    const avisos = [];
+    if (failed.length) {
+        avisos.push(`${failed.length} jornada(s) NÃO foram finalizadas e voltaram para a fila: `
+            + `${failed[0].reason}`);
+    }
+    if (pulados.length) {
+        avisos.push(`${pulados.length} colaborador(es) sem cadastro ativo no MySQL — `
+            + `o recibo foi gerado, mas não replicado. Regularize o cadastro.`);
+    }
+
+    const message = avisos.length
+        ? `Marcações finalizadas parcialmente. ${avisos.join(' ')}`
         : 'Marcações finalizadas com sucesso.';
 
     return respond.ok(res, { message, data });
@@ -237,11 +274,14 @@ async function postPaymentsClose(req, res) {
         branchCode: user.branch_code,
     });
 
+    const failed = assertClosingNotAllFailed(results);
+
     const inserted = results.filter(r => r.status === 'inserted').length;
     const skipped  = results.filter(r => r.status === 'skipped').length;
 
     return respond.ok(res, {
-        message: `Fechamento concluído: ${inserted} jornada(s) inserida(s), ${skipped} ignorada(s).`,
+        message: `Fechamento concluído: ${inserted} jornada(s) inserida(s), ${skipped} ignorada(s)`
+            + (failed.length ? `, ${failed.length} com falha: ${failed[0].reason}` : '.'),
         results
     });
 }

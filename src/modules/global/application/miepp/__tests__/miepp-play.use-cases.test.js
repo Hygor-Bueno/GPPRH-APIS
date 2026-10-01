@@ -348,7 +348,7 @@ describe('evidência crua de uma tela', () => {
             schedule_id: null,
             media_exists: true,
         });
-        expect(resultado.player).toEqual({ id: 1, name: 'Tela Caixa 1' });
+        expect(resultado.player).toEqual({ id: 1, name: 'Tela Caixa 1', last_ip: null });
     });
 
     it('404 para tela que não existe', async () => {

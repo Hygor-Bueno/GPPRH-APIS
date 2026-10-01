@@ -539,6 +539,34 @@ describe('GippUseCases', () => {
         });
     });
 
+    describe('processWorkSchedules — operador sem matrícula', () => {
+        it.each([
+            ['sem matrícula', null, '0209'],
+            ['sem filial', '004023', null],
+        ])('should refuse before touching any status when the operator is %s', async (_label, userId, branch) => {
+            const repository = makeFakeRepository({
+                findWorkSchedulesStatus: jest.fn().mockResolvedValue([status('A', 3)]),
+            });
+            const useCases = makeUseCases({ repository });
+
+            // created_by/created_by_branch_code são NOT NULL: sem a checagem, a
+            // procedure levava a jornada a 6 e o INSERT do recibo falhava depois.
+            await expect(useCases.processWorkSchedules(['A'], userId, branch)).rejects.toMatchObject({
+                statusCode: 422,
+                code: 'OPERATOR_WITHOUT_REGISTRATION',
+            });
+            expect(repository.processWorkSchedules).not.toHaveBeenCalled();
+        });
+
+        it('should also refuse closeWorkSchedules directly', async () => {
+            const repository = makeFakeRepository();
+            const useCases = makeUseCases({ repository });
+
+            await expect(useCases.closeWorkSchedules(['A'], null, '0209')).rejects.toMatchObject({ statusCode: 422 });
+            expect(repository.hasExistingReceipt).not.toHaveBeenCalled();
+        });
+    });
+
     describe('processWorkSchedules — approval gate', () => {
         it.each([
             ['open', 1],

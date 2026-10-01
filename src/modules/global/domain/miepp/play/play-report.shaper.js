@@ -118,6 +118,9 @@ function shapePlayerRow(row) {
     return {
         player_id: toInt(row.player_id),
         player_name: row.player_name ?? null,
+        // IP ATUAL da tela (último heartbeat), não o da época da exibição: o
+        // acumulado não guarda IP. Serve para achar o equipamento na rede hoje.
+        last_ip: row.player_last_ip ?? null,
         location_id: toLocationId(row.location_id),
         location_name: row.location_name ?? null,
         ...shapeCounters(row),

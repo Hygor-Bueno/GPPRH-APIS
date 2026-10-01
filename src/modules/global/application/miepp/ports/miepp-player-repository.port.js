@@ -76,6 +76,23 @@ class MieppPlayerRepositoryPort {
      */
     ackCommand(commandId, playerId, status) { throw new Error('Not implemented'); }
 
+    /**
+     * @param {number} commandId
+     * @param {number} playerId
+     * @returns {Promise<{id:number, command_type:string, status:string, result_file_id:number|null}|null>}
+     *          `null` se o comando não for deste player.
+     */
+    findDeviceCommand(commandId, playerId) { throw new Error('Not implemented'); }
+
+    /**
+     * Liga a captura ao comando `screenshot` e o marca `acknowledged`.
+     * @param {number} commandId
+     * @param {number} playerId
+     * @param {number} fileId - `_files.id`
+     * @returns {Promise<boolean>} `false` se o comando não aceitava mais captura.
+     */
+    attachScreenshot(commandId, playerId, fileId) { throw new Error('Not implemented'); }
+
     /** @param {number} playerId @param {object} page @returns {Promise<object[]>} */
     listCommands(playerId, page) { throw new Error('Not implemented'); }
 

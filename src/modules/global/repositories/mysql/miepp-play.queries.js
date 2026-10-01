@@ -221,6 +221,7 @@ const SQL_LIST_MEDIA_BY_LOCATION = `
 const SQL_LIST_MEDIA_BY_PLAYER = `
     SELECT d.player_id,
            p.name AS player_name,
+           p.last_ip AS player_last_ip,
            d.location_id,
            l.name AS location_name,
            ${PLAY_SUMS}
@@ -229,7 +230,7 @@ const SQL_LIST_MEDIA_BY_PLAYER = `
     LEFT JOIN miepp_locations l ON l.id = d.location_id
     WHERE d.media_id = ?
       AND d.play_date BETWEEN ? AND ?
-    GROUP BY d.player_id, p.name, d.location_id, l.name
+    GROUP BY d.player_id, p.name, p.last_ip, d.location_id, l.name
     ORDER BY plays DESC, d.player_id
     LIMIT ${BREAKDOWN_LIMIT}
 `;

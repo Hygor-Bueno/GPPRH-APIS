@@ -196,8 +196,39 @@ const SQL_ACK_COMMAND = `
     WHERE id = ? AND player_id = ? AND status IN ('pending', 'sent')
 `;
 
+/**
+ * O comando de captura, visto pelo device que vai responder a ele. O
+ * `player_id` no WHERE tem a mesma razão do ACK: o id sozinho é adivinhável.
+ *
+ * Parâmetros: `[command_id, player_id]`
+ */
+const SQL_FIND_DEVICE_COMMAND = `
+    SELECT id, command_type, status, result_file_id
+    FROM miepp_device_commands
+    WHERE id = ? AND player_id = ?
+`;
+
+/**
+ * Anexa a captura e fecha o comando.
+ *
+ * Aceita `acknowledged` além de `pending`/`sent` porque a APK que já está nas
+ * telas confirma o `screenshot` pelo ACK comum antes de existir esta rota: o
+ * envio da imagem chega depois do ACK, e recusá-lo jogaria a captura fora.
+ * `result_file_id IS NULL` é o que impede um segundo envio de trocar a imagem.
+ *
+ * Parâmetros: `[file_id, command_id, player_id]`
+ */
+const SQL_ATTACH_SCREENSHOT = `
+    UPDATE miepp_device_commands
+    SET result_file_id = ?, status = 'acknowledged', executed_at = COALESCE(executed_at, NOW())
+    WHERE id = ? AND player_id = ?
+      AND command_type = 'screenshot'
+      AND status IN ('pending', 'sent', 'acknowledged')
+      AND result_file_id IS NULL
+`;
+
 const SQL_LIST_PLAYER_COMMANDS = `
-    SELECT id, command_type, payload, status, created_by, created_at, executed_at
+    SELECT id, command_type, payload, status, created_by, created_at, executed_at, result_file_id
     FROM miepp_device_commands
     WHERE player_id = ?
     ORDER BY created_at DESC
@@ -247,6 +278,8 @@ module.exports = {
     SQL_LIST_PENDING_COMMANDS,
     SQL_MARK_COMMANDS_SENT,
     SQL_ACK_COMMAND,
+    SQL_FIND_DEVICE_COMMAND,
+    SQL_ATTACH_SCREENSHOT,
     SQL_LIST_PLAYER_COMMANDS,
     SQL_UPDATE_PLAYER_HEARTBEAT,
     SQL_INSERT_STATUS_LOG,

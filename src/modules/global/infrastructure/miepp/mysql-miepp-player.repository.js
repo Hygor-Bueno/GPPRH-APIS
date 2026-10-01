@@ -25,6 +25,8 @@ const {
     SQL_LIST_PENDING_COMMANDS,
     SQL_MARK_COMMANDS_SENT,
     SQL_ACK_COMMAND,
+    SQL_FIND_DEVICE_COMMAND,
+    SQL_ATTACH_SCREENSHOT,
     SQL_LIST_PLAYER_COMMANDS,
     SQL_UPDATE_PLAYER_HEARTBEAT,
     SQL_INSERT_STATUS_LOG,
@@ -148,6 +150,16 @@ class MysqlMieppPlayerRepository extends MieppPlayerRepositoryPort {
 
     async ackCommand(commandId, playerId, status) {
         const result = await execute(SQL_ACK_COMMAND, [status, commandId, playerId]);
+        return Number(result.affectedRows || 0) > 0;
+    }
+
+    async findDeviceCommand(commandId, playerId) {
+        const rows = await query(SQL_FIND_DEVICE_COMMAND, [commandId, playerId]);
+        return rows[0] ?? null;
+    }
+
+    async attachScreenshot(commandId, playerId, fileId) {
+        const result = await execute(SQL_ATTACH_SCREENSHOT, [fileId, commandId, playerId]);
         return Number(result.affectedRows || 0) > 0;
     }
 

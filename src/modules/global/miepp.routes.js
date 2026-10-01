@@ -166,6 +166,23 @@ router.post('/device/commands/:id/ack',
     validate(postCommandAckSchema),
     asyncHandler(deviceController.ackCommand));
 
+/**
+ * @route POST /miepp/device/commands/:id/screenshot
+ * @description Entrega a imagem de um comando `screenshot` (campo `file`,
+ * multipart, PNG/JPEG/WebP) e fecha o comando como `acknowledged` — para este
+ * tipo, substitui o ACK. Se a captura falhar na tela, o app usa o ACK comum
+ * com `failed`.
+ *
+ * `authenticateDevice` vem ANTES do multer: sem token, a requisição é recusada
+ * sem receber o corpo.
+ * @access Token de dispositivo
+ */
+router.post('/device/commands/:id/screenshot',
+    deviceLimiter,
+    authenticateDevice,
+    fileUpload.single('file'),
+    asyncHandler(deviceController.uploadScreenshot));
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ENTREGA DE MÍDIA — autorizada pela assinatura na query
 // ═══════════════════════════════════════════════════════════════════════════

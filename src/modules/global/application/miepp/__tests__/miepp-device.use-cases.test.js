@@ -344,3 +344,86 @@ describe('ACK de comando', () => {
             .rejects.toMatchObject({ statusCode: 404 });
     });
 });
+
+describe('captura de tela', () => {
+    const FILE = { path: '/tmp/upload-x', mimetype: 'image/png', size: 1234 };
+
+    function makeScreenshotUseCases({ command, stored, attached = true, mediaStorage } = {}) {
+        const playerRepository = new FakePlayerRepository();
+        playerRepository.findDeviceCommand = jest.fn(async () => (command === undefined
+            ? { id: 5, command_type: 'screenshot', status: 'sent', result_file_id: null }
+            : command));
+        playerRepository.attachScreenshot = jest.fn(async () => attached);
+
+        const storage = mediaStorage === undefined
+            ? { save: jest.fn(async () => stored ?? { file_id: 99, mime_type: 'image/webp' }) }
+            : mediaStorage;
+
+        const useCases = new MieppDeviceUseCases({
+            playerRepository,
+            scheduleRepository: new FakeScheduleRepository(),
+            playlistRepository: new FakePlaylistRepository(),
+            mediaStorage: storage,
+            pairingService: fakePairing,
+            mediaTokenService: fakeMediaToken,
+        });
+        return { useCases, playerRepository, storage };
+    }
+
+    it('grava a imagem, anexa ao comando e devolve o file_id', async () => {
+        const { useCases, playerRepository, storage } = makeScreenshotUseCases();
+
+        await expect(useCases.uploadScreenshot(PLAYER, 5, FILE))
+            .resolves.toEqual({ id: 5, status: 'acknowledged', file_id: 99 });
+
+        expect(playerRepository.findDeviceCommand).toHaveBeenCalledWith(5, PLAYER.id);
+        expect(storage.save).toHaveBeenCalledWith(FILE, null);
+        expect(playerRepository.attachScreenshot).toHaveBeenCalledWith(5, PLAYER.id, 99);
+    });
+
+    it('aceita captura de comando já confirmado pelo ACK comum (APK antiga)', async () => {
+        const { useCases } = makeScreenshotUseCases({
+            command: { id: 5, command_type: 'screenshot', status: 'acknowledged', result_file_id: null },
+        });
+        await expect(useCases.uploadScreenshot(PLAYER, 5, FILE)).resolves.toMatchObject({ file_id: 99 });
+    });
+
+    it('confere o comando ANTES de gravar: 404 não deixa arquivo órfão', async () => {
+        const { useCases, storage } = makeScreenshotUseCases({ command: null });
+
+        await expect(useCases.uploadScreenshot(PLAYER, 5, FILE)).rejects.toMatchObject({ statusCode: 404 });
+        expect(storage.save).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['comando de outro tipo', { id: 5, command_type: 'reboot', status: 'sent', result_file_id: null }, 400],
+        ['captura já enviada', { id: 5, command_type: 'screenshot', status: 'acknowledged', result_file_id: 7 }, 409],
+        ['comando encerrado como falha', { id: 5, command_type: 'screenshot', status: 'failed', result_file_id: null }, 409],
+    ])('recusa %s sem gravar', async (_label, command, statusCode) => {
+        const { useCases, storage } = makeScreenshotUseCases({ command });
+
+        await expect(useCases.uploadScreenshot(PLAYER, 5, FILE)).rejects.toMatchObject({ statusCode });
+        expect(storage.save).not.toHaveBeenCalled();
+    });
+
+    it('recusa arquivo que não é imagem pelo conteúdo real', async () => {
+        const { useCases, playerRepository } = makeScreenshotUseCases({
+            stored: { file_id: 99, mime_type: 'application/pdf' },
+        });
+
+        await expect(useCases.uploadScreenshot(PLAYER, 5, FILE)).rejects.toMatchObject({ statusCode: 400 });
+        expect(playerRepository.attachScreenshot).not.toHaveBeenCalled();
+    });
+
+    it('409 quando outro envio fechou o comando no meio do caminho', async () => {
+        const { useCases } = makeScreenshotUseCases({ attached: false });
+        await expect(useCases.uploadScreenshot(PLAYER, 5, FILE)).rejects.toMatchObject({ statusCode: 409 });
+    });
+
+    it('400 sem arquivo e 503 sem armazenamento configurado', async () => {
+        await expect(makeScreenshotUseCases().useCases.uploadScreenshot(PLAYER, 5, undefined))
+            .rejects.toMatchObject({ statusCode: 400 });
+        await expect(makeScreenshotUseCases({ mediaStorage: null }).useCases.uploadScreenshot(PLAYER, 5, FILE))
+            .rejects.toMatchObject({ statusCode: 503 });
+    });
+});

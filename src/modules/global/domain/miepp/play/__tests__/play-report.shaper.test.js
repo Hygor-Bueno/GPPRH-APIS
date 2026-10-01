@@ -107,6 +107,11 @@ describe('recorte por tela', () => {
             plays: 10,
         });
     });
+
+    it('expõe o IP atual da tela como last_ip', () => {
+        expect(shapePlayerRow({ player_id: 8, player_last_ip: '10.10.20.31' }).last_ip).toBe('10.10.20.31');
+        expect(shapePlayerRow({ player_id: 8 }).last_ip).toBeNull();
+    });
 });
 
 describe('shapeTotals', () => {
