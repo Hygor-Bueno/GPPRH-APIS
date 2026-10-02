@@ -69,7 +69,7 @@ const putTaskItemSchema = {
     action: {
         type: 'string',
         required: true,
-        enum: ['check', 'yes_no', 'description', 'file', 'note', 'assigned_to', 'status', 'position'],
+        enum: ['check', 'yes_no', 'description', 'file', 'note', 'assigned_to', 'status', 'position', 'dates'],
     },
 };
 
