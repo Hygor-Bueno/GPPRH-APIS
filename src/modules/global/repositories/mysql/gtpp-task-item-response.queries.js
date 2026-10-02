@@ -147,7 +147,7 @@ const SQL_SOFT_DELETE_FILES_BY_RESPONSE = `
  * violação de camada em que o controller consultava `gt_task_item`
  * diretamente via `poolGlobal` para poder emitir o evento WebSocket.
  */
-const SQL_FIND_TASK_ID_BY_ITEM_ID = `SELECT task_id FROM gt_task_item WHERE id = ?`;
+const SQL_FIND_TASK_BY_ITEM_ID = `SELECT it.task_id, ts.state_id FROM global.gt_task_item it INNER JOIN global.gt_task ts ON (it.task_id = ts.id) WHERE it.id = ?`;
 
 module.exports = {
     SQL_GET_ITEM_RESPONSES,
@@ -160,5 +160,5 @@ module.exports = {
     SQL_SOFT_DELETE_RESPONSE_FILE,
     SQL_SOFT_DELETE_FILES_BY_RESPONSE,
     SQL_UPDATE_RESPONSE,
-    SQL_FIND_TASK_ID_BY_ITEM_ID,
+    SQL_FIND_TASK_BY_ITEM_ID,
 };

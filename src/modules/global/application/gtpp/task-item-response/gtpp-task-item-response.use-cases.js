@@ -66,8 +66,10 @@ class GtppTaskItemResponseUseCases {
      * @throws {AppError} 404 item inexistente / 400 sem conteúdo ou texto longo demais
      */
     async createItemResponse(taskItemId, userId, { comment, files = [] }) {
-        const taskId = await this.repository.findTaskIdByItemId(taskItemId);
-        if (!taskId) throw new AppError('Item não encontrado.', 404);
+        const task = await this.repository.findTaskIdByItemId(taskItemId);
+        if (!task.task_id) throw new AppError('Item não encontrado.', 404);
+        if (task.state_id >= 5) throw new AppError('Comentarios não são aceitos no estado atual.', 404);
+        
 
         const text = typeof comment === 'string' ? comment.trim() : '';
 
@@ -97,7 +99,7 @@ class GtppTaskItemResponseUseCases {
         // registro, e manter o tipo estável protege cliente antigo que faz
         // `comment.trim()` sem checar. Revisitar quando o front web migrar.
         this.eventPublisher
-            .broadcastEvent(taskId, userId, EV_RESPONSE_NEW, {
+            .broadcastEvent(task.task_id, userId, EV_RESPONSE_NEW, {
                 action: 'created', id: result.responseId, item_id: taskItemId, comment: text,
             })
             .catch(() => {});

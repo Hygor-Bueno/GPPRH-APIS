@@ -22,7 +22,7 @@ const {
     SQL_SOFT_DELETE_RESPONSE_FILE,
     SQL_SOFT_DELETE_FILES_BY_RESPONSE,
     SQL_UPDATE_RESPONSE,
-    SQL_FIND_TASK_ID_BY_ITEM_ID,
+    SQL_FIND_TASK_BY_ITEM_ID,
 } = require('../../repositories/mysql/gtpp-task-item-response.queries');
 
 const GTPP_MODULE = 'GTPP';
@@ -62,8 +62,8 @@ class MysqlTaskItemResponseRepository extends TaskItemResponseRepositoryPort {
     }
 
     async findTaskIdByItemId(itemId) {
-        const [[row]] = await this._query(SQL_FIND_TASK_ID_BY_ITEM_ID, [itemId]);
-        return row?.task_id ?? null;
+        const [[row]] = await this._query(SQL_FIND_TASK_BY_ITEM_ID, [itemId]);
+        return row ?? null;
     }
 
     /**
