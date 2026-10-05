@@ -27,13 +27,13 @@ function computeAutoTransition(stateId, { total, checked }) {
     const allChecked = total > 0 && total === checked;
     const noneChecked = checked === 0;
 
-    if (stateId === TASK_STATE.TODO && !noneChecked) {
+    if (stateId === TASK_STATE.TODO && !noneChecked && !allChecked) {
         return { newStateId: TASK_STATE.DOING, historyDescription: 'Tarefa iniciada — primeiro item concluído' };
     }
     if (stateId === TASK_STATE.DOING && noneChecked) {
         return { newStateId: TASK_STATE.TODO, historyDescription: 'Todos os itens desmarcados — tarefa revertida para pendente' };
     }
-    if (stateId === TASK_STATE.DOING && allChecked) {
+    if (stateId === TASK_STATE.DOING || stateId === TASK_STATE.TODO && allChecked) {
         return { newStateId: TASK_STATE.VALIDATE, historyDescription: 'Todos os itens concluídos — aguardando análise' };
     }
     if (stateId === TASK_STATE.VALIDATE && !allChecked) {

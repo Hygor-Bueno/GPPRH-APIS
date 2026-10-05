@@ -99,8 +99,22 @@ class MysqlTaskRepository extends TaskRepositoryPort {
         const task = taskRows[0];
         if (!task) return null;
 
+        // Calculo de % baseado no nas horas, em caso que o prazo da tarefa esta para o mesmo dia.
+        const deadlinePercent = (percent, initialDate, finalDate) => {
+            if (percent) return percent;
+            if (initialDate === null && finalDate === null) return null
+
+            const final = new Date(finalDate);
+            const now = new Date();
+
+            if (now.toDateString() !== final.toDateString()) return 100;
+
+            return Math.round((now.getHours() / 24) * 100);
+};
+
         const task_item = rawItems.map(item => ({
             ...item,
+            deadline_percent: deadlinePercent(item.deadline_percent, item.initial_date, item.final_date),
             check:       Boolean(item.check),
             assigned_to: item.assigned_to ?? 0,
         }));

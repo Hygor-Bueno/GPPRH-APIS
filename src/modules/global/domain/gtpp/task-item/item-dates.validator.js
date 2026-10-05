@@ -34,7 +34,7 @@ function validateItemDates(initialDate, finalDate, taskDates) {
         throw new AppError('initial_date e final_date devem ser informados juntos.', 400);
     }
 
-    if (initialDate >= finalDate) {
+    if (initialDate > finalDate) {
         throw new AppError('A data de início do item deve ser anterior à data de fim.', 400);
     }
 
