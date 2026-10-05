@@ -90,14 +90,24 @@ function scanForBinaryThreats(buf, { allowWebScripts = false } = {}) {
  * @throws {AppError} 400 se keyword perigosa for encontrada.
  */
 function scanPdfContent(buf) {
-    const scan = buf.slice(0, Math.min(MAX_SCAN_BYTES, buf.length)).toString('binary');
+    const scan = _stripPdfStrings(buf.slice(0, Math.min(MAX_SCAN_BYTES, buf.length)).toString('binary'));
 
     for (const key of PDF_DANGEROUS_KEYS) {
         // Busca precisa: a chave PDF deve ser seguida de espaço, tab, newline
         // ou um delimitador PDF (< [ () >> ) — evita falsos positivos em nomes
         // de fontes embutidas como /AAAAAA+LiberationSans que contêm /AA.
-        const pattern = new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[\\s<\\[(/]');
-        if (pattern.test(scan)) {
+        // O `>` e o `]` faltavam: `/S/JavaScript>>` (chave no fim do dicionário) passava.
+        const pattern = new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[\\s<>\\[\\](/]', 'g');
+        const hits = [...scan.matchAll(pattern)];
+
+        // `/OpenAction` só é perigoso pela ação que dispara. InDesign e Acrobat
+        // gravam por padrão um que apenas abre na página 1 (`/S/GoTo`) — esse
+        // passa; qualquer outro tipo, ou um que não dê para resolver, segue bloqueado.
+        const blocked = key === '/OpenAction'
+            ? hits.some((m) => !_isGoToOpenAction(scan, m.index + key.length))
+            : hits.length > 0;
+
+        if (blocked) {
             throw new AppError(
                 `PDF bloqueado: contém elemento perigoso "${key}". ` +
                 'PDFs com JavaScript ou ações automáticas não são permitidos.',
@@ -105,6 +115,94 @@ function scanPdfContent(buf) {
             );
         }
     }
+}
+
+/**
+ * Diz se o valor de um `/OpenAction` é só navegação para uma página.
+ *
+ * Aceita as duas formas que os exportadores usam:
+ *   - destino direto:    `/OpenAction [3 0 R /Fit]`
+ *   - ação por referência: `/OpenAction 44 0 R` → `44 0 obj <</D[45 0 R/Fit]/S/GoTo>>`
+ *
+ * A ação referenciada precisa ser `/S/GoTo` (não `GoToR`/`GoToE`, que abrem
+ * outro arquivo) e não pode encadear outra ação via `/Next`. Objeto que não se
+ * acha no trecho escaneado (ex.: dentro de object stream comprimido) conta
+ * como não inofensivo.
+ *
+ * @private
+ * @param {string} scan  - PDF já sem o conteúdo das strings.
+ * @param {number} start - Posição logo após a chave `/OpenAction`.
+ * @returns {boolean}
+ */
+function _isGoToOpenAction(scan, start) {
+    const value = scan.slice(start, start + 64);
+
+    if (/^\s*\[/.test(value)) return true;
+
+    const ref = value.match(/^\s*(\d+)\s+(\d+)\s+R\b/);
+    if (!ref) return false;
+
+    const obj = scan.match(new RegExp(`(?:^|[^\\d])${ref[1]}\\s+${ref[2]}\\s+obj([\\s\\S]*?)endobj`));
+    if (!obj) return false;
+
+    const body = obj[1];
+    return /\/S\s*\/GoTo(?![A-Za-z])/.test(body) && !/\/Next(?![A-Za-z])/.test(body);
+}
+
+/**
+ * Apaga o conteúdo das strings literais `( … )` do PDF que estão FORA de
+ * streams, para que o scan veja só chaves de dicionário.
+ *
+ * Sem isto, todo link cuja URL contivesse um trecho como "/JavaScript/" ou
+ * "/AA/" era recusado — `/URI(https://developer.mozilla.org/pt-BR/docs/Web/JavaScript/)`
+ * casava com a chave `/JavaScript`, embora seja só texto de uma ação `/URI`
+ * inofensiva. Para o leitor de PDF, tudo entre parênteses é dado, nunca chave.
+ *
+ * Streams ficam de fora de propósito: o leitor pula o corpo pelo `/Length`, e
+ * um `(` solto ali dentro abriria aqui uma "string" que engoliria os
+ * dicionários seguintes — o que permitiria esconder um `/OpenAction` real. O
+ * corpo do stream segue sendo escaneado exatamente como antes.
+ *
+ * @private
+ * @param {string} pdf - Conteúdo em codificação 'binary'.
+ * @returns {string}
+ */
+function _stripPdfStrings(pdf) {
+    const parts = [];
+    let copied = 0; // início do trecho ainda não copiado para `parts`
+    let i = 0;
+
+    while (i < pdf.length) {
+        const ch = pdf[i];
+
+        // Início de corpo de stream: pula sem tocar até `endstream`.
+        if (ch === 's' && pdf.startsWith('stream', i) && !/[A-Za-z]/.test(pdf[i - 1] ?? '')) {
+            const end = pdf.indexOf('endstream', i + 6);
+            i = end === -1 ? pdf.length : end + 9;
+            continue;
+        }
+
+        // String literal: pula até o `)` que a fecha, respeitando escape e
+        // parênteses aninhados balanceados (as duas formas que a spec permite).
+        if (ch === '(') {
+            parts.push(pdf.slice(copied, i), '()');
+            let depth = 1;
+            i++;
+            while (i < pdf.length && depth > 0) {
+                if (pdf[i] === '\\') { i += 2; continue; }
+                if (pdf[i] === '(') depth++;
+                else if (pdf[i] === ')') depth--;
+                i++;
+            }
+            copied = i;
+            continue;
+        }
+
+        i++;
+    }
+
+    parts.push(pdf.slice(copied));
+    return parts.join('');
 }
 
 // ─── Scan específico: text/plain e CSV ───────────────────────────────────────

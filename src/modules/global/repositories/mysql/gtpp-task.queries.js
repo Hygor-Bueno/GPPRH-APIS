@@ -5,6 +5,8 @@
 
 'use strict';
 
+const { localDateTime } = require('./mysql-datetime.sql');
+
 /**
  * Monta a query de listagem de tarefas com filtros e paginação opcionais.
  *
@@ -165,7 +167,7 @@ const SQL_EXTEND_TASK_FINAL_DATE = `UPDATE gt_task SET final_date = DATE_ADD(CUR
 
 /** Lista o histórico de uma tarefa em ordem decrescente. */
 const SQL_GET_TASK_HISTORIC = `
-  SELECT h.id, h.description, h.state_id, h.date_time,
+  SELECT h.id, h.description, h.state_id, ${localDateTime('h.date_time')},
          ts.description AS state_description, ts.color AS state_color
   FROM gt_task_historic h
   LEFT JOIN gt_task_state ts ON ts.id = h.state_id
@@ -194,9 +196,9 @@ const SQL_GET_TASK_ITEMS = `
     t.yes_no,
     t.created_by,
     t.assigned_to,
-    t.created_at,
+    ${localDateTime('t.created_at')},
     t.updated_by,
-    t.updated_at,
+    ${localDateTime('t.updated_at')},
     t.status,
     CASE WHEN t.file_id IS NOT NULL OR t.file IS NOT NULL THEN 1 ELSE 0 END AS file,
     t.file_id,
@@ -226,15 +228,14 @@ const SQL_GET_TASK_ITEMS = `
 `;
 
 /**
- * Usuários vinculados a uma tarefa (com foto), para o detalhe getTaskById.
+ * Usuários vinculados a uma tarefa, para o detalhe getTaskById.
  *
- * Devolve as DUAS formas de foto durante a transição:
- *  - `file_id` (`_user`) → foto atual, via `_files`; mesmo formato de `GET /users`
- *  - `photo`   (`_employee`) → BLOB legado, anterior ao migrate-employee-photos
+ * Tudo vem de `_user`: nome e foto (`file_id`, via `_files` — mesmo formato de
+ * `GET /users`). O BLOB legado `_employee.photo` saiu: trafegava o binário de
+ * cada usuário da tarefa em toda chamada do detalhe. O front pega a foto pelo
+ * `file_id`.
  *
- * Preferir `file_id` no front. O `photo` só continua aqui para não quebrar quem
- * ainda o consome — quando ninguém mais usar, remover a coluna daqui: ela
- * trafega o binário de cada usuário da tarefa em toda chamada do detalhe.
+ * `UPPER` no nome para o detalhe exibir todos no mesmo padrão, em caixa alta.
  */
 const SQL_GET_TASK_DETAIL_USERS = `
   SELECT
@@ -242,12 +243,10 @@ const SQL_GET_TASK_DETAIL_USERS = `
     gtu.user_id,
     IF(_u.ad_status = 'active', true, false) AS status,
     gtu.theme_id_fk,
-    e.name,
-    _u.file_id,
-    e.photo
+    UPPER(_u.name) AS name,
+    _u.file_id
   FROM gt_task_user gtu
   INNER JOIN _user _u ON _u.id = gtu.user_id
-  INNER JOIN _employee e ON e.id = gtu.user_id
   WHERE gtu.task_id = ?
 `;
 

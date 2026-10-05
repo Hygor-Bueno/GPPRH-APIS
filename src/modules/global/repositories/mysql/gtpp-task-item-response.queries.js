@@ -12,6 +12,8 @@
 
 'use strict';
 
+const { localDateTime } = require('./mysql-datetime.sql');
+
 /**
  * Comentários/evidências ativos de um item, com o nome do autor.
  *
@@ -26,7 +28,7 @@ const SQL_GET_ITEM_RESPONSES = `
     r.comment,
     r.status,
     r.created_by_fk,
-    r.created_at,
+    ${localDateTime('r.created_at')},
     e.name
   FROM gt_task_item_response r
   LEFT JOIN _employee e ON e.id = r.created_by_fk
@@ -52,7 +54,7 @@ const SQL_GET_ITEM_RESPONSE_FILES = `
     f.video_codec,
     rf.processing_status,
     rf.status,
-    rf.created_at
+    ${localDateTime('rf.created_at')}
   FROM gt_task_item_response_files rf
   INNER JOIN gt_task_item_response r ON r.id = rf.task_item_response_id_fk
   LEFT JOIN _files f ON f.id = rf.file_id
@@ -74,7 +76,7 @@ const SQL_GET_RESPONSE_FILES = `
     f.video_codec,
     rf.processing_status,
     rf.status,
-    rf.created_at
+    ${localDateTime('rf.created_at')}
   FROM gt_task_item_response_files rf
   LEFT JOIN _files f ON f.id = rf.file_id
   WHERE rf.task_item_response_id_fk = ? AND rf.status = 1
@@ -83,7 +85,7 @@ const SQL_GET_RESPONSE_FILES = `
 
 /** Comentário ativo por id — usado para reemitir o evento WS após mexer nos anexos. */
 const SQL_FIND_RESPONSE_BY_ID = `
-  SELECT id, task_item_id_fk, comment, status, created_by_fk, created_at
+  SELECT id, task_item_id_fk, comment, status, created_by_fk, ${localDateTime('created_at')}
   FROM gt_task_item_response
   WHERE id = ? AND status = 1
 `;

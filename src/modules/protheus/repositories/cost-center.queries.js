@@ -284,7 +284,41 @@ function sqlGetUserOrganizationBatch(count) {
     `;
 }
 
+/**
+ * Colaboradores (matrícula + filial) de um centro de custo — o caminho inverso
+ * de `sqlGetUserOrganizationBatch`. Usado pela visão de supervisão do GTPP para
+ * filtrar tarefas pelo CC do criador.
+ *
+ * Lê só a SRA da empresa informada: `RA_CC` não é único entre empresas. A tabela
+ * vem da whitelist `COMPANY_TABLES`, nunca do input; empresa fora dela (04, 05)
+ * devolve `null` e quem chama trata como "nenhum colaborador".
+ *
+ * Não filtra demissão de propósito: tarefas de quem saiu continuam aparecendo
+ * no CC em que a pessoa estava.
+ *
+ * Parâmetros: @cost_center, e @branch_code quando `withBranch`.
+ *
+ * @param {string} companyCode - '01', '02', ...
+ * @param {boolean} [withBranch=false]
+ * @returns {string|null}
+ */
+function sqlEmployeesByCostCenter(companyCode, withBranch = false) {
+    const company = COMPANY_TABLES.find(c => c.company === companyCode);
+    if (!company) return null;
+
+    return `
+        SELECT DISTINCT
+            LTRIM(RTRIM(RH.RA_MAT))    AS registration,
+            LTRIM(RTRIM(RH.RA_FILIAL)) AS branch_code
+        FROM TMPPRD12.dbo.${company.employees} RH
+        WHERE RH.D_E_L_E_T_ <> '*'
+          AND LTRIM(RTRIM(RH.RA_CC)) = @cost_center
+          ${withBranch ? 'AND RH.RA_FILIAL = @branch_code' : ''}
+    `;
+}
+
 module.exports = {
+    sqlEmployeesByCostCenter,
     sqlCostCenter,
     sqlBranch,
     sqlAllBranches,

@@ -27,6 +27,7 @@ const accessController = require('./controllers/access.controller');
 const chatController = require('./controllers/chat.controller');
 const filesController = require('./controllers/files.controller');
 const gtppTaskController = require('./controllers/gtpp-task.controller');
+const gtppTaskOverviewController = require('./controllers/gtpp-task-overview.controller');
 const gtppItemController = require('./controllers/gtpp-task-item.controller');
 const gtppResponseController = require('./controllers/gtpp-task-item-response.controller');
 const gtppTaskUserController = require('./controllers/gtpp-task-user.controller');
@@ -923,6 +924,30 @@ router.get('/gtpp/tasks/board',
     authMiddleware,
     canAny(['GTPP_USE']),
     asyncHandler(gtppTaskController.getTasksBoard));
+
+/**
+ * @route GET /gtpp/overview/tasks
+ * @description Visão de supervisão (diretoria): lista qualquer tarefa, sem a
+ * trava de criador/vinculado. Filtros: employee_registration + employee_branch (ou user_id), user_role, company_code,
+ * branch_code, cost_center_code, state_ids, priority, search, due_from,
+ * due_to, overdue, page, limit.
+ * @access Requer `GTPP_MANAGE` (ou `SYSTEM_OWNER`)
+ */
+router.get('/gtpp/overview/tasks',
+    authMiddleware,
+    canAny(['GTPP_MANAGE']),
+    asyncHandler(gtppTaskOverviewController.listTasks));
+
+/**
+ * @route GET /gtpp/overview/tasks/summary
+ * @description Total de tarefas por estado, com os mesmos filtros de
+ * `GET /gtpp/overview/tasks` (paginação ignorada).
+ * @access Requer `GTPP_MANAGE` (ou `SYSTEM_OWNER`)
+ */
+router.get('/gtpp/overview/tasks/summary',
+    authMiddleware,
+    canAny(['GTPP_MANAGE']),
+    asyncHandler(gtppTaskOverviewController.summarizeTasks));
 
 /**
  * @route GET /gtpp/tasks/:taskId/historic
