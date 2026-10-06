@@ -48,9 +48,8 @@ class AuthUseCases {
      * @throws {AppError} 503 se o AD estiver indisponível
      */
     async login(username, password) {
-        const loginResult = await this._authenticate(username, password);
-        const identifier = loginResult.guid || loginResult.id;
-        return this._buildSessionUser(identifier);
+        const userId = await this._authenticate(username, password);
+        return this._buildSessionUser(userId);
     }
 
     /**
@@ -140,7 +139,10 @@ class AuthUseCases {
         return { user_id: targetUserId, temporary_password: temporaryPassword };
     }
 
-    /** @private */
+    /**
+     * @private
+     * @returns {Promise<number>} `_user.id` do usuário autenticado.
+     */
     async _authenticate(username, password) {
         try {
             return await this._loginViaAd(username, password);
@@ -160,7 +162,7 @@ class AuthUseCases {
         if (!(await verifyPassword(password, user.password))) {
             throw new UnauthorizedError('Senha incorreta');
         }
-        return user;
+        return user.id;
     }
 
     /** @private */
@@ -182,7 +184,7 @@ class AuthUseCases {
                 });
                 await knownUser.setPassword(password);
                 await this.repository.upsertAdLogin(knownUser);
-                return auth;
+                return existingUser.id;
             }
 
             // Primeiro login — busca dados no Protheus
@@ -197,7 +199,19 @@ class AuthUseCases {
             });
             await newUser.setPassword(password);
             await this.repository.upsertAdLogin(newUser);
-            return auth;
+
+            // O vínculo é relido pelo GUID em vez de confiar no que a procedure
+            // fez: se ela não gravou o `ad_guid`, o login falha aqui — nunca
+            // segue adiante com uma identidade que não conseguimos provar.
+            const mappedUser = await this.repository.findUserByAdGuid(auth.guid);
+            if (!mappedUser) {
+                throw new AppError(
+                    'Login no AD aceito, mas o usuário não ficou vinculado ao cadastro local. Procure o administrador.',
+                    500,
+                    { code: 'AD_LINK_MISSING' },
+                );
+            }
+            return mappedUser.id;
         } catch (err) {
             if (err.message?.includes('Invalid Credentials')) {
                 throw new UnauthorizedError('Usuário ou senha inválidos no Active Directory');
@@ -209,9 +223,29 @@ class AuthUseCases {
         }
     }
 
-    /** @private */
-    async _buildSessionUser(identifier) {
-        const userData = await this.repository.findUserAuthorization(identifier);
+    /**
+     * Sempre recebe o `_user.id` — nunca o GUID do AD.
+     *
+     * A procedure filtra por `ad_guid = p OR id = p`, e no MySQL comparar a
+     * coluna INT `id` com uma string faz conversão numérica do prefixo: o GUID
+     * '3c214b06…' vira 3 e casava com o usuário 3. Foi assim que uma
+     * colaboradora recebeu a sessão do diretor em 06/10/2026. Por isso o id vai
+     * como string só de dígitos, e a linha devolvida é conferida: se não for
+     * exatamente o usuário autenticado, o login é recusado.
+     *
+     * @private
+     * @param {number} userId
+     */
+    async _buildSessionUser(userId) {
+        const userData = await this.repository.findUserAuthorization(String(userId));
+        if (Number(userData.id) !== Number(userId)) {
+            console.error(
+                `[auth] sp_get_user_authorization devolveu o usuário ${userData.id} para o login do usuário ${userId} — sessão recusada.`
+            );
+            throw new AppError('Não foi possível confirmar a identidade do usuário. Procure o administrador.', 500, {
+                code: 'SESSION_IDENTITY_MISMATCH',
+            });
+        }
         // A filial vai junto porque a matrícula não é única entre empresas: sem
         // ela a busca no Protheus pode devolver o vínculo de outra pessoa, e a
         // sessão herdaria empresa e centro de custo errados.

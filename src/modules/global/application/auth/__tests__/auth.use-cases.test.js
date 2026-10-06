@@ -24,7 +24,8 @@ function makeFakeRepository(overrides = {}) {
     const repo = new AuthRepositoryPort();
     repo.findUserAuthorization = jest.fn().mockResolvedValue(SESSION_ROW);
     repo.findLocalUserByUsername = jest.fn().mockResolvedValue(null);
-    repo.findUserByAdGuid = jest.fn().mockResolvedValue(null);
+    // Primeiro login: não há vínculo antes do upsert; depois dele, o usuário 1.
+    repo.findUserByAdGuid = jest.fn().mockResolvedValueOnce(null).mockResolvedValue({ id: 1 });
     repo.upsertAdLogin = jest.fn().mockResolvedValue({ result: 'LOGIN_OK' });
     return Object.assign(repo, overrides);
 }
@@ -54,7 +55,7 @@ describe('AuthUseCases', () => {
     describe('login via AD — existing user', () => {
         it('should update the cached password and NOT query protheus employee data', async () => {
             const repository = makeFakeRepository({
-                findUserByAdGuid: jest.fn().mockResolvedValue({ name: 'Fulano', registration: '123', branch_code: '0101', table_protheus: 'SRA020' }),
+                findUserByAdGuid: jest.fn().mockResolvedValue({ id: 1, name: 'Fulano', registration: '123', branch_code: '0101', table_protheus: 'SRA020' }),
             });
             const protheusRepository = makeFakeProtheusRepository();
             const useCases = makeUseCases({ repository, protheusRepository });
@@ -63,14 +64,14 @@ describe('AuthUseCases', () => {
 
             expect(repository.upsertAdLogin).toHaveBeenCalledTimes(1);
             expect(protheusRepository.findEmployeeDataByName).not.toHaveBeenCalled();
-            expect(repository.findUserAuthorization).toHaveBeenCalledWith('guid-123');
+            expect(repository.findUserAuthorization).toHaveBeenCalledWith('1');
             expect(result.username).toBe('fulano');
         });
     });
 
     describe('login via AD — first login (no existing mapping)', () => {
         it('should look up protheus employee data and create the local user', async () => {
-            const repository = makeFakeRepository({ findUserByAdGuid: jest.fn().mockResolvedValue(null) });
+            const repository = makeFakeRepository();
             const protheusRepository = makeFakeProtheusRepository();
             const useCases = makeUseCases({ repository, protheusRepository });
 
@@ -78,6 +79,50 @@ describe('AuthUseCases', () => {
 
             expect(protheusRepository.findEmployeeDataByName).toHaveBeenCalledWith('Fulano');
             expect(repository.upsertAdLogin).toHaveBeenCalledTimes(1);
+            expect(repository.findUserAuthorization).toHaveBeenCalledWith('1');
+        });
+
+        it('should refuse the login when the procedure did not link the AD GUID', async () => {
+            const repository = makeFakeRepository({ findUserByAdGuid: jest.fn().mockResolvedValue(null) });
+            const useCases = makeUseCases({ repository });
+
+            await expect(useCases.login('fulano', 'senha123')).rejects.toMatchObject({ code: 'AD_LINK_MISSING' });
+            expect(repository.findUserAuthorization).not.toHaveBeenCalled();
+        });
+    });
+
+    // Incidente de 06/10/2026: a colaboradora 461 entrou com a sessão do
+    // diretor (id 3) porque o GUID dela, '3c214b06…', era passado para a
+    // procedure e o MySQL convertia o prefixo numérico em 3 ao comparar com `id`.
+    describe('session identity (GUID never reaches sp_get_user_authorization)', () => {
+        const MARIA_GUID = '3c214b065be561478711df9be388e9f5';
+        const MARIA_ROW = { id: 461, name: 'MARIA', registration: '003780', branch_code: '0209', table_protheus: 'SRA020' };
+
+        it('should look the session up by the local id, never by the GUID', async () => {
+            const repository = makeFakeRepository({
+                findUserByAdGuid: jest.fn().mockResolvedValue(MARIA_ROW),
+                findUserAuthorization: jest.fn().mockResolvedValue({ ...SESSION_ROW, id: 461 }),
+            });
+            const ldapAuthenticator = makeFakeLdap({ authenticate: jest.fn().mockResolvedValue({ guid: MARIA_GUID, name: 'Maria Elis dos Santos' }) });
+
+            await makeUseCases({ repository, ldapAuthenticator }).login('Maria.Santos', 'x');
+
+            expect(repository.findUserAuthorization).toHaveBeenCalledTimes(1);
+            expect(repository.findUserAuthorization).toHaveBeenCalledWith('461');
+        });
+
+        it('should refuse the session when the procedure returns a different user', async () => {
+            const repository = makeFakeRepository({
+                findUserByAdGuid: jest.fn().mockResolvedValue(MARIA_ROW),
+                findUserAuthorization: jest.fn().mockResolvedValue({ ...SESSION_ROW, id: 3, user: 'edson' }),
+            });
+            const ldapAuthenticator = makeFakeLdap({ authenticate: jest.fn().mockResolvedValue({ guid: MARIA_GUID, name: 'Maria Elis dos Santos' }) });
+            const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+            await expect(makeUseCases({ repository, ldapAuthenticator }).login('Maria.Santos', 'x'))
+                .rejects.toMatchObject({ code: 'SESSION_IDENTITY_MISMATCH' });
+
+            errorSpy.mockRestore();
         });
     });
 
@@ -87,13 +132,14 @@ describe('AuthUseCases', () => {
             const localHash = (await bcrypt.hash('senhaLocal', 10)).replace('$2b$', '$2y$');
             const repository = makeFakeRepository({
                 findLocalUserByUsername: jest.fn().mockResolvedValue({ id: 42, password: localHash }),
+                findUserAuthorization: jest.fn().mockResolvedValue({ ...SESSION_ROW, id: 42 }),
             });
             const useCases = makeUseCases({ repository, ldapAuthenticator });
 
             await useCases.login('fulano', 'senhaLocal');
 
             expect(repository.findLocalUserByUsername).toHaveBeenCalledWith('fulano');
-            expect(repository.findUserAuthorization).toHaveBeenCalledWith(42);
+            expect(repository.findUserAuthorization).toHaveBeenCalledWith('42');
         });
 
         it('should NOT fall back to local login when the AD service itself is unavailable', async () => {
