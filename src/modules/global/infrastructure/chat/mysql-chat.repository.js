@@ -50,10 +50,10 @@ class MysqlChatRepository extends ChatRepositoryPort {
     }
 
     async findConversations(userId) {
-        // Parâmetros em ordem: outer(id_sender) + inner(IF×4, WHERE×2, IF!=, !=)
+        // Parâmetros em ordem: outer(id_sender) + inner(IF×3, WHERE×2, IF!=, !=)
         return this._execute(
             sqlGetConversations(),
-            [userId, userId, userId, userId, userId, userId, userId, userId]
+            [userId, userId, userId, userId, userId, userId, userId]
         );
     }
 

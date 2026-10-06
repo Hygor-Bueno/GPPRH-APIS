@@ -44,7 +44,7 @@ const { WEB_SAFE_VIDEO_CODECS } = require('../../../../../utils/file/video-codec
  * @property {0|1}     status
  * @property {number}  created_by_fk
  * @property {string|Date} created_at
- * @property {?string} name           - Nome do autor (`_employee.name`).
+ * @property {?string} name           - Nome do autor (`_user.name`).
  * @property {?number} file_id        - @deprecated Primeiro item de `files` — remover quando o front migrar.
  * @property {?string} file_name      - @deprecated idem.
  * @property {?string} file_path      - @deprecated idem.

@@ -34,7 +34,7 @@ const PAGE_SIZE = 20;
  * Retorna a lista de conversas diretas do usuário com contagem de não lidas.
  *
  * Para cada conversa retorna: `partner_id`, `partner_name` e `unread_count`.
- * O nome do parceiro é buscado em `_employee` (com fallback para `_user.name`).
+ * O nome do parceiro vem de `_user.name`.
  *
  * Parâmetros (7x `userId`):
  * `[userId, userId, userId, userId, userId, userId, userId]`
@@ -59,11 +59,10 @@ function sqlGetConversations() {
         FROM (
             SELECT
                 IF(m.id_user = ?, m.id_sender, m.id_user)             AS partner_id,
-                UPPER(TRIM(COALESCE(e.name, u.name, 'Desconhecido'))) AS partner_name,
+                UPPER(TRIM(COALESCE(u.name, 'Desconhecido')))         AS partner_name,
                 DATE_FORMAT(MAX(m.date), '%Y-%m-%d %H:%i:%s')         AS last_message_date
             FROM cl_message m
-            LEFT JOIN _employee e ON e.id = IF(m.id_user = ?, m.id_sender, m.id_user)
-            LEFT JOIN _user     u ON u.id = IF(m.id_user = ?, m.id_sender, m.id_user)
+            LEFT JOIN _user u ON u.id = IF(m.id_user = ?, m.id_sender, m.id_user)
             WHERE (m.id_user = ? OR m.id_sender = ?)
               AND m.id_group IS NULL
               AND IF(m.id_user = ?, m.id_sender, m.id_user) != ?

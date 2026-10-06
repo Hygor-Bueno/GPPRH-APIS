@@ -7,21 +7,19 @@
 
 /** Lista todas as mensagens de uma tarefa em ordem cronológica. */
 const SQL_GET_TASK_MESSAGES = `
-  SELECT m.id, m.description, m.date_time, m.user_id, e.name,
+  SELECT m.id, m.description, m.date_time, m.user_id, u.name,
     m.file_id, m.file_name
   FROM gt_message m
   INNER JOIN _user u ON u.id = m.user_id
-  INNER JOIN _employee e ON e.id = m.user_id
   WHERE m.task_id = ?
   ORDER BY m.id ASC
 `;
 
 const SQL_GET_MESSAGE_BY_ID = `
-  SELECT m.id, m.description, m.date_time, m.user_id, e.name,
+  SELECT m.id, m.description, m.date_time, m.user_id, u.name,
     m.file_id, m.file_name
   FROM gt_message m
   INNER JOIN _user u ON u.id = m.user_id
-  INNER JOIN _employee e ON e.id = m.user_id
   WHERE m.id = ?
 `;
 

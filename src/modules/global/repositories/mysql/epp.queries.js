@@ -567,8 +567,8 @@ const SQL_GET_STOCK_HISTORY = `
         creators.name AS creators_name,
         editors.name  AS editors_name
     FROM global.epp_stock AS stk
-    LEFT JOIN global._employee AS creators ON stk.created_by = creators.id
-    LEFT JOIN global._employee AS editors  ON stk.updated_by = editors.id
+    LEFT JOIN global._user AS creators ON stk.created_by = creators.id
+    LEFT JOIN global._user AS editors  ON stk.updated_by = editors.id
     LEFT JOIN global.epp_product AS prod   ON stk.id_product_fk = prod.id_product
     WHERE stk.id_product_fk = ? AND stk.stock_delete = 0
     ORDER BY stk.id_stock DESC

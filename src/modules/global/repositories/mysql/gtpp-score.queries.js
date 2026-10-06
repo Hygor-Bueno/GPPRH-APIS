@@ -48,12 +48,11 @@ const SQL_UPDATE_DISQUALIFY = `UPDATE gt_task SET disqualify = ? WHERE id = ?`;
 
 /** Todos os usuários com acesso GTPP (application_id 2 ou 3). */
 const SQL_GET_ALL_USERS_WITH_ACCESS = `
-  SELECT DISTINCT u.id, e.name AS \`user\`
+  SELECT DISTINCT u.id, TRIM(u.name) AS \`user\`
   FROM _user u
-  INNER JOIN _employee e ON e.id = u.id
   INNER JOIN _application_access aa ON aa.user_id = u.id
   WHERE u.ad_status = 'active' AND aa.application_id IN (2, 3)
-  ORDER BY e.name ASC
+  ORDER BY \`user\` ASC
 `;
 
 module.exports = {

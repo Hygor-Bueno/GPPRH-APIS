@@ -119,7 +119,7 @@ function buildTaskOverviewQuery(filters, closedStates) {
     t.id,
     t.description,
     t.user_id,
-    UPPER(TRIM(COALESCE(u.name, e.name))) AS creator_name,
+    UPPER(TRIM(u.name)) AS creator_name,
     u.branch_code AS creator_branch_code,
     ts.id AS state_id,
     ts.description AS state_description,
@@ -141,7 +141,6 @@ function buildTaskOverviewQuery(filters, closedStates) {
   FROM gt_task t
   INNER JOIN gt_task_state ts ON ts.id = t.state_id
   INNER JOIN _user u ON u.id = t.user_id
-  LEFT JOIN _employee e ON e.id = t.user_id
   ${where}
   ORDER BY t.id DESC
   LIMIT ${safeLimit + 1} OFFSET ${safeOffset}

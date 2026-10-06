@@ -29,9 +29,9 @@ const SQL_GET_ITEM_RESPONSES = `
     r.status,
     r.created_by_fk,
     ${localDateTime('r.created_at')},
-    e.name
+    u.name
   FROM gt_task_item_response r
-  LEFT JOIN _employee e ON e.id = r.created_by_fk
+  LEFT JOIN _user u ON u.id = r.created_by_fk
   WHERE r.task_item_id_fk = ? AND r.status = 1
   ORDER BY r.created_at ASC
 `;
