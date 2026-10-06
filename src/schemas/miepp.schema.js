@@ -56,7 +56,7 @@ const postPlayerSchema = {
     resolution:    { type: 'string',  required: false, maxLength: 20, pattern: RESOLUTION_PATTERN },
     orientation:   { type: 'string',  required: true,  enum: values(Orientation) },
     mac_address:   { type: 'string',  required: false, maxLength: 17, pattern: MAC_PATTERN },
-    active:        { type: 'boolean', required: false },
+    active:        { type: 'number', required: false },
 };
 
 const putPlayerSchema = {
@@ -66,7 +66,7 @@ const putPlayerSchema = {
     resolution:    { type: 'string',  required: false, maxLength: 20, pattern: RESOLUTION_PATTERN },
     orientation:   { type: 'string',  required: false, enum: values(Orientation) },
     mac_address:   { type: 'string',  required: false, maxLength: 17, pattern: MAC_PATTERN },
-    active:        { type: 'boolean', required: false },
+    active:        { type: 'number', required: false },
 };
 
 const postCommandSchema = {
