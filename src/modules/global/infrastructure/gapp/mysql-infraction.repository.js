@@ -26,7 +26,6 @@ class MysqlInfractionRepository {
 
     async listInfraction() {
         const sql = sqlListInfraction();
-        console.log(sql);
         const [rows] = await this._query(sql, []);
         return rows
     }

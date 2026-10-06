@@ -290,6 +290,43 @@ const updateNfSchema = {
     nf_id:        { type: 'number' },
 }
 
+const maintenanceSchema = {
+    technician:     { type: 'string' },
+    service_value:  { type: 'number' },
+    value_parts:    { type: 'number' },
+    km_day:         { type: 'number' },
+    km_next:        { type: 'number' },
+    date_next:      { type: 'string' },
+    warranty:       { type: 'number' },
+    validity:       { type: 'string' },
+    expen_id_fk:    { type: 'number' },
+}
+
+const fuelSchema = {
+    fuel_id:        { type: 'number' },
+    liter_value:    { type: 'number' },
+    coupon_number:  { type: 'number', require: true },
+    km_day:         { type: 'number', require: true },
+    liter_qtd:      { type: 'number', require: true },
+    expen_id_fk:    { type: 'number' },
+    fuel_type_id_fk:{ type: 'number', require: true },
+    item_number:    { type: 'number' },
+    detail:         { type: 'string' },
+}
+
+const finesSchema = {
+    fine_id:                { type: 'number' },
+    infraction:             { type: 'string', require: true },
+    ait:                    { type: 'string', require: true },
+    gravity:                { type: 'string', require: true },
+    points:                 { type: 'number', require: true },
+    article_ctb:            { type: 'string', require: true },
+    offending_driver:       { type: 'number' },
+    offending_driver_date:  { type: 'string' },
+    expen_id_fk:            { type: 'number' },
+    infraction_id_fk:       { type: 'number' },
+}
+
 module.exports = {
     createActiveSchema,
     updateActiveSchema,
@@ -310,5 +347,8 @@ module.exports = {
     nfFieldSchema,
     listNfQuerySchema,
     createNfSchema,
-    updateNfSchema
+    updateNfSchema,
+    maintenanceSchema,
+    fuelSchema,
+    finesSchema
 };

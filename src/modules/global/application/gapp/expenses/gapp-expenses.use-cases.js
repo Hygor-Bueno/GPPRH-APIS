@@ -14,6 +14,8 @@ const { ExpenseType } = require('../../../domain/gapp/expenses/expense-type.enum
 const { pickTypeDetail } = require('../../../domain/gapp/expenses/expense-detail.selector');
 const { resolveFuelDetail } = require('../../../domain/gapp/expenses/fuel-detail.calculator');
 const { shapeExpenseDetail } = require('../../../domain/gapp/expenses/expense-detail.shaper');
+const { validateSchema } = require('../../../../../middlewares/validate.middleware');
+const { fuelSchema, finesSchema, maintenanceSchema } = require('../../../../../schemas/gapp.schema');
 
 class GappExpensesUseCases {
     /**
@@ -63,6 +65,7 @@ class GappExpensesUseCases {
         }
 
         if (detail && Number(expTypeId) === ExpenseType.FUEL) {
+            await validateSchema(data.fuel, fuelSchema);
             const tank = await this.repository.findTankCapacity(data.active_id_fk);
             const lastKm = await this.repository.findLastKm(data.active_id_fk)
 
@@ -81,10 +84,12 @@ class GappExpensesUseCases {
         }
 
         if (detail && Number(expTypeId) === ExpenseType.MAINTENANCE) {
+            await validateSchema(data.maintenance, maintenanceSchema);
+            
             const maintenanceData = data.maintenance
             const totalWithDiscount = Number(data.total_value) - (Number(data.discount) ?? 0);
-            const totalParts = Number(maintenanceData.value_parts) ?? 0;
-            const serviceValue = Number(maintenanceData.service_value) ?? 0;
+            const totalParts = maintenanceData.value_parts ?? 0;
+            const serviceValue = maintenanceData.service_value ?? 0;
 
             if ((totalWithDiscount - ((totalParts + serviceValue) - Number(data.discount))) !== 0) {
                 throw new AppError('A somatoria total dos valores é divergente do valor total da despesa!', 400)
@@ -96,6 +101,10 @@ class GappExpensesUseCases {
             if (maintenanceData.warranty === "1" && !maintenanceData.validity) {
                 throw new AppError('O campo prazo e obrigatorio quando existe uma garantia!', 400)
             }
+        }
+
+        if(detail && Number(expTypeId) === ExpenseType.FINE){
+            await validateSchema(data.fine, finesSchema);
         }
 
         return detail;
