@@ -10,7 +10,7 @@ function makeFakeRepository(overrides = {}) {
     repo.findFilesByItem = jest.fn().mockResolvedValue([]);
     repo.findFilesByResponse = jest.fn().mockResolvedValue([]);
     repo.findResponseById = jest.fn().mockResolvedValue({ id: 1, comment: 'oi' });
-    repo.findTaskIdByItemId = jest.fn().mockResolvedValue(5);
+    repo.findTaskByItemId = jest.fn().mockResolvedValue({ taskId: 5, stateId: 2 });
     repo.create = jest.fn().mockResolvedValue({ responseId: 99, files: [] });
     repo.update = jest.fn().mockResolvedValue({ affectedRows: 1 });
     repo.softDelete = jest.fn().mockResolvedValue({ affectedRows: 1 });
@@ -105,9 +105,22 @@ describe('GtppTaskItemResponseUseCases', () => {
 
     describe('createItemResponse', () => {
         it('should throw 404 when the parent item does not exist (no direct DB access from the controller anymore)', async () => {
-            const repository = makeFakeRepository({ findTaskIdByItemId: jest.fn().mockResolvedValue(null) });
+            const repository = makeFakeRepository({ findTaskByItemId: jest.fn().mockResolvedValue(null) });
             const useCases = makeUseCases({ repository });
             await expect(useCases.createItemResponse(999, 10, { comment: 'oi' })).rejects.toThrow(AppError);
+        });
+
+        it.each([5, 6, 7, 8])('should reject with 400 and persist nothing when the task is closed (state %i)', async (stateId) => {
+            const repository = makeFakeRepository({ findTaskByItemId: jest.fn().mockResolvedValue({ taskId: 5, stateId }) });
+            const useCases = makeUseCases({ repository });
+            await expect(useCases.createItemResponse(1, 10, { comment: 'oi' })).rejects.toMatchObject({ statusCode: 400 });
+            expect(repository.create).not.toHaveBeenCalled();
+        });
+
+        it.each([1, 2, 3, 4])('should accept comments while the task is open (state %i)', async (stateId) => {
+            const repository = makeFakeRepository({ findTaskByItemId: jest.fn().mockResolvedValue({ taskId: 5, stateId }) });
+            const useCases = makeUseCases({ repository });
+            await expect(useCases.createItemResponse(1, 10, { comment: 'oi' })).resolves.toMatchObject({ responseId: 99 });
         });
 
         it('should throw 400 when there is neither text nor file', async () => {
@@ -227,7 +240,7 @@ describe('GtppTaskItemResponseUseCases', () => {
         });
 
         it('should silently skip the broadcast when the parent item cannot be resolved', async () => {
-            const repository = makeFakeRepository({ findTaskIdByItemId: jest.fn().mockResolvedValue(null) });
+            const repository = makeFakeRepository({ findTaskByItemId: jest.fn().mockResolvedValue(null) });
             const eventPublisher = makeFakeEventPublisher();
             const useCases = makeUseCases({ repository, eventPublisher });
             await expect(useCases.updateItemResponse(1, 'novo', 5, 10)).resolves.toBeUndefined();

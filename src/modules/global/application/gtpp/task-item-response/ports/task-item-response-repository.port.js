@@ -51,8 +51,8 @@ class TaskItemResponseRepositoryPort {
      */
     softDeleteFile(params) { throw new Error('Not implemented'); }
 
-    /** @param {number} itemId @returns {Promise<number|null>} */
-    findTaskIdByItemId(itemId) { throw new Error('Not implemented'); }
+    /** @param {number} itemId @returns {Promise<{taskId:number, stateId:number}|null>} */
+    findTaskByItemId(itemId) { throw new Error('Not implemented'); }
 }
 
 module.exports = { TaskItemResponseRepositoryPort };

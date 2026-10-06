@@ -145,11 +145,15 @@ const SQL_SOFT_DELETE_FILES_BY_RESPONSE = `
 `;
 
 /**
- * Resolve o task_id de uma resposta a partir do item pai — elimina a
- * violação de camada em que o controller consultava `gt_task_item`
- * diretamente via `poolGlobal` para poder emitir o evento WebSocket.
+ * Resolve a tarefa (id e estado) a partir do item pai — o id para emitir o
+ * evento WebSocket, o estado para barrar comentário em tarefa encerrada.
  */
-const SQL_FIND_TASK_BY_ITEM_ID = `SELECT it.task_id, ts.state_id FROM global.gt_task_item it INNER JOIN global.gt_task ts ON (it.task_id = ts.id) WHERE it.id = ?`;
+const SQL_FIND_TASK_BY_ITEM_ID = `
+  SELECT it.task_id, t.state_id
+  FROM gt_task_item it
+  INNER JOIN gt_task t ON t.id = it.task_id
+  WHERE it.id = ?
+`;
 
 module.exports = {
     SQL_GET_ITEM_RESPONSES,

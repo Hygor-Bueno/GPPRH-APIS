@@ -61,9 +61,9 @@ class MysqlTaskItemResponseRepository extends TaskItemResponseRepositoryPort {
         return row ?? null;
     }
 
-    async findTaskIdByItemId(itemId) {
+    async findTaskByItemId(itemId) {
         const [[row]] = await this._query(SQL_FIND_TASK_BY_ITEM_ID, [itemId]);
-        return row ?? null;
+        return row ? { taskId: row.task_id, stateId: row.state_id } : null;
     }
 
     /**

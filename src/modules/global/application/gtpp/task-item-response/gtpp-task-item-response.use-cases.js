@@ -10,6 +10,7 @@
 const { AppError } = require('../../../../../errors/app.error');
 const { MAX_REQUEST_BYTES } = require('../../../../../utils/file/constants');
 const { shapeItemResponses, toFileDTOs, buildLegacyFileFields } = require('../../../domain/gtpp/task-item-response/task-item-response.shaper');
+const { assertTaskEditable } = require('../../../domain/gtpp/task/task-editability.rules');
 
 // Tipo 7 = novo comentário/evidência | Tipo 9 = comentário deletado | Tipo 10 = comentário editado
 const EV_RESPONSE_NEW     = 7;
@@ -66,10 +67,9 @@ class GtppTaskItemResponseUseCases {
      * @throws {AppError} 404 item inexistente / 400 sem conteúdo ou texto longo demais
      */
     async createItemResponse(taskItemId, userId, { comment, files = [] }) {
-        const task = await this.repository.findTaskIdByItemId(taskItemId);
-        if (!task.task_id) throw new AppError('Item não encontrado.', 404);
-        if (task.state_id >= 5) throw new AppError('Comentarios não são aceitos no estado atual.', 404);
-        
+        const task = await this.repository.findTaskByItemId(taskItemId);
+        if (!task) throw new AppError('Item não encontrado.', 404);
+        assertTaskEditable(task.stateId);
 
         const text = typeof comment === 'string' ? comment.trim() : '';
 
@@ -99,7 +99,7 @@ class GtppTaskItemResponseUseCases {
         // registro, e manter o tipo estável protege cliente antigo que faz
         // `comment.trim()` sem checar. Revisitar quando o front web migrar.
         this.eventPublisher
-            .broadcastEvent(task.task_id, userId, EV_RESPONSE_NEW, {
+            .broadcastEvent(task.taskId, userId, EV_RESPONSE_NEW, {
                 action: 'created', id: result.responseId, item_id: taskItemId, comment: text,
             })
             .catch(() => {});
@@ -117,10 +117,10 @@ class GtppTaskItemResponseUseCases {
         const { affectedRows } = await this.repository.update(responseId, comment.trim());
         if (affectedRows === 0) throw new AppError('Resposta não encontrada ou já excluída.', 404);
 
-        const taskId = await this.repository.findTaskIdByItemId(taskItemId);
-        if (taskId) {
+        const task = await this.repository.findTaskByItemId(taskItemId);
+        if (task) {
             this.eventPublisher
-                .broadcastEvent(taskId, userId, EV_RESPONSE_UPDATED, {
+                .broadcastEvent(task.taskId, userId, EV_RESPONSE_UPDATED, {
                     action: 'updated', id: responseId, item_id: taskItemId, comment,
                 })
                 .catch(() => {});
@@ -130,14 +130,14 @@ class GtppTaskItemResponseUseCases {
     /** @throws {AppError} 404 */
     async deleteItemResponse(responseId, taskItemId, userId) {
         // Busca o task_id ANTES de deletar, para ainda conseguir emitir o evento.
-        const taskId = await this.repository.findTaskIdByItemId(taskItemId);
+        const task = await this.repository.findTaskByItemId(taskItemId);
 
         const { affectedRows } = await this.repository.softDelete(responseId, userId);
         if (affectedRows === 0) throw new AppError('Resposta não encontrada.', 404);
 
-        if (taskId) {
+        if (task) {
             this.eventPublisher
-                .broadcastEvent(taskId, userId, EV_RESPONSE_DELETED, {
+                .broadcastEvent(task.taskId, userId, EV_RESPONSE_DELETED, {
                     action: 'deleted', id: responseId, item_id: taskItemId,
                 })
                 .catch(() => {});
@@ -165,11 +165,11 @@ class GtppTaskItemResponseUseCases {
         });
         if (affectedRows === 0) throw new AppError('Anexo não encontrado ou já removido.', 404);
 
-        const taskId = await this.repository.findTaskIdByItemId(taskItemId);
-        if (taskId) {
+        const task = await this.repository.findTaskByItemId(taskItemId);
+        if (task) {
             const response = await this.repository.findResponseById(responseId);
             this.eventPublisher
-                .broadcastEvent(taskId, userId, EV_RESPONSE_UPDATED, {
+                .broadcastEvent(task.taskId, userId, EV_RESPONSE_UPDATED, {
                     action: 'updated', id: responseId, item_id: taskItemId, comment: response?.comment ?? '',
                 })
                 .catch(() => {});

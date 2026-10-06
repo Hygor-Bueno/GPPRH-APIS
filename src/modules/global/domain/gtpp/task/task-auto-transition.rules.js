@@ -3,9 +3,10 @@
  * disparado após qualquer check/uncheck/criação/remoção de item.
  *
  * Mapa completo:
- *  estado 1 + algum item marcado          → 2  (tarefa iniciada)
+ *  estado 1 + algum (não todos) marcado   → 2  (tarefa iniciada)
  *  estado 2 + nenhum item marcado         → 1  (tarefa revertida para pendente)
- *  estado 2 + todos os itens marcados     → 3  (aguardando análise)
+ *  estado 1|2 + todos os itens marcados   → 3  (aguardando análise — o 1 cobre
+ *                                               a tarefa de item único)
  *  estado 3 + nem todos os itens marcados → 2  (item reaberto)
  *
  * Deliberadamente separada de `task-state-transition.rules.js`: aquela
@@ -33,7 +34,7 @@ function computeAutoTransition(stateId, { total, checked }) {
     if (stateId === TASK_STATE.DOING && noneChecked) {
         return { newStateId: TASK_STATE.TODO, historyDescription: 'Todos os itens desmarcados — tarefa revertida para pendente' };
     }
-    if (stateId === TASK_STATE.DOING || stateId === TASK_STATE.TODO && allChecked) {
+    if ((stateId === TASK_STATE.DOING || stateId === TASK_STATE.TODO) && allChecked) {
         return { newStateId: TASK_STATE.VALIDATE, historyDescription: 'Todos os itens concluídos — aguardando análise' };
     }
     if (stateId === TASK_STATE.VALIDATE && !allChecked) {

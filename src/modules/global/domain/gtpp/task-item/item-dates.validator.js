@@ -21,10 +21,29 @@ function parseDate(value, fieldName) {
 }
 
 /**
+ * `YYYY-MM-DD` no horário local. Aceita `Date` (o mysql2 devolve coluna DATE
+ * como `Date` à meia-noite local) ou string já nesse formato.
+ * @param {Date|string|null} value
+ * @returns {string|null}
+ */
+function toDayKey(value) {
+    if (value == null) return null;
+    if (typeof value === 'string') return value.slice(0, 10);
+    const d = new Date(value);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
  * Valida as datas do item contra a tarefa pai e entre si.
+ *
+ * As datas da tarefa são normalizadas para string antes de comparar: vindas
+ * do banco como `Date`, `'2026-01-05' < Date` é sempre `false` e o limite da
+ * tarefa nunca era aplicado.
+ *
  * @param {string|null} initialDate
  * @param {string|null} finalDate
- * @param {{ initial_date: string|null, final_date: string|null }} taskDates
+ * @param {{ initial_date: Date|string|null, final_date: Date|string|null }} taskDates
  * @throws {AppError} 400
  */
 function validateItemDates(initialDate, finalDate, taskDates) {
@@ -35,22 +54,25 @@ function validateItemDates(initialDate, finalDate, taskDates) {
     }
 
     if (initialDate > finalDate) {
-        throw new AppError('A data de início do item deve ser anterior à data de fim.', 400);
+        throw new AppError('A data de início do item não pode ser posterior à data de fim.', 400);
     }
 
-    if (taskDates.initial_date && initialDate < taskDates.initial_date) {
+    const taskInitial = toDayKey(taskDates.initial_date);
+    const taskFinal   = toDayKey(taskDates.final_date);
+
+    if (taskInitial && initialDate < taskInitial) {
         throw new AppError(
-            `A data de início do item (${initialDate}) não pode ser anterior à data de início da tarefa (${taskDates.initial_date}).`,
+            `A data de início do item (${initialDate}) não pode ser anterior à data de início da tarefa (${taskInitial}).`,
             400
         );
     }
 
-    if (taskDates.final_date && finalDate > taskDates.final_date) {
+    if (taskFinal && finalDate > taskFinal) {
         throw new AppError(
-            `A data de fim do item (${finalDate}) não pode ultrapassar a data de fim da tarefa (${taskDates.final_date}).`,
+            `A data de fim do item (${finalDate}) não pode ultrapassar a data de fim da tarefa (${taskFinal}).`,
             400
         );
     }
 }
 
-module.exports = { parseDate, validateItemDates };
+module.exports = { parseDate, validateItemDates, toDayKey };

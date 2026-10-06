@@ -16,6 +16,16 @@ describe('computeAutoTransition', () => {
         expect(result.newStateId).toBe(3);
     });
 
+    it('TODO(1) -> VALIDATE(3) when all items get checked at once (e.g. single-item task)', () => {
+        expect(computeAutoTransition(1, { total: 1, checked: 1 }).newStateId).toBe(3);
+        expect(computeAutoTransition(1, { total: 3, checked: 3 }).newStateId).toBe(3);
+    });
+
+    it('DOING(2) stays DOING while only some items are checked', () => {
+        expect(computeAutoTransition(2, { total: 3, checked: 1 })).toBeNull();
+        expect(computeAutoTransition(2, { total: 3, checked: 2 })).toBeNull();
+    });
+
     it('VALIDATE(3) -> DOING(2) when not all items are checked anymore', () => {
         const result = computeAutoTransition(3, { total: 3, checked: 2 });
         expect(result.newStateId).toBe(2);
