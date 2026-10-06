@@ -16,19 +16,7 @@ const protheusRoutes = require('./modules/protheus/routes');
 const gippRoutes = require('./modules/gipp/routes');
 const mealRoutes = require('./modules/meal/routes');
 const wsRoutes = require('./websocket/routes/ws.routes');
-
-const ALLOWED_ORIGINS = [
-  // frontends internos servidos pelo Apache do 10.10.10.99 (portas 72/73)
-  'http://10.10.10.99',
-  'http://10.10.10.99:73',
-  'http://gigpp.com.br:72',
-  'http://gigpp.com.br:73',
-  'https://gigpp.com.br:73',
-  // desenvolvimento local
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'https://localhost:5173'
-];
+const ALLOWED_ORIGINS = require('./config/internal-origins');
 
 module.exports = createApp({
   allowedOrigins: ALLOWED_ORIGINS,

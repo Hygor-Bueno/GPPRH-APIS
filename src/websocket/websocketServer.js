@@ -3,6 +3,9 @@ const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
 const cookie = require("cookie");
+const cookieParser = require("cookie-parser");
+const cors = require("cors");
+const ALLOWED_ORIGINS = require("../config/internal-origins");
 const eventRoutes = require("./routes/event.routes");
 
 const { connectionManager } = require("./connectionManager");
@@ -10,6 +13,18 @@ const { authenticateFromCookies } = require("../application/auth/auth-session.se
 
 const app = express();
 app.use(express.json());
+app.use(cookieParser());
+
+// O Apache publica estas rotas HTTP para o navegador como
+// `https://gigpp.com.br:73/api/v1/monitoring/*` → `/ws/*`. Sem CORS aqui, o
+// preflight voltava sem `Access-Control-Allow-Origin` e o navegador barrava a
+// chamada sem mostrar status nenhum.
+app.use(cors({
+  origin: ALLOWED_ORIGINS,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
