@@ -31,7 +31,7 @@ const THEME_DESC_MAX   = 125;
 const postTaskSchema = {
     title:        { type: 'string', required: true, minLength: 1, maxLength: TITLE_MAX },
     description:  { type: 'string' },
-    priority:     { type: 'number', enum: [1, 2, 3] },
+    priority:     { type: 'number', enum: [0, 1, 2] },
     initial_date: { type: 'string', pattern: DATE_PATTERN },
     final_date:   { type: 'string', pattern: DATE_PATTERN },
     expire_day:   { type: 'number', min: 0 },
