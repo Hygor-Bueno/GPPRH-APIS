@@ -222,7 +222,7 @@ const SQL_GET_TASK_ITEMS = `
     WHERE r.status = 1
     GROUP BY task_item_id_fk
   ) AS r ON r.task_item_id_fk = t.id
-  LEFT JOIN _employee e ON e.id = t.assigned_to
+  LEFT JOIN _user e ON e.id = t.assigned_to
   WHERE t.task_id = ? AND t.status = 1
   ORDER BY t.\`order\` ASC
 `;
