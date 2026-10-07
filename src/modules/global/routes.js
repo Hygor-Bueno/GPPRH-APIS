@@ -53,6 +53,7 @@ const gappInfractionsController = require('./controllers/gapp-infractions.contro
 const gappMovimentationController = require('./controllers/gapp-movimentation.controller');
 const gappStoreController = require('./controllers/gapp-store.controller');
 const gappSettingsController = require('./controllers/gapp-settings.controller');
+const mgppAwardsController = require('./controllers/mgpp-awards.controller');
 const mieppRoutes = require('./miepp.routes');
 const { upload: fileUpload } = require('../../utils/file/file.service');
 const authMiddleware = require('../../middlewares/auth.middleware');
@@ -2335,6 +2336,31 @@ router.put('/gapp/settings/subdepartament/:id',
     authMiddleware,
     canAll(['GAPP_UPDATE_SETTIGNS']),
     asyncHandler(gappSettingsController.updateSubdepartament)
+);
+
+
+// ─── MGPP ─ Rotas do modulo metas gerentes ─────────────────
+
+/**
+ * @route GET /targets/awards
+ * @description Lista as premiações registradas no banco mg_awards
+ * @access MG_MANAGER_VIEW
+ */
+
+router.get('/targets/awards',
+    authMiddleware,
+    canAll(['MG_MANAGER_VIEW']),
+    asyncHandler(mgppAwardsController.list)
+);
+router.post('/targets/awards',
+    authMiddleware,
+    canAll(['MG_MANAGER_VIEW']),
+    asyncHandler(mgppAwardsController.create)
+);
+router.put('/targets/awards/:id',
+    authMiddleware,
+    canAll(['MG_MANAGER_VIEW']),
+    asyncHandler(mgppAwardsController.update)
 );
 
 
