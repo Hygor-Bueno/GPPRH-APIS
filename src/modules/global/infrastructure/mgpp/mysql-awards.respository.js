@@ -1,6 +1,6 @@
 const { poolGlobal } = require('../../../../config/mysql');
 const { AppError } = require('../../../../errors/app.error');
-const { MgppAwardsRepositoryPorts } = require('../../../global/application/mgpp/ports/mgpp-awards-repository-ports')
+const { MgppAwardsRepositoryPorts } = require('../../../global/application/mgpp/awards/ports/mgpp-awards-repository-ports')
 const { sqlListAwards, sqlInsertAward, sqlUpdateAward,  } = require('../../repositories/mysql/mgpp-awards.queries');
 
 class MgppAwardsRepository {

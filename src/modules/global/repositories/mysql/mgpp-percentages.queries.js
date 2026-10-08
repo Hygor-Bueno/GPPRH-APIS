@@ -37,7 +37,7 @@ function sqlUpdatePercentage(){
             WHERE id_percentage = ?`
 }
 
-function buildInsertPercentage(data, id){
+function buildUpdatePercentage(data, id){
     data.id_user_fk ?? null,
     data.id_award_fk ?? null,
     data.costcenter_code ?? null,
@@ -50,3 +50,5 @@ function buildInsertPercentage(data, id){
     id ?? null
 }
 
+
+module.exports = { sqlListPercentage, sqlInsertPercentage, sqlUpdatePercentage, buildInsertPercentage, buildUpdatePercentage}

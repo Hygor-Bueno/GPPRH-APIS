@@ -54,6 +54,7 @@ const gappMovimentationController = require('./controllers/gapp-movimentation.co
 const gappStoreController = require('./controllers/gapp-store.controller');
 const gappSettingsController = require('./controllers/gapp-settings.controller');
 const mgppAwardsController = require('./controllers/mgpp-awards.controller');
+const mgppPercentageController = require('./controllers/mgpp-percentage.controller');
 const mieppRoutes = require('./miepp.routes');
 const { upload: fileUpload } = require('../../utils/file/file.service');
 const authMiddleware = require('../../middlewares/auth.middleware');
@@ -2346,21 +2347,63 @@ router.put('/gapp/settings/subdepartament/:id',
  * @description Lista as premiações registradas no banco mg_awards
  * @access MG_MANAGER_VIEW
  */
-
 router.get('/targets/awards',
     authMiddleware,
     canAll(['MG_MANAGER_VIEW']),
     asyncHandler(mgppAwardsController.list)
 );
+
+/**
+ * @route POST /targets/awards
+ * @description Realiza o registro no banco mg_awards
+ * @access MG_MANAGER_VIEW
+ */
 router.post('/targets/awards',
     authMiddleware,
-    canAll(['MG_MANAGER_VIEW']),
+    canAll(['MG_MANAGER_CREATE']),
     asyncHandler(mgppAwardsController.create)
 );
+
+/**
+ * @route PUT /targets/awards
+ * @description Atualiza as premiações registradas no banco mg_awards
+ * @access MG_MANAGER_VIEW
+ */
 router.put('/targets/awards/:id',
     authMiddleware,
-    canAll(['MG_MANAGER_VIEW']),
+    canAll(['MG_MANAGER_UPDATE']),
     asyncHandler(mgppAwardsController.update)
+);
+
+/**
+ * @route GET /targets/percentage
+ * @description Lista as porcentagens de cada setor registrado no banco mg_percentage
+ * @access MG_MANAGER_VIEW
+ */
+router.get('/targets/percentage',
+    authMiddleware,
+    canAll(['MG_MANAGER_VIEW']),
+    asyncHandler(mgppPercentageController.list)
+);
+/**
+ * @route POST /targets/percentage
+ * @description Cria as porcentagens de cada setor registrando no banco mg_percentage
+ * @access MG_MANAGER_CREATE
+ */
+router.post('/targets/percentage',
+    authMiddleware,
+    canAll(['MG_MANAGER_CREATE']),
+    asyncHandler(mgppPercentageController.create)
+);
+/**
+ * @route PUT /targets/percentage
+ * @description Atualiza as porcentagens de cada setor registrado no banco mg_percentage
+ * @access MG_MANAGER_UPDATE
+ */
+router.put('/targets/percentage',
+    authMiddleware,
+    canAll(['MG_MANAGER_UPDATE']),
+    asyncHandler(mgppPercentageController.update)
 );
 
 

@@ -1,11 +1,10 @@
-const { MgppAwardsUseCases } = require('../application/mgpp/awards/mgpp-awards.use-case');
-const { MgppAwardsRepository } = require('../infrastructure/mgpp/mysql-awards.respository');
+const { MgppPercentageUseCase } = require('../application/mgpp/percentage/mgpp-percentage.use-case');
+const { MysqlPercentegeRepository } = require('../infrastructure/mgpp/mysql-percentages.repository');
 const { respond } = require('../../../utils/respond');
 
-const useCases = new MgppAwardsUseCases({
-    repository: new MgppAwardsRepository(),
+const useCases = new MgppPercentageUseCase({
+    repository: new MysqlPercentegeRepository(),
 });
-
 
 async function create(req, res) {
     const result = await useCases.create(req.body, req.user);
@@ -23,3 +22,4 @@ async function list(req, res) {
 }
 
 module.exports = { list, create, update }
+
