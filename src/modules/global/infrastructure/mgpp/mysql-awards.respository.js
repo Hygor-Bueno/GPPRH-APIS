@@ -27,7 +27,6 @@ class MgppAwardsRepository {
     async create(data) {
         let conn = await poolGlobal.getConnection();
         try {
-            console.log("Aqui", sqlInsertAward(), [data.total_value_award, data.category_award])
             const [result] = await conn.execute(sqlInsertAward(), [data.total_value_award, data.category_award])
             return { insertId: result.insertId }
         } catch (error) {

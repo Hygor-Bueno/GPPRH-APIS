@@ -6,6 +6,11 @@ const useCases = new MgppPercentageUseCase({
     repository: new MysqlPercentegeRepository(),
 });
 
+async function list(req, res) {
+    const result = await useCases.list(req.query, req.user);
+    return respond.ok(res, result);
+}
+
 async function create(req, res) {
     const result = await useCases.create(req.body, req.user);
     return respond.created(res, result);
@@ -13,11 +18,6 @@ async function create(req, res) {
 
 async function update(req, res) {
     const result = await useCases.update(Number(req.params.id), req.body, req.user);
-    return respond.ok(res, result);
-}
-
-async function list(req, res) {
-    const result = await useCases.list(req.query, req.user);
     return respond.ok(res, result);
 }
 

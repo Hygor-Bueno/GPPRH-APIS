@@ -2400,7 +2400,7 @@ router.post('/targets/percentage',
  * @description Atualiza as porcentagens de cada setor registrado no banco mg_percentage
  * @access MG_MANAGER_UPDATE
  */
-router.put('/targets/percentage',
+router.put('/targets/percentage/:id',
     authMiddleware,
     canAll(['MG_MANAGER_UPDATE']),
     asyncHandler(mgppPercentageController.update)
