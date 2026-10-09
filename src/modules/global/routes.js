@@ -56,6 +56,7 @@ const gappSettingsController = require('./controllers/gapp-settings.controller')
 const mgppAwardsController = require('./controllers/mgpp-awards.controller');
 const mgppPercentageController = require('./controllers/mgpp-percentage.controller');
 const mgppInventoryConfigsController = require('./controllers/mgpp-inventory-configs.controller');
+const mgppInventoryController = require('./controllers/mgpp-inventory.controller');
 const mieppRoutes = require('./miepp.routes');
 const { upload: fileUpload } = require('../../utils/file/file.service');
 const authMiddleware = require('../../middlewares/auth.middleware');
@@ -2440,6 +2441,40 @@ router.put('/targets/inventory-configs/:id',
     canAll(['MG_MANAGER_UPDATE']),
     asyncHandler(mgppInventoryConfigsController.update)
 );
+
+/**
+ * @route GET /targets/inventory-
+ * @description Lista os inventarios de cada setor registrado no banco (mg_inventory)
+ * @access MG_MANAGER_VIEW
+ */
+router.get('/targets/inventory',
+    authMiddleware,
+    canAll(['MG_MANAGER_VIEW']),
+    asyncHandler(mgppInventoryController.list)
+);
+
+/**
+ * @route POST /targets/inventory-
+ * @description Registra inventario banco (mg_inventory)
+ * @access MG_MANAGER_CREATE
+ */
+router.post('/targets/inventory',
+    authMiddleware,
+    canAll(['MG_MANAGER_CREATE']),
+    asyncHandler(mgppInventoryController.create)
+);
+
+/**
+ * @route PUT /targets/inventory-
+ * @description Atualiza de inventarios registrados no banco (mg_inventory)
+ * @access MG_MANAGER_UPDATE
+ */
+router.put('/targets/inventory/:id',
+    authMiddleware,
+    canAll(['MG_MANAGER_UPDATE']),
+    asyncHandler(mgppInventoryController.update)
+);
+
 
 // ─── GAPP — Tabelas de apoio (lookup, para dropdowns/filtros) ─────────────────
 //
