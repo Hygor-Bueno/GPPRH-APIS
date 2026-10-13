@@ -1,6 +1,29 @@
 function sqlListInventoryConfigs() {
-    return `SELECT * FROM global.mg_inventory_configs`
+    const currentDate = new Date();
+    const initialDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const finalDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+    const formatDate = (date) => date.toISOString().split("T")[0];
+
+    return `
+        SELECT
+            mg.id_inventory_config,
+            mg.costcenter_code,
+            mg.branch_code,
+            mg.quantity_for_month,
+            (
+                mg.quantity_for_month - (
+                    SELECT COUNT(*)
+                    FROM global.mg_inventories AS inv
+                    WHERE inv.created_at >= '${formatDate(initialDate)}'
+                      AND inv.created_at < '${formatDate(finalDate)}'
+                      AND inv.costcenter_code = mg.costcenter_code
+                      AND inv.branch_code = mg.branch_code
+                )
+            ) AS quantity_pending
+        FROM global.mg_inventory_configs AS mg;
+    `;
 }
+
 
 function sqlInsertInventoryConfig() {
     return `INSERT INTO global.mg_inventory_configs (

@@ -28,8 +28,8 @@ class MgppInventoryUseCase {
         }
     }
 
-    async list() {
-        const res = this.repository.list();
+    async list(filters) {
+        const res = this.repository.list(filters);
         return res
     }
 

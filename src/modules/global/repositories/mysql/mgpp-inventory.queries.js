@@ -1,5 +1,12 @@
-function sqlListInventory() {
-    return `SELECT * FROM global.mg_inventories`
+function sqlListInventory(filters = {}) {
+    const limit = Number(filters.limit) || 20;
+    const page = Number(filters.page) || 1;
+    const offset = (page - 1) * limit;
+    const sql = `SELECT * FROM global.mg_inventories
+        ORDER BY id_inventory DESC 
+            LIMIT ? OFFSET ?
+    `
+    return { sql, params: [limit, offset] };
 }
 
 function sqlGetConfigs(id) {
@@ -47,9 +54,12 @@ function buildUpdateInventory(data, id) {
         id ?? null
     ]
 }
+function sqlCountInventoryRegistered() {
+    return `SELECT COUNT(*) as total FROM global.mg_inventories`
+}
 
 module.exports = {
     sqlListInventory, sqlInsertInventory, sqlUpdateInventory,
     buildInsertInventory, buildUpdateInventory,
-    sqlGetConfigs, sqlGetNumberReleasesForMonth
+    sqlGetConfigs, sqlGetNumberReleasesForMonth, sqlCountInventoryRegistered
 }

@@ -3,8 +3,8 @@ const { AppError } = require('../../../../errors/app.error');
 const { MgppInventoryRepositoryPorts } = require("../../application/mgpp/inventory/ports/mgpp-inventory-repository-port")
 const {
     sqlListInventory, sqlInsertInventory, sqlUpdateInventory,
-    buildInsertInventory, buildUpdateInventory, 
-    sqlGetConfigs, sqlGetNumberReleasesForMonth } = require('../../repositories/mysql/mgpp-inventory.queries')
+    buildInsertInventory, buildUpdateInventory,
+    sqlGetConfigs, sqlGetNumberReleasesForMonth, sqlCountInventoryRegistered } = require('../../repositories/mysql/mgpp-inventory.queries')
 
 class MysqlInventoryRepository {
     /** @private */
@@ -21,9 +21,11 @@ class MysqlInventoryRepository {
         }
     }
 
-    async list() {
-        const [rows] = await this._query(sqlListInventory())
-        return rows
+    async list(filter) {
+        const { sql, params } = sqlListInventory(filter);
+        const [rows] = await this._query(sql, params);
+        const [[{ total }]] = await this._query(sqlCountInventoryRegistered())
+        return { items: rows, total: total, page: Number(filter.page) || 1, limit: Number(filter.limit) || 20 };
     }
     async getConfigs(id) {
         const [rows] = await this._query(sqlGetConfigs(id));

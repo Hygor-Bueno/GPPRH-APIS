@@ -2382,7 +2382,7 @@ router.put('/targets/awards/:id',
  * @description Lista as porcentagens de cada setor registrado no banco mg_percentage
  * @access MG_MANAGER_VIEW
  */
-router.get('/targets/percentage',
+router.get('/targets/percentages',
     authMiddleware,
     canAll(['MG_MANAGER_VIEW']),
     asyncHandler(mgppPercentageController.list)
@@ -2392,7 +2392,7 @@ router.get('/targets/percentage',
  * @description Cria as porcentagens de cada setor registrando no banco mg_percentage
  * @access MG_MANAGER_CREATE
  */
-router.post('/targets/percentage',
+router.post('/targets/percentages',
     authMiddleware,
     canAll(['MG_MANAGER_CREATE']),
     asyncHandler(mgppPercentageController.create)
@@ -2402,7 +2402,7 @@ router.post('/targets/percentage',
  * @description Atualiza as porcentagens de cada setor registrado no banco mg_percentage
  * @access MG_MANAGER_UPDATE
  */
-router.put('/targets/percentage/:id',
+router.put('/targets/percentages/:id',
     authMiddleware,
     canAll(['MG_MANAGER_UPDATE']),
     asyncHandler(mgppPercentageController.update)
