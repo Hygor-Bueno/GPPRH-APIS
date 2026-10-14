@@ -2419,6 +2419,11 @@ router.get('/targets/inventory-configs',
     canAll(['MG_MANAGER_VIEW']),
     asyncHandler(mgppInventoryConfigsController.list)
 );
+router.get('/targets/inventory-configs/pendings',
+    authMiddleware,
+    canAll(['MG_MANAGER_VIEW']),
+    asyncHandler(mgppInventoryConfigsController.listPendings)
+);
 
 /**
  * @route POST /targets/inventory-configs

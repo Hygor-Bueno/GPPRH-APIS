@@ -11,6 +11,10 @@ class MgppInventoryConfigsUseCase {
         const res = this.repository.list();
         return res
     }
+    async listPendings() {
+        const res = this.repository.listPendings();
+        return res
+    }
 
     async create(data, user) {
         const payload = { ...data, id_user_fk: user.id };

@@ -4,6 +4,8 @@ class MgppInventoryConfigsRepositoryPorts {
     */
     list() { throw new Error('Not implemented'); }
 
+    listPendings() { throw new Error('Not implemented'); }
+
     /**
      * @param {object} data
      */

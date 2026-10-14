@@ -1,4 +1,14 @@
 function sqlListInventoryConfigs() {
+    return `
+        SELECT
+            id_inventory_config,
+            costcenter_code,
+            branch_code,
+            quantity_for_month
+        FROM global.mg_inventory_configs
+    `;
+}
+function sqlListInventoryConfigsPendings() {
     const currentDate = new Date();
     const initialDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
     const finalDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
@@ -63,4 +73,4 @@ function buildUpdateInventoryConfig(data, id) {
     ]
 }
 
-module.exports = { sqlListInventoryConfigs, sqlInsertInventoryConfig, sqlUpdateInventoryConfig, buildInsertInventoryConfig, buildUpdateInventoryConfig }
+module.exports = { sqlListInventoryConfigs, sqlInsertInventoryConfig, sqlUpdateInventoryConfig, buildInsertInventoryConfig, buildUpdateInventoryConfig, sqlListInventoryConfigsPendings }

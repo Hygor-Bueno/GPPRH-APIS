@@ -29,6 +29,7 @@ class MgppInventoryUseCase {
     }
 
     async list(filters) {
+        if (filters.date_start > filters.date_end) throw new AppError('Data final inferior a data de inicio', 400)
         const res = this.repository.list(filters);
         return res
     }

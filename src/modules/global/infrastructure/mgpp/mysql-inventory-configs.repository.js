@@ -1,7 +1,7 @@
 const { poolGlobal } = require('../../../../config/mysql');
 const { AppError } = require('../../../../errors/app.error');
 const { MgppInventoryConfigsRepositoryPorts } = require("../../../global/application/mgpp/inventory-configs/ports/mgpp-inventory-configs-repository-port")
-const { sqlListInventoryConfigs, sqlInsertInventoryConfig, sqlUpdateInventoryConfig, buildInsertInventoryConfig, buildUpdateInventoryConfig } = require('../../repositories/mysql/mgpp-inventory-configs.queries')
+const { sqlListInventoryConfigs, sqlInsertInventoryConfig, sqlUpdateInventoryConfig, buildInsertInventoryConfig, buildUpdateInventoryConfig, sqlListInventoryConfigsPendings } = require('../../repositories/mysql/mgpp-inventory-configs.queries')
 
 class MysqlInventoryConfigsRepository {
     /** @private */
@@ -20,6 +20,11 @@ class MysqlInventoryConfigsRepository {
 
     async list() {
         const [rows] = await this._query(sqlListInventoryConfigs())
+        return rows
+    }
+
+    async listPendings() {
+        const [rows] = await this._query(sqlListInventoryConfigsPendings())
         return rows
     }
 

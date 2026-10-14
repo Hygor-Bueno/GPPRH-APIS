@@ -10,6 +10,10 @@ async function list(req, res) {
     const result = await useCases.list(req.query, req.user);
     return respond.ok(res, result);
 }
+async function listPendings(req, res) {
+    const result = await useCases.listPendings(req.query, req.user);
+    return respond.ok(res, result);
+}
 
 async function create(req, res) {
     const result = await useCases.create(req.body, req.user);
@@ -21,5 +25,5 @@ async function update(req, res) {
     return respond.ok(res, result);
 }
 
-module.exports = { list, create, update }
+module.exports = { list, listPendings, create, update }
 
