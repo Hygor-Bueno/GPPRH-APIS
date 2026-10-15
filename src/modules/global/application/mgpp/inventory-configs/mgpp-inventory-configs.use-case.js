@@ -7,8 +7,8 @@ class MgppInventoryConfigsUseCase {
         this.repository = repository;
     }
 
-    async list() {
-        const res = this.repository.list();
+    async list(filters) {
+        const res = this.repository.list(filters);
         return res
     }
     async listPendings() {

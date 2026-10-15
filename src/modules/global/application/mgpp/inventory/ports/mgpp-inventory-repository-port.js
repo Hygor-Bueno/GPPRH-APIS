@@ -6,6 +6,8 @@ class MgppInventoryRepositoryPorts {
 
     getConfigs(id) { throw new Error('Not implemented'); }
 
+    validateStatus(id) { throw new Error('Not implemented'); }
+
     getNumberReleasesForMonth(date, id) { throw new Error('Not implemented'); }
 
     /**

@@ -1,6 +1,7 @@
 const INVENTORY_FILTER_CLAUSES = {
     branch_code: 'branch_code = ?',
-    costcenter_code: 'costcenter_code = ?'
+    costcenter_code: 'costcenter_code = ?',
+    status_inventory: 'status_inventory = ?'
 };
 
 function buildInventoryFilters(filters = {}) {
@@ -10,7 +11,7 @@ function buildInventoryFilters(filters = {}) {
     for (const [key, clause] of Object.entries(INVENTORY_FILTER_CLAUSES)) {
         if (filters[key] != null && filters[key] !== '') {
             conditions.push(clause);
-            params.push(key === 'description' ? `%${filters[key]}%` : filters[key]);
+            params.push(filters[key]);
         }
     }
 
@@ -65,7 +66,8 @@ function sqlUpdateInventory() {
                 id_user_fk = ?,
                 id_inventory_config = ?,
                 costcenter_code = ?,
-                branch_code = ?
+                branch_code = ?,
+                status_inventory = ?
             WHERE id_inventory = ?`
 }
 
@@ -75,15 +77,20 @@ function buildUpdateInventory(data, id) {
         data.id_inventory_config ?? null,
         data.costcenter_code ?? null,
         data.branch_code ?? null,
+        data.status_inventory ?? null,
         id ?? null
     ]
 }
+
 function sqlCountInventoryRegistered() {
     return `SELECT COUNT(*) as total FROM global.mg_inventories`
+}
+function sqlValidateInventoryStatus(id) {
+    return `SELECT status_inventory FROM global.mg_inventories WHERE id_inventory = ${id}`
 }
 
 module.exports = {
     sqlListInventory, sqlInsertInventory, sqlUpdateInventory,
-    buildInsertInventory, buildUpdateInventory,
+    buildInsertInventory, buildUpdateInventory, sqlValidateInventoryStatus,
     sqlGetConfigs, sqlGetNumberReleasesForMonth, sqlCountInventoryRegistered
 }

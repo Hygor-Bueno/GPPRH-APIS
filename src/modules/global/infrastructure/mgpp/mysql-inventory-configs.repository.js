@@ -18,8 +18,9 @@ class MysqlInventoryConfigsRepository {
         }
     }
 
-    async list() {
-        const [rows] = await this._query(sqlListInventoryConfigs())
+    async list(filters) {
+        const { sql, params } = sqlListInventoryConfigs(filters)
+        const [rows] = await this._query(sql, params)
         return rows
     }
 

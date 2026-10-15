@@ -1,12 +1,33 @@
-function sqlListInventoryConfigs() {
-    return `
-        SELECT
-            id_inventory_config,
-            costcenter_code,
-            branch_code,
-            quantity_for_month
-        FROM global.mg_inventory_configs
-    `;
+const INVENTORY_FILTER_CLAUSES = {
+    branch_code: 'branch_code = ?',
+    costcenter_code: 'costcenter_code = ?'
+};
+
+function buildInventoryFilters(filters = {}) {
+    const conditions = [];
+    const params = [];
+
+    for (const [key, clause] of Object.entries(INVENTORY_FILTER_CLAUSES)) {
+        if (filters[key] != null && filters[key] !== '') {
+            conditions.push(clause);
+            params.push(filters[key]);
+        }
+    }
+
+    return { where: conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '', params };
+}
+
+function sqlListInventoryConfigs(filters = {}) {
+    const { where, params } = buildInventoryFilters(filters)
+    const sql = `SELECT
+                    id_inventory_config,
+                    costcenter_code,
+                    branch_code,
+                    quantity_for_month
+                FROM global.mg_inventory_configs
+                ${where}`;
+
+    return { sql: sql, params: params }
 }
 function sqlListInventoryConfigsPendings() {
     const currentDate = new Date();
@@ -28,6 +49,7 @@ function sqlListInventoryConfigsPendings() {
                       AND inv.created_at < '${formatDate(finalDate)}'
                       AND inv.costcenter_code = mg.costcenter_code
                       AND inv.branch_code = mg.branch_code
+                      AND inv.status_inventory != 2
                 )
             ) AS quantity_pending
         FROM global.mg_inventory_configs AS mg;

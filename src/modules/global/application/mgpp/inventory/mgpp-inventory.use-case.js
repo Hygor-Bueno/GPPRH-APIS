@@ -9,13 +9,13 @@ class MgppInventoryUseCase {
         this.repository = repository;
     }
 
-    async _validateData(data) {
+    async _validateData(data, isUpdate) {
         const dateNow = new Date().toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', });
 
         const config = await this.repository.getConfigs(data.id_inventory_config);
         const numberReleases = await this.repository.getNumberReleasesForMonth(dateNow, data.id_inventory_config);
 
-        if (numberReleases >= config.quantity_for_month) {
+        if (numberReleases >= config.quantity_for_month && !isUpdate) {
             throw new AppError('Numero de lançamentos de inventarios do mês ja foi atingido.', 400);
         }
 
@@ -35,7 +35,7 @@ class MgppInventoryUseCase {
     }
 
     async create(data, user) {
-        await this._validateData(data);
+        await this._validateData(data, false);
 
         const payload = { ...data, id_user_fk: user.id };
         const res = this.repository.create(payload);
@@ -43,7 +43,13 @@ class MgppInventoryUseCase {
     }
 
     async update(id, data, user) {
-        await this._validateData(data);
+        const status_validy = await this.repository.validateStatus(data.id_inventory);
+
+        if (status_validy !== 0) {
+            throw new AppError('Não é possível realizar alterações, pois este inventário já foi validado.', 400);
+        }
+
+        await this._validateData(data, true);
 
         const payload = { ...data, id_user_fk: user.id };
         const res = this.repository.update(id, payload);

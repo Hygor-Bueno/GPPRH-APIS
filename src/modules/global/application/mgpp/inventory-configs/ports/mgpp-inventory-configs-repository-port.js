@@ -2,7 +2,7 @@ class MgppInventoryConfigsRepositoryPorts {
     /**
     * @param {number} accessCode - `_user.id` do usuário autenticado.
     */
-    list() { throw new Error('Not implemented'); }
+    list(filters) { throw new Error('Not implemented'); }
 
     listPendings() { throw new Error('Not implemented'); }
 
