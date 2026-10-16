@@ -10,6 +10,31 @@
 
 const { FileService } = require('../../../utils/file/file.service');
 const { respond }     = require('../../../utils/respond');
+const { AppError }    = require('../../../errors/app.error');
+
+/**
+ * Módulos cujos arquivos NÃO saem por esta rota.
+ *
+ * `/files/:fileId` exige só sessão — qualquer usuário logado lê qualquer
+ * arquivo, e os ids são sequenciais. Para foto de colaborador e anexo de tarefa
+ * isso foi uma escolha; para atestado médico (CPPP) seria vazamento de dado de
+ * saúde (LGPD, art. 11). Arquivo de módulo listado aqui responde 404 — como se
+ * não existisse — e só é servido pela rota do próprio módulo, com permissão
+ * (`GET /cppp/adjustments/:id/attachment`).
+ *
+ * O módulo sai do `file_path` (`storage/uploads/<MÓDULO>/...`). Efeito da
+ * deduplicação por hash do `FileService`: se os MESMOS bytes já tinham sido
+ * enviados por outro módulo, o registro é o antigo e não fica restrito — mas
+ * aí o conteúdo já estava exposto antes.
+ */
+const RESTRICTED_MODULES = new Set(['CPPP']);
+
+function assertServableHere(record) {
+    const module = /^storage\/uploads\/([A-Z]{2,8})\//.exec(String(record?.file_path ?? ''))?.[1];
+    if (RESTRICTED_MODULES.has(module)) {
+        throw new AppError('Arquivo não encontrado.', 404);
+    }
+}
 
 /**
  * Quanto tempo o navegador pode reusar o arquivo sem perguntar de novo.
@@ -65,6 +90,7 @@ const CLIENT_GAVE_UP = new Set([
 async function serveFile(req, res) {
     const fileId = parseInt(req.params.fileId, 10);
     const record = await FileService.findById(fileId);
+    assertServableHere(record);
 
     const absolutePath = FileService.absolutePath(record);
 
@@ -120,6 +146,7 @@ async function serveFile(req, res) {
 async function servePoster(req, res) {
     const fileId = parseInt(req.params.fileId, 10);
     const record = await FileService.findById(fileId);
+    assertServableHere(record);
 
     if (!record.poster_path) {
         return res.status(404).json({ error: true, message: 'Capa ainda não gerada.' });
@@ -153,8 +180,11 @@ async function servePoster(req, res) {
  */
 async function deleteFile(req, res) {
     const fileId = parseInt(req.params.fileId, 10);
+    // Anexo de ajuste de ponto não some por esta rota: o ajuste guarda a
+    // referência como evidência.
+    assertServableHere(await FileService.findById(fileId));
     await FileService.softDelete(fileId, req.user.id);
     return respond.ok(res, { message: 'Arquivo removido com sucesso.' });
 }
 
-module.exports = { serveFile, servePoster, deleteFile };
+module.exports = { serveFile, servePoster, deleteFile, RESTRICTED_MODULES };

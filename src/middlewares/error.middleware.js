@@ -40,7 +40,10 @@ function errorHandler(err, req, res, next) {
   // Erros do multer (upload de arquivo)
   if (err instanceof multer.MulterError) {
     const MSG = {
-      LIMIT_FILE_SIZE: 'Arquivo muito grande. Tamanho máximo permitido: 50 MB.',
+      // Sem número de propósito: o MulterError não diz qual limite estourou.
+      // As instâncias da casa já traduzem isto com o teto certo via
+      // `withUploadLimit`; esta linha só pega uma instância nova sem o wrapper.
+      LIMIT_FILE_SIZE: 'Arquivo muito grande.',
       LIMIT_FILE_COUNT: 'Arquivos demais em uma única requisição.',
       LIMIT_UNEXPECTED_FILE: 'Campo de arquivo inesperado. Use o campo "files" (ou "file").',
     };

@@ -44,6 +44,29 @@ describe('mime-detector — containers OLE2 (Office legado)', () => {
     });
 });
 
+describe('mime-detector — GIF', () => {
+    // Logical Screen Descriptor 2×3 px logo depois da assinatura.
+    const gif = sig => Buffer.concat([Buffer.from(sig, 'ascii'), Buffer.from([0x02, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00])]);
+
+    it('should detect both GIF87a and GIF89a', () => {
+        expect(detect(gif('GIF89a'))).toBe('image/gif');
+        expect(detect(gif('GIF87a'))).toBe('image/gif');
+    });
+
+    it('should reject an unknown GIF version instead of taking it for an image', () => {
+        expect(() => detect(gif('GIF88a'))).toThrow(AppError);
+    });
+
+    it('should read the dimensions from the logical screen descriptor', () => {
+        const { checkImageDimensions } = require('../scanners');
+
+        expect(() => checkImageDimensions(gif('GIF89a'), 'image/gif')).not.toThrow();
+        const huge = gif('GIF89a');
+        huge.writeUInt16LE(9000, 6);
+        expect(() => checkImageDimensions(huge, 'image/gif')).toThrow(AppError);
+    });
+});
+
 describe('reconcileExtension — nome divergente do conteúdo', () => {
     // O conteúdo já foi provado como tipo da whitelist antes desta função rodar.
     // Divergência de nome não recusa mais — corrige a extensão e segue.

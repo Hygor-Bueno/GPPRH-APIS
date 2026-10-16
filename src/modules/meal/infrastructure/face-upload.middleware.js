@@ -20,6 +20,7 @@
  */
 
 const multer = require('multer');
+const { withUploadLimit } = require('../../../utils/file/upload-limit');
 
 /**
  * Teto por arquivo.
@@ -30,13 +31,13 @@ const multer = require('multer');
  */
 const MAX_FILE_BYTES = Number(process.env.FACE_MAX_IMAGE_BYTES || 12 * 1024 * 1024);
 
-const faceUpload = multer({
+const faceUpload = withUploadLimit(multer({
     storage: multer.memoryStorage(),
     limits: {
         fileSize: MAX_FILE_BYTES,
         // O cadastro manda até 5 fotos. Um a mais que isso não é uso legítimo.
         files: 5,
     },
-});
+}), MAX_FILE_BYTES);
 
 module.exports = { faceUpload, MAX_FILE_BYTES };

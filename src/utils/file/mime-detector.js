@@ -67,6 +67,11 @@ function detect(buf, claimedExtension = null) {
         return 'image/jpeg';
     }
 
+    // GIF: GIF87a ou GIF89a
+    if (buf.length >= 6 && buf.toString('ascii', 0, 6).match(/^GIF8[79]a$/)) {
+        return 'image/gif';
+    }
+
     // XML: começa com <?xml ou <tag (sem null bytes)
     const sample = buf.slice(0, Math.min(512, buf.length));
     if (!sample.includes(0x00)) {

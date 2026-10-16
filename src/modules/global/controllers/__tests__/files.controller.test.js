@@ -145,3 +145,34 @@ describe('GET /files/:fileId — desistência do cliente', () => {
         });
     });
 });
+
+describe('GET /files/:fileId — módulos restritos', () => {
+    function appWithErrors() {
+        const app = buildApp();
+        app.delete('/files/:fileId', (req, res, next) => { req.user = { id: 1 }; next(); }, filesController.deleteFile);
+        app.use((err, req, res, next) => res.status(err.statusCode || 500).json({ message: err.message }));
+        return app;
+    }
+
+    it('atestado do CPPP não sai pela rota genérica — 404, como se não existisse', async () => {
+        // Qualquer usuário logado alcança esta rota e os ids são sequenciais;
+        // atestado é dado de saúde e só sai por /cppp/adjustments/:id/attachment.
+        FileService.findById.mockResolvedValue({ id: 8, file_path: 'storage/uploads/CPPP/2026/10/08/abc.pdf' });
+        const res = await request(appWithErrors()).get('/files/8');
+        expect(res.status).toBe(404);
+        expect(FileService.absolutePath).not.toHaveBeenCalledWith(expect.objectContaining({ id: 8 }));
+    });
+
+    it('nem pode ser apagado por ela', async () => {
+        FileService.findById.mockResolvedValue({ id: 8, file_path: 'storage/uploads/CPPP/2026/10/08/abc.pdf' });
+        const res = await request(appWithErrors()).delete('/files/8');
+        expect(res.status).toBe(404);
+        expect(FileService.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('os demais módulos continuam saindo', async () => {
+        FileService.findById.mockResolvedValue({ id: 9, file_path: 'storage/uploads/GTPP/2026/10/08/abc.pdf' });
+        const res = await request(appWithErrors()).get('/files/9');
+        expect(res.status).toBe(200);
+    });
+});
