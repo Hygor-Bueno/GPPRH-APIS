@@ -39,10 +39,10 @@ function sqlGetConfigs(id) {
 }
 
 function sqlGetNumberReleasesForMonth(month, id) {
-    return `SELECT COUNT(*) AS quantity FROM global.mg_inventories WHERE created_at like '%${month}%' AND id_inventory_config = ${id}`
+    return `SELECT COUNT(*) AS quantity FROM global.mg_inventories WHERE created_at like '%${month}%' AND id_inventory_config = ${id} AND status_inventory != 2`
 }
 
-
+// ! Remover => vai se tornar automatico no banco o registro usuarios vão apenas alterar a quantidade realizada e alterar o staus
 function sqlInsertInventory() {
     return `INSERT INTO global.mg_inventories (
                 id_user_fk,
@@ -62,11 +62,12 @@ function buildInsertInventory(data) {
 }
 
 function sqlUpdateInventory() {
-    return `UPDATE global.mg_inventories SET 
+    return `UPDATE global.mg_inventories SET     
                 id_user_fk = ?,
                 id_inventory_config = ?,
                 costcenter_code = ?,
                 branch_code = ?,
+                quantity_performed = ?,
                 status_inventory = ?
             WHERE id_inventory = ?`
 }
@@ -77,6 +78,7 @@ function buildUpdateInventory(data, id) {
         data.id_inventory_config ?? null,
         data.costcenter_code ?? null,
         data.branch_code ?? null,
+        data.quantity_performed ?? null,
         data.status_inventory ?? null,
         id ?? null
     ]
