@@ -13,6 +13,11 @@ function sqlGetEmployeesFiltered() {
     return `CALL prcGetEmployeeDetails(?, ?, ?, ?, ?, ?, ?, ?)`;
 }
 
+/**
+ * Chama a stored procedure `sp_global_get_users(pPage, pPageSize, pName, pApplicationId, pStatus)`.
+ * `pStatus` (TINYINT) filtra por `_user.ad_status`: 1 = 'active', 0 = <> 'active', NULL = todos.
+ * Retorna `ad_status AS status` (texto) e `total_records`/`total_pages` em cada linha.
+ */
 function sqlGetUsersFiltered() {
     return `CALL sp_global_get_users(?, ?, ?, ?, ?)`;
 }
