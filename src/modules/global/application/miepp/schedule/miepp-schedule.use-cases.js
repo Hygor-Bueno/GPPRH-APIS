@@ -11,7 +11,7 @@
 const { AppError } = require('../../../../../errors/app.error');
 const { TargetType } = require('../../../domain/miepp/miepp.enums');
 const { ALL_DAYS } = require('../../../domain/miepp/schedule/days-of-week');
-const { normalizePagination, optionalFlag, paginated } = require('../../../domain/miepp/pagination.rules');
+const { normalizePagination, optionalFlag, paginated } = require('../../../domain/shared/pagination.rules');
 
 class MieppScheduleUseCases {
     /**

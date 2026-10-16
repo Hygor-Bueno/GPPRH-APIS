@@ -8,7 +8,7 @@
 const crypto = require('crypto');
 
 const { AppError } = require('../../../../../errors/app.error');
-const { normalizePagination, optionalFlag, paginated } = require('../../../domain/miepp/pagination.rules');
+const { normalizePagination, optionalFlag, paginated } = require('../../../domain/shared/pagination.rules');
 
 class MieppPlayerUseCases {
     /**

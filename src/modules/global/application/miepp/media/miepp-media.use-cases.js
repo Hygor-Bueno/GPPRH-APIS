@@ -12,7 +12,7 @@ const crypto = require('crypto');
 
 const { AppError } = require('../../../../../errors/app.error');
 const { MediaType, MediaStatus } = require('../../../domain/miepp/miepp.enums');
-const { normalizePagination, paginated } = require('../../../domain/miepp/pagination.rules');
+const { normalizePagination, paginated } = require('../../../domain/shared/pagination.rules');
 const { normalizeOrigin, withOrigin } = require('../../../domain/miepp/media/media-origin.rules');
 const { normalizeFolderFilter, normalizeFolderId } = require('../../../domain/miepp/media/media-folder.rules');
 
