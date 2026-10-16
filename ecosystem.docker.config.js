@@ -92,6 +92,40 @@ module.exports = {
       env: {
         NODE_ENV: "production"
       }
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Coletor do relógio de ponto (CPPP — Control iD REP-C)
+    // ─────────────────────────────────────────────────────────────────────────
+    //
+    // ⚠️ `instances: 1`, pelo mesmo motivo do renderizador: no cluster da API a
+    //    coleta diária rodaria duas vezes. Único processo que fala com o
+    //    relógio; a rota da tela só enfileira. Leve (uma chamada HTTP por dia e
+    //    MySQL), por isso no mesmo container e sem imagem própria.
+    //
+    // `kill_timeout` maior que o dos outros: uma coleta integral leva até
+    // 180s, e o PM2 matar no meio deixa a coleta `running` até o próximo boot
+    // marcá-la como abandonada (nada se perde — a seguinte recomeça do
+    // primeiro NSR que faltar —, mas é ruído evitável).
+    {
+      name: "cppp-afd-collector",
+      script: "./src/workers/cppp-afd-collector.js",
+
+      exec_mode: "fork",
+      instances: 1,
+
+      kill_timeout: 30000,
+      exp_backoff_restart_delay: 100,
+      max_memory_restart: "400M",
+
+      error_file: "/app/logs/cppp-afd-collector-error.log",
+      out_file: "/app/logs/cppp-afd-collector-out.log",
+      merge_logs: true,
+      log_date_format: "YYYY-MM-DD HH:mm:ss",
+
+      env: {
+        NODE_ENV: "production"
+      }
     }
   ]
 };
