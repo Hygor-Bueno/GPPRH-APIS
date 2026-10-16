@@ -22,6 +22,7 @@ const router = express.Router();
 const authController = require('./controllers/auth.controller');
 const employeeController = require('./controllers/employee.controller');
 const gippRhController = require('./controllers/gipp-rh.controller');
+const gippRhBirthdayController = require('./controllers/gipp-rh-birthday.controller');
 const payeeController = require('./controllers/payee.controller');
 const accessController = require('./controllers/access.controller');
 const chatController = require('./controllers/chat.controller');
@@ -54,6 +55,8 @@ const gappMovimentationController = require('./controllers/gapp-movimentation.co
 const gappStoreController = require('./controllers/gapp-store.controller');
 const gappSettingsController = require('./controllers/gapp-settings.controller');
 const mieppRoutes = require('./miepp.routes');
+const cpppRoutes = require('./cppp.routes');
+const reppRoutes = require('./repp.routes');
 const { upload: fileUpload } = require('../../utils/file/file.service');
 const authMiddleware = require('../../middlewares/auth.middleware');
 const upload = require('../../middlewares/upload.middleware');
@@ -183,6 +186,9 @@ router.get('/employees',
  * @route GET /users
  * @description Lista usuários paginados com enriquecimento do Protheus (empresa, filial, CC).
  * Query params: pPage, pPageSize, pName, pApplicationId, pStatus.
+ * `pStatus` filtra por `_user.ad_status`: 1 = 'active', 0 = qualquer outro
+ * (pending, blocked, delete), ausente = todos. O campo `status` da resposta
+ * traz o `ad_status` em texto ('active', 'blocked'...), não mais 1/0.
  * @access Requer `CORE_VIEW_EMPLOYEE`
  */
 router.get('/users',
@@ -298,6 +304,30 @@ router.get('/gipp-rh/event-codes',
     authMiddleware,
     canAll(['GIPPRH_VIEW_EMPLOYEE']),
     asyncHandler(gippRhController.getEventCodes));
+
+// ─── Aniversariantes do mês ───────────────────────────────────────────────────
+
+/**
+ * @route GET /gipp-rh/birthdays
+ * @description Aniversariantes do mês (`?month=1..12`, `&branches=0202,0206` opcional),
+ * agrupados por filial e em ordem de dia. Só dia/mês — sem ano nem matrícula.
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE`
+ */
+router.get('/gipp-rh/birthdays',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE']),
+    asyncHandler(gippRhBirthdayController.getBirthdays));
+
+/**
+ * @route GET /gipp-rh/birthdays/flyer
+ * @description Cartaz `.pptx` dos aniversariantes no layout do RH — um slide por
+ * filial, 19 nomes por slide. Mesmos filtros de `/gipp-rh/birthdays`.
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE`
+ */
+router.get('/gipp-rh/birthdays/flyer',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE']),
+    asyncHandler(gippRhBirthdayController.downloadBirthdayFlyer));
 
 // ─── Recibos de Pagamento (CRUD) ──────────────────────────────────────────────
 
@@ -2461,5 +2491,26 @@ router.get('/gapp/infractions', authMiddleware, asyncHandler(gappLookupControlle
  * Prefixo final: `/api/v1/global/miepp/...`
  */
 router.use('/miepp', mieppRoutes);
+
+/**
+ * Suite CPPP — Controle de Ponto Peg Pese (relógio Control iD REP-C).
+ *
+ * Roteador próprio (`cppp.routes.js`): a suite é auto-contida e o cabeçalho de
+ * lá documenta a restrição que não pode se perder — nenhuma rota escreve no
+ * relógio nem altera o espelho do AFD.
+ *
+ * Prefixo final: `/api/v1/global/cppp/...`
+ */
+router.use('/cppp', cpppRoutes);
+
+/**
+ * Suite REPP — Reserva de Espaços Peg Pese (Sala de Treinamento, Auditório).
+ *
+ * Roteador próprio (`repp.routes.js`) porque a consulta da agenda é PÚBLICA
+ * (`optionalAuth`, nunca 401) — aqui toda rota começa por `authMiddleware`.
+ *
+ * Prefixo final: `/api/v1/global/spaces/...`
+ */
+router.use('/spaces', reppRoutes);
 
 module.exports = router;
