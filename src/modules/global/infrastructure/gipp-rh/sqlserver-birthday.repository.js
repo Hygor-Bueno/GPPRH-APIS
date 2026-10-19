@@ -6,7 +6,22 @@
 const { poolPromise, sql } = require('../../../../config/sqlserver');
 const { AppError } = require('../../../../errors/app.error');
 const { BirthdayRepositoryPort } = require('../../application/gipp-rh/birthday/ports/birthday-repository.port');
-const { sqlFindBirthdaysByMonth } = require('../../repositories/sqlserver/birthday.queries');
+const {
+    sqlFindBirthdaysByMonth,
+    sqlFindEmployeeCpf,
+    sqlFindCurrentContractsByCpf,
+} = require('../../repositories/sqlserver/birthday.queries');
+
+/** Folga sob o limite de 2100 parâmetros por request do SQL Server. */
+const CPF_CHUNK = 1000;
+
+function toAppError(error, message) {
+    if (error instanceof AppError) return error;
+    return new AppError(error.message || message, 500, {
+        code: 'SQLSERVER_ERROR',
+        details: error,
+    });
+}
 
 class SqlServerBirthdayRepository extends BirthdayRepositoryPort {
     async findByMonth(month, branchCodes) {
@@ -19,11 +34,38 @@ class SqlServerBirthdayRepository extends BirthdayRepositoryPort {
             const result = await request.query(sqlFindBirthdaysByMonth(branchCodes.length));
             return result.recordset;
         } catch (error) {
-            if (error instanceof AppError) throw error;
-            throw new AppError(error.message || 'Erro ao buscar aniversariantes', 500, {
-                code: 'SQLSERVER_ERROR',
-                details: error,
-            });
+            throw toAppError(error, 'Erro ao buscar aniversariantes');
+        }
+    }
+
+    async findEmployeeCpf(branchCode, registration) {
+        try {
+            const pool = await poolPromise;
+            const result = await pool.request()
+                .input('branchCode', sql.VarChar(12), branchCode)
+                .input('registration', sql.VarChar(6), registration)
+                .query(sqlFindEmployeeCpf());
+            return result.recordset[0]?.cpf || null;
+        } catch (error) {
+            throw toAppError(error, 'Erro ao buscar o colaborador');
+        }
+    }
+
+    async findCurrentContractsByCpf(cpfs) {
+        if (!cpfs.length) return [];
+        try {
+            const pool = await poolPromise;
+            const rows = [];
+            for (let start = 0; start < cpfs.length; start += CPF_CHUNK) {
+                const chunk = cpfs.slice(start, start + CPF_CHUNK);
+                const request = pool.request();
+                chunk.forEach((cpf, i) => request.input(`cpf${i}`, sql.VarChar(11), cpf));
+                const result = await request.query(sqlFindCurrentContractsByCpf(chunk.length));
+                rows.push(...result.recordset);
+            }
+            return rows;
+        } catch (error) {
+            throw toAppError(error, 'Erro ao buscar os colaboradores fora do cartaz');
         }
     }
 }

@@ -8,6 +8,12 @@
  *
  * Nada aqui faz I/O: entra a linha crua do Protheus, sai o que vai impresso.
  *
+ * Lista de exclusão: quem o RH tira do cartaz (pediu para não aparecer, por
+ * exemplo) fica em `rh_birthday_exclusions` (MySQL `global`), pelo CPF — e não
+ * pela matrícula, que muda numa transferência de filial e traria a pessoa de
+ * volta. `withoutExcluded` tira essas pessoas antes de montar a lista, então
+ * lista e cartaz batem.
+ *
  * @module modules/global/domain/gipp-rh/birthday.rules
  */
 
@@ -26,7 +32,17 @@ const BirthdayErrorCode = Object.freeze({
     InvalidMonth: 'GIPPRH_BIRTHDAY_INVALID_MONTH',
     InvalidBranch: 'GIPPRH_BIRTHDAY_INVALID_BRANCH',
     NoBirthdays: 'GIPPRH_BIRTHDAY_NOT_FOUND',
+    InvalidEmployee: 'GIPPRH_BIRTHDAY_INVALID_EMPLOYEE',
+    InvalidReason: 'GIPPRH_BIRTHDAY_INVALID_REASON',
+    EmployeeNotFound: 'GIPPRH_BIRTHDAY_EMPLOYEE_NOT_FOUND',
+    AlreadyExcluded: 'GIPPRH_BIRTHDAY_ALREADY_EXCLUDED',
+    InvalidExclusionId: 'GIPPRH_BIRTHDAY_INVALID_EXCLUSION_ID',
+    ExclusionNotFound: 'GIPPRH_BIRTHDAY_EXCLUSION_NOT_FOUND',
+    MysqlError: 'GIPPRH_BIRTHDAY_MYSQL_ERROR',
 });
+
+/** Tamanho de `rh_birthday_exclusions.reason`. */
+const EXCLUSION_REASON_MAX_LENGTH = 255;
 
 /**
  * Nome do centro de custo como ele deve aparecer no cartaz.
@@ -140,10 +156,13 @@ function branchLabel(branchName, branchCode) {
 /**
  * Linha crua do repositório → linha do cartaz.
  *
- * @param {{ branch_code: string, branch_name: ?string, name: ?string,
+ * `registration` vai junto para a tela poder tirar a pessoa do cartaz
+ * (`POST /gipp-rh/birthdays/exclusions`); o renderer não imprime.
+ *
+ * @param {{ branch_code: string, branch_name: ?string, registration: string, name: ?string,
  *           full_name: ?string, birth_date: string, cost_center: ?string }} row
  *        `birth_date` no formato do Protheus, `YYYYMMDD`.
- * @returns {{ branchCode: string, branchName: string, name: string,
+ * @returns {{ branchCode: string, branchName: string, registration: string, name: string,
  *             sector: string, day: number, month: number, date: string }}
  */
 function toBirthdayEntry(row) {
@@ -153,6 +172,7 @@ function toBirthdayEntry(row) {
     return {
         branchCode: String(row.branch_code).trim(),
         branchName: branchLabel(row.branch_name, String(row.branch_code).trim()),
+        registration: String(row.registration ?? '').trim(),
         name: toTitleCase(row.full_name || row.name),
         sector: sectorLabel(row.cost_center),
         day,
@@ -205,8 +225,92 @@ function paginate(groups, rowsPerSlide = ROWS_PER_SLIDE) {
     return slides;
 }
 
+/**
+ * Corpo de `POST /gipp-rh/birthdays/exclusions`. A tela manda a filial e a
+ * matrícula que vieram na lista do mês; o CPF é resolvido no Protheus, nunca
+ * aceito do cliente.
+ *
+ * @param {{ branch_code?: unknown, registration?: unknown, reason?: unknown }} body
+ * @returns {{ branchCode: string, registration: string, reason: ?string }}
+ */
+function normalizeExclusionInput(body = {}) {
+    const branchCode = String(body.branch_code ?? '').trim();
+    const rawRegistration = String(body.registration ?? '').trim();
+    if (!/^\d{4}$/.test(branchCode) || !/^\d{1,6}$/.test(rawRegistration)) {
+        throw new AppError('Informe a filial (4 dígitos) e a matrícula do colaborador.', 400, {
+            code: BirthdayErrorCode.InvalidEmployee,
+        });
+    }
+    const reason = body.reason === undefined || body.reason === null ? '' : String(body.reason).trim();
+    if (reason.length > EXCLUSION_REASON_MAX_LENGTH) {
+        throw new AppError(`O motivo pode ter até ${EXCLUSION_REASON_MAX_LENGTH} caracteres.`, 400, {
+            code: BirthdayErrorCode.InvalidReason,
+        });
+    }
+    return {
+        branchCode,
+        registration: rawRegistration.padStart(6, '0'),
+        reason: reason || null,
+    };
+}
+
+/**
+ * @param {unknown} raw - `:id` da rota.
+ * @returns {number}
+ */
+function normalizeExclusionId(raw) {
+    const text = String(raw ?? '').trim();
+    const id = /^\d+$/.test(text) ? Number(text) : NaN;
+    if (!(id > 0 && Number.isSafeInteger(id))) {
+        throw new AppError('Identificador de exclusão inválido.', 400, {
+            code: BirthdayErrorCode.InvalidExclusionId,
+        });
+    }
+    return id;
+}
+
+/**
+ * Tira da linha crua do mês quem está na lista de exclusão.
+ *
+ * @template {{ cpf?: ?string }} T
+ * @param {T[]} rows
+ * @param {Iterable<string>} excludedCpfs
+ * @returns {T[]}
+ */
+function withoutExcluded(rows, excludedCpfs) {
+    const excluded = new Set([...excludedCpfs].map(cpf => String(cpf).trim()));
+    if (!excluded.size) return rows;
+    return rows.filter(row => !excluded.has(String(row.cpf ?? '').trim()));
+}
+
+/**
+ * Exclusão (MySQL) + contrato atual (Protheus) → resposta. Nada da pessoa é
+ * copiado para a tabela de exclusão, e o CPF fica de fora da resposta. Sem
+ * contrato, filial/matrícula/nome saem nulos.
+ *
+ * @param {{ id: number, reason: ?string, created_at: Date, created_by: number }} exclusion
+ * @param {?{ branch_code: string, branch_name: ?string, registration: string,
+ *            full_name: ?string, cost_center: ?string, dismissed: boolean|number }} contract
+ */
+function toExclusionEntry(exclusion, contract) {
+    const branchCode = contract?.branch_code ? String(contract.branch_code).trim() : null;
+    return {
+        id: exclusion.id,
+        branchCode,
+        branchName: branchCode ? branchLabel(contract.branch_name, branchCode) : null,
+        registration: contract?.registration ? String(contract.registration).trim() : null,
+        name: contract?.full_name ? toTitleCase(contract.full_name) : null,
+        sector: sectorLabel(contract?.cost_center),
+        dismissed: Boolean(contract?.dismissed),
+        reason: exclusion.reason ?? null,
+        createdAt: exclusion.created_at,
+        createdBy: exclusion.created_by,
+    };
+}
+
 module.exports = {
     ROWS_PER_SLIDE,
+    EXCLUSION_REASON_MAX_LENGTH,
     BirthdayErrorCode,
     normalizeMonth,
     normalizeBranchCodes,
@@ -217,4 +321,8 @@ module.exports = {
     toBirthdayEntry,
     groupByBranch,
     paginate,
+    normalizeExclusionInput,
+    normalizeExclusionId,
+    withoutExcluded,
+    toExclusionEntry,
 };

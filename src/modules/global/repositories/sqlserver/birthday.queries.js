@@ -11,6 +11,10 @@
  * Quem entra: não demitido (`RA_DEMISSA` vazio e `RA_SITFOLH <> 'D'`). Férias
  * (`F`) e afastado (`A`) continuam na lista, como no cartaz feito à mão.
  *
+ * O CPF sai na linha só para a API tirar quem está na lista de exclusão
+ * (`rh_birthday_exclusions`, no MySQL `global` — outro servidor, por isso o
+ * filtro não fica aqui). Não chega à resposta: `toBirthdayEntry` descarta.
+ *
  * Roda no pool `config/sqlserver` (banco GIPP), que alcança o TMPPRD12.
  *
  * @module modules/global/repositories/sqlserver/birthday.queries
@@ -36,6 +40,7 @@ function companySelect({ employees, costCenters }) {
                    RTRIM(e.RA_MAT)      AS registration,
                    RTRIM(e.RA_NOME)     AS name,
                    RTRIM(e.RA_NOMECMP)  AS full_name,
+                   RTRIM(e.RA_CIC)      AS cpf,
                    e.RA_NASC            AS birth_date,
                    RTRIM(cc.CTT_DESC01) AS cost_center
               FROM TMPPRD12.dbo.${employees} e
@@ -62,6 +67,7 @@ function sqlFindBirthdaysByMonth(branchCount = 0) {
                u.registration,
                u.name,
                u.full_name,
+               u.cpf,
                u.birth_date,
                u.cost_center
           FROM (${COMPANY_TABLES.map(companySelect).join('\n            UNION ALL')}
@@ -73,4 +79,46 @@ function sqlFindBirthdaysByMonth(branchCount = 0) {
          ORDER BY u.branch_code, SUBSTRING(u.birth_date, 7, 2), u.full_name;`;
 }
 
-module.exports = { sqlFindBirthdaysByMonth };
+/**
+ * Contrato pela filial + matrícula que a tela mandou, para descobrir o CPF de
+ * quem vai para a lista de exclusão. Pela view: só precisa de CPF.
+ */
+function sqlFindEmployeeCpf() {
+    return `
+        SELECT TOP 1 RTRIM(EmployeeCPF) AS cpf
+          FROM GIPP.dbo.view_employee_with_company_info
+         WHERE BranchCode = @branchCode
+           AND EmployeeID = @registration;`;
+}
+
+/**
+ * Contrato atual de cada CPF da lista de exclusão. A mesma pessoa pode ter
+ * vários (transferência, readmissão): vale o vigente; sem vigente, o de
+ * admissão mais recente.
+ *
+ * @param {number} cpfCount - quantos parâmetros `@cpf0..@cpfN` (≥ 1).
+ * @returns {string}
+ */
+function sqlFindCurrentContractsByCpf(cpfCount) {
+    const placeholders = Array.from({ length: cpfCount }, (_, i) => `@cpf${i}`).join(', ');
+    return `
+        SELECT cpf, branch_code, branch_name, registration, full_name, cost_center, dismissed
+          FROM (SELECT RTRIM(v.EmployeeCPF)            AS cpf,
+                       v.BranchCode                     AS branch_code,
+                       v.BranchName                     AS branch_name,
+                       v.EmployeeID                     AS registration,
+                       RTRIM(v.EmployeeFullName)        AS full_name,
+                       RTRIM(v.CostCenterDescription)   AS cost_center,
+                       CASE WHEN LTRIM(RTRIM(v.EmployeeDemiss)) = '' THEN 0 ELSE 1 END AS dismissed,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY v.EmployeeCPF
+                           ORDER BY CASE WHEN LTRIM(RTRIM(v.EmployeeDemiss)) = '' THEN 0 ELSE 1 END,
+                                    v.EmployeeAdmiss DESC
+                       ) AS rn
+                  FROM GIPP.dbo.view_employee_with_company_info v
+                 WHERE v.EmployeeCPF IN (${placeholders})
+          ) c
+         WHERE rn = 1;`;
+}
+
+module.exports = { sqlFindBirthdaysByMonth, sqlFindEmployeeCpf, sqlFindCurrentContractsByCpf };

@@ -1,14 +1,16 @@
 /**
  * @fileoverview Controller dos aniversariantes do mês (GIPP-RH).
  *
- * Só sai dia e mês do nascimento: `toBirthdayEntry` descarta o ano (e a
- * matrícula), já que o cartaz é feito para ser afixado na loja.
+ * Só sai dia e mês do nascimento: `toBirthdayEntry` descarta o ano, já que o
+ * cartaz é feito para ser afixado na loja. A matrícula vai no JSON (a tela
+ * precisa dela para tirar alguém do cartaz), mas não é impressa.
  *
  * @module modules/global/controllers/gipp-rh-birthday.controller
  */
 
 const { GippRhBirthdayUseCases } = require('../application/gipp-rh/birthday/birthday.use-cases');
 const { SqlServerBirthdayRepository } = require('../infrastructure/gipp-rh/sqlserver-birthday.repository');
+const { MySqlBirthdayExclusionRepository } = require('../infrastructure/gipp-rh/mysql-birthday-exclusion.repository');
 const { PptxBirthdayFlyerRenderer } = require('../infrastructure/gipp-rh/pptx-birthday-flyer.renderer');
 const { respond } = require('../../../utils/respond');
 
@@ -16,6 +18,7 @@ const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.
 
 const useCases = new GippRhBirthdayUseCases({
     repository: new SqlServerBirthdayRepository(),
+    exclusionRepository: new MySqlBirthdayExclusionRepository(),
     flyerRenderer: new PptxBirthdayFlyerRenderer(),
 });
 
@@ -40,4 +43,37 @@ async function downloadBirthdayFlyer(req, res) {
     return res.send(buffer);
 }
 
-module.exports = { getBirthdays, downloadBirthdayFlyer };
+/**
+ * Quem está fora do cartaz, com o contrato atual de cada um.
+ * @route GET /gipp-rh/birthdays/exclusions
+ */
+async function getBirthdayExclusions(req, res) {
+    const data = await useCases.listExclusions();
+    return respond.ok(res, data);
+}
+
+/**
+ * Tira alguém do cartaz (todos os meses).
+ * @route POST /gipp-rh/birthdays/exclusions  { branch_code, registration, reason? }
+ */
+async function addBirthdayExclusion(req, res) {
+    const data = await useCases.addExclusion(req.body, req.user.id);
+    return respond.created(res, data);
+}
+
+/**
+ * Devolve a pessoa ao cartaz.
+ * @route DELETE /gipp-rh/birthdays/exclusions/:id
+ */
+async function removeBirthdayExclusion(req, res) {
+    await useCases.removeExclusion(req.params.id);
+    return respond.message(res, 'Colaborador de volta ao cartaz.');
+}
+
+module.exports = {
+    getBirthdays,
+    downloadBirthdayFlyer,
+    getBirthdayExclusions,
+    addBirthdayExclusion,
+    removeBirthdayExclusion,
+};

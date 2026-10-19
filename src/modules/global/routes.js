@@ -310,7 +310,8 @@ router.get('/gipp-rh/event-codes',
 /**
  * @route GET /gipp-rh/birthdays
  * @description Aniversariantes do mês (`?month=1..12`, `&branches=0202,0206` opcional),
- * agrupados por filial e em ordem de dia. Só dia/mês — sem ano nem matrícula.
+ * agrupados por filial e em ordem de dia. Só dia/mês, sem ano; a matrícula vem
+ * para a tela poder tirar alguém do cartaz. Quem está na lista de exclusão não vem.
  * @access Requer `GIPPRH_VIEW_EMPLOYEE`
  */
 router.get('/gipp-rh/birthdays',
@@ -328,6 +329,38 @@ router.get('/gipp-rh/birthdays/flyer',
     authMiddleware,
     canAll(['GIPPRH_VIEW_EMPLOYEE']),
     asyncHandler(gippRhBirthdayController.downloadBirthdayFlyer));
+
+/**
+ * @route GET /gipp-rh/birthdays/exclusions
+ * @description Lista de exclusão do cartaz — quem não sai em mês nenhum, com o
+ * contrato atual de cada pessoa no Protheus.
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE`
+ */
+router.get('/gipp-rh/birthdays/exclusions',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE']),
+    asyncHandler(gippRhBirthdayController.getBirthdayExclusions));
+
+/**
+ * @route POST /gipp-rh/birthdays/exclusions
+ * @description Tira o colaborador do cartaz. Body `{ branch_code, registration, reason? }`;
+ * a exclusão vale pelo CPF, então sobrevive a transferência de filial.
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE` e `GIPPRH_MANAGE_BIRTHDAY`
+ */
+router.post('/gipp-rh/birthdays/exclusions',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE', 'GIPPRH_MANAGE_BIRTHDAY']),
+    asyncHandler(gippRhBirthdayController.addBirthdayExclusion));
+
+/**
+ * @route DELETE /gipp-rh/birthdays/exclusions/:id
+ * @description Devolve o colaborador ao cartaz.
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE` e `GIPPRH_MANAGE_BIRTHDAY`
+ */
+router.delete('/gipp-rh/birthdays/exclusions/:id',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE', 'GIPPRH_MANAGE_BIRTHDAY']),
+    asyncHandler(gippRhBirthdayController.removeBirthdayExclusion));
 
 // ─── Recibos de Pagamento (CRUD) ──────────────────────────────────────────────
 

@@ -77,6 +77,7 @@ de dia e depois nome). Só tem filial que tem aniversariante.
           {
             "branchCode": "0202",
             "branchName": "INTERLAGOS",
+            "registration": "002351",
             "name": "Fernanda Aparecida dos Santos",
             "sector": "Perecíveis",
             "day": 1,
@@ -91,8 +92,10 @@ de dia e depois nome). Só tem filial que tem aniversariante.
 ```
 
 - Mês sem ninguém: `branches: []` (200, não é erro).
-- **Não existe** ano de nascimento nem matrícula na resposta, de propósito. Não
-  tente mostrar idade.
+- **Não existe** ano de nascimento na resposta, de propósito. Não tente mostrar
+  idade. `registration` (matrícula) vem só para a tela poder tirar a pessoa do
+  cartaz — ver `docs/aniversariantes-exclusao-frontend-prompt.md`.
+- Quem está na lista de exclusão do cartaz já não vem nesta lista.
 - `branchName` já vem pronto para exibir (sem o "PEG PESE" na frente; outras
   empresas aparecem com o nome completo, ex.: "FRUGAL BOLONHA").
 

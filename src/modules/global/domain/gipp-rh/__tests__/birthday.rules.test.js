@@ -14,6 +14,10 @@ const {
     toBirthdayEntry,
     groupByBranch,
     paginate,
+    normalizeExclusionInput,
+    normalizeExclusionId,
+    withoutExcluded,
+    toExclusionEntry,
 } = require('../birthday.rules');
 const { sqlFindBirthdaysByMonth } = require('../../../repositories/sqlserver/birthday.queries');
 
@@ -86,11 +90,12 @@ describe('formatação', () => {
         expect(branchLabel(null, '0999')).toBe('FILIAL 0999');
     });
 
-    it('entrada do cartaz não carrega ano nem matrícula', () => {
+    it('entrada do cartaz não carrega o ano; a matrícula vai para a tela poder excluir', () => {
         const entry = toBirthdayEntry(row());
         expect(entry).toEqual({
             branchCode: '0202',
             branchName: 'INTERLAGOS',
+            registration: '002351',
             name: 'Fernanda Aparecida dos Santos',
             sector: 'Perecíveis',
             day: 1,
@@ -146,5 +151,88 @@ describe('sqlFindBirthdaysByMonth', () => {
 
     it('filtro de filial só por parâmetro', () => {
         expect(sqlFindBirthdaysByMonth(2)).toContain('u.branch_code IN (@branch0, @branch1)');
+    });
+
+    it('devolve o CPF para a API aplicar a lista de exclusão', () => {
+        expect(sqlFindBirthdaysByMonth(0)).toMatch(/RTRIM\(e\.RA_CIC\)\s+AS cpf/);
+        expect(sqlFindBirthdaysByMonth(0)).toContain('u.cpf,');
+    });
+});
+
+describe('withoutExcluded', () => {
+    it('tira quem tem o CPF na lista, ignorando espaço do CHAR', () => {
+        const rows = [row({ cpf: '11111111111' }), row({ cpf: '22222222222 ' }), row({ cpf: '33333333333' })];
+        expect(withoutExcluded(rows, ['22222222222', '33333333333 ']).map(r => r.cpf)).toEqual(['11111111111']);
+    });
+
+    it('lista vazia não mexe nas linhas', () => {
+        const rows = [row({ cpf: '11111111111' })];
+        expect(withoutExcluded(rows, [])).toBe(rows);
+    });
+
+    it('a entrada da resposta não carrega o CPF', () => {
+        expect(toBirthdayEntry(row({ cpf: '11111111111' }))).not.toHaveProperty('cpf');
+    });
+});
+
+describe('normalizeExclusionInput', () => {
+    it('completa a matrícula com zeros e limpa o motivo', () => {
+        expect(normalizeExclusionInput({ branch_code: '0202', registration: '2351', reason: '  pediu  ' }))
+            .toEqual({ branchCode: '0202', registration: '002351', reason: 'pediu' });
+    });
+
+    it('motivo vazio vira null', () => {
+        expect(normalizeExclusionInput({ branch_code: '0202', registration: '002351', reason: ' ' }).reason).toBeNull();
+    });
+
+    it.each([
+        [{}],
+        [{ branch_code: '202', registration: '002351' }],
+        [{ branch_code: '0202', registration: '0023510' }],
+        [{ branch_code: '0202', registration: '23A' }],
+    ])('recusa filial/matrícula inválida %p', body => {
+        expect(() => normalizeExclusionInput(body)).toThrow(expect.objectContaining({
+            statusCode: 400,
+            code: BirthdayErrorCode.InvalidEmployee,
+        }));
+    });
+
+    it('recusa motivo longo demais', () => {
+        expect(() => normalizeExclusionInput({ branch_code: '0202', registration: '1', reason: 'x'.repeat(256) }))
+            .toThrow(expect.objectContaining({ code: BirthdayErrorCode.InvalidReason }));
+    });
+});
+
+describe('normalizeExclusionId', () => {
+    it('aceita inteiro positivo', () => {
+        expect(normalizeExclusionId('12')).toBe(12);
+    });
+
+    it.each([undefined, '', '0', '-1', '1.5', 'abc'])('recusa %p', raw => {
+        expect(() => normalizeExclusionId(raw)).toThrow(expect.objectContaining({
+            code: BirthdayErrorCode.InvalidExclusionId,
+        }));
+    });
+});
+
+describe('toExclusionEntry', () => {
+    it('formata o contrato atual e não expõe CPF', () => {
+        const entry = toExclusionEntry(
+            { id: 3, cpf: '12345678901', reason: 'Pediu', created_at: '2026-10-19', created_by: 7 },
+            {
+                cpf: '12345678901', branch_code: '0202', branch_name: 'PEG PESE INTERLAGOS', registration: '002351',
+                full_name: 'FERNANDA APARECIDA DOS SANTOS', cost_center: 'PERECIVEIS', dismissed: 0,
+            },
+        );
+        expect(entry).toEqual({
+            id: 3, branchCode: '0202', branchName: 'INTERLAGOS', registration: '002351',
+            name: 'Fernanda Aparecida dos Santos', sector: 'Perecíveis', dismissed: false,
+            reason: 'Pediu', createdAt: '2026-10-19', createdBy: 7,
+        });
+    });
+
+    it('CPF sem contrato no Protheus sai com os dados nulos', () => {
+        const entry = toExclusionEntry({ id: 4, cpf: '12345678901', reason: null, created_at: '2026-10-19', created_by: 7 }, null);
+        expect(entry).toMatchObject({ branchCode: null, branchName: null, registration: null, name: null, dismissed: false });
     });
 });
