@@ -124,6 +124,35 @@ describe('GippRhBirthdayUseCases', () => {
         expect(artStorage.readPng).not.toHaveBeenCalled();
     });
 
+    it('cartaz com mescla: um slide para as duas filiais, e o filtro ganha a filial mesclada', async () => {
+        const flyerRenderer = makeRenderer();
+        const rows = [...ROWS, { ...ROWS[0], branch_code: '0209', branch_name: 'PEG PESE ESCRITORIO CENTRAL', full_name: 'EVA', cpf: '3' }];
+        const repository = makeRepository(rows);
+
+        await makeUseCases({ repository, flyerRenderer }).buildFlyer({ month: 3, branches: '0202', merge: '0202,0209' });
+
+        expect(repository.findByMonth).toHaveBeenCalledWith(3, ['0202', '0209']);
+        const [flyer] = flyerRenderer.render.mock.calls[0];
+        expect(flyer.slides).toHaveLength(1);
+        expect(flyer.slides[0]).toMatchObject({ branchCode: '0202', branchName: 'INTERLAGOS' });
+        expect(flyer.slides[0].people.map(p => p.name)).toEqual(['Ana Maria', 'Eva', 'Jose Vieira da Silva']);
+    });
+
+    it('mescla inválida é recusada antes de ir ao banco', async () => {
+        const repository = makeRepository(ROWS);
+
+        await expect(makeUseCases({ repository }).buildFlyer({ month: 3, merge: '0202' }))
+            .rejects.toMatchObject({ code: BirthdayErrorCode.InvalidMerge });
+        expect(repository.findByMonth).not.toHaveBeenCalled();
+    });
+
+    it('a lista da tela não é afetada pela mescla', async () => {
+        const rows = [...ROWS, { ...ROWS[0], branch_code: '0209', branch_name: 'PEG PESE ESCRITORIO CENTRAL', cpf: '3' }];
+        const result = await makeUseCases({ repository: makeRepository(rows) }).listByMonth({ month: 3, merge: '0202,0209' });
+
+        expect(result.branches.map(b => b.branchCode)).toEqual(['0202', '0209']);
+    });
+
     it('cartaz: cada filial sai com a arte da sua empresa e as linhas dela', async () => {
         const flyerRenderer = makeRenderer();
         const frugalLayout = { ...DEFAULT_LAYOUT, rows_per_slide: 1 };

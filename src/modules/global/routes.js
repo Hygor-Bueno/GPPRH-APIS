@@ -322,7 +322,9 @@ router.get('/gipp-rh/birthdays',
 /**
  * @route GET /gipp-rh/birthdays/flyer
  * @description Cartaz `.pptx` dos aniversariantes no layout do RH — um slide por
- * filial, 19 nomes por slide. Mesmos filtros de `/gipp-rh/birthdays`.
+ * filial, 19 nomes por slide. Mesmos filtros de `/gipp-rh/birthdays`, mais
+ * `merge=0202,0209` (repetível) para juntar filiais num slide só na impressão;
+ * a primeira do grupo dá o nome e a arte.
  * @access Requer `GIPPRH_VIEW_EMPLOYEE`
  */
 router.get('/gipp-rh/birthdays/flyer',

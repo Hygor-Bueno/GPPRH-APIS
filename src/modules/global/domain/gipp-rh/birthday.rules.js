@@ -39,6 +39,7 @@ const BirthdayErrorCode = Object.freeze({
     InvalidExclusionId: 'GIPPRH_BIRTHDAY_INVALID_EXCLUSION_ID',
     ExclusionNotFound: 'GIPPRH_BIRTHDAY_EXCLUSION_NOT_FOUND',
     MysqlError: 'GIPPRH_BIRTHDAY_MYSQL_ERROR',
+    InvalidMerge: 'GIPPRH_BIRTHDAY_INVALID_MERGE',
 });
 
 /** Tamanho de `rh_birthday_exclusions.reason`. */
@@ -195,10 +196,81 @@ function groupByBranch(entries) {
         }
         groups.get(entry.branchCode).people.push(entry);
     }
-    const byDayThenName = (a, b) => (a.day - b.day) || a.name.localeCompare(b.name, 'pt-BR');
     return [...groups.values()]
         .sort((a, b) => a.branchCode.localeCompare(b.branchCode))
         .map(group => ({ ...group, people: group.people.sort(byDayThenName) }));
+}
+
+function byDayThenName(a, b) {
+    return (a.day - b.day) || a.name.localeCompare(b.name, 'pt-BR');
+}
+
+/**
+ * Mescla de filiais SÓ NA IMPRESSÃO (`?merge=0202,0209`): cada parâmetro é um
+ * grupo, e a primeira filial é a principal — dá o nome da faixa e a arte (pela
+ * empresa dela). Aceita string ou array (o Express junta `merge` repetido).
+ *
+ * @param {unknown} raw
+ * @returns {string[][]} vazio = sem mescla.
+ */
+function normalizeMergeGroups(raw) {
+    if (raw === undefined || raw === null || raw === '') return [];
+    const groups = (Array.isArray(raw) ? raw : [raw]).map(group =>
+        [...new Set(String(group).split(',').map(code => code.trim()).filter(Boolean))]);
+    const seen = new Set();
+    for (const group of groups) {
+        const invalid = group.find(code => !/^\d{4}$/.test(code));
+        if (invalid || group.length < 2) {
+            throw new AppError(
+                invalid
+                    ? `Filial inválida na mescla: '${invalid}'. Use o código de 4 dígitos (ex.: 0202,0209).`
+                    : 'Cada mescla precisa de pelo menos duas filiais (ex.: merge=0202,0209).',
+                400,
+                { code: BirthdayErrorCode.InvalidMerge },
+            );
+        }
+        const repeated = group.find(code => seen.has(code));
+        if (repeated) {
+            throw new AppError(`A filial ${repeated} está em mais de uma mescla.`, 400, {
+                code: BirthdayErrorCode.InvalidMerge,
+            });
+        }
+        group.forEach(code => seen.add(code));
+    }
+    return groups;
+}
+
+/**
+ * Junta as filiais de cada grupo no slide da principal. Nome da faixa = o da
+ * principal; se ela não tem ninguém no mês, o da primeira do grupo que tem.
+ * Filiais fora de qualquer grupo passam como estão.
+ *
+ * @param {{ branchCode: string, branchName: string, people: object[] }[]} groups - saída de `groupByBranch`.
+ * @param {string[][]} mergeGroups - saída de `normalizeMergeGroups`.
+ * @returns {{ branchCode: string, branchName: string, people: object[], mergedBranchCodes?: string[] }[]}
+ */
+function mergeBranches(groups, mergeGroups) {
+    if (!mergeGroups.length) return groups;
+    const byCode = new Map(groups.map(group => [group.branchCode, group]));
+    const merged = new Set();
+    const result = [];
+
+    for (const codes of mergeGroups) {
+        const present = codes.map(code => byCode.get(code)).filter(Boolean);
+        codes.forEach(code => merged.add(code));
+        if (!present.length) continue;
+        const main = byCode.get(codes[0]) ?? present[0];
+        result.push({
+            branchCode: codes[0],
+            branchName: main.branchName,
+            people: present.flatMap(group => group.people).sort(byDayThenName),
+            mergedBranchCodes: present.map(group => group.branchCode),
+        });
+    }
+    for (const group of groups) {
+        if (!merged.has(group.branchCode)) result.push(group);
+    }
+    return result.sort((a, b) => a.branchCode.localeCompare(b.branchCode));
 }
 
 /**
@@ -323,6 +395,8 @@ module.exports = {
     toBirthdayEntry,
     groupByBranch,
     paginate,
+    normalizeMergeGroups,
+    mergeBranches,
     normalizeExclusionInput,
     normalizeExclusionId,
     withoutExcluded,

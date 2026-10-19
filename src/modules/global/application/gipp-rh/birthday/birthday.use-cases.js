@@ -13,6 +13,8 @@ const {
     toBirthdayEntry,
     groupByBranch,
     paginate,
+    normalizeMergeGroups,
+    mergeBranches,
     normalizeExclusionInput,
     normalizeExclusionId,
     withoutExcluded,
@@ -63,22 +65,30 @@ class GippRhBirthdayUseCases {
      * Cada filial sai com a arte da sua EMPRESA (prefixo da filial) — a própria
      * ou a padrão —, e com a quantidade de linhas daquela arte por slide.
      *
-     * @param {{ month: unknown, branches?: unknown }} query
+     * `merge` junta filiais num slide só, apenas no arquivo (a lista do mês
+     * continua separada). Com filtro de filiais, as da mescla entram no filtro.
+     *
+     * @param {{ month: unknown, branches?: unknown, merge?: unknown }} query
      * @returns {Promise<{ fileName: string, buffer: Buffer }>}
      */
     async buildFlyer(query) {
-        const list = await this.listByMonth(query);
+        const mergeGroups = normalizeMergeGroups(query.merge);
+        const filter = normalizeBranchCodes(query.branches);
+        const branches = filter.length ? [...new Set([...filter, ...mergeGroups.flat()])] : filter;
+
+        const list = await this.listByMonth({ month: query.month, branches });
         if (!list.branches.length) {
             throw new AppError(`Nenhum aniversariante em ${list.month_name}.`, 404, {
                 code: BirthdayErrorCode.NoBirthdays,
             });
         }
+        const printed = mergeBranches(list.branches, mergeGroups);
         const artByCompany = await resolveFlyerArts(
             { artRepository: this.artRepository, artStorage: this.artStorage },
-            list.branches.map(branch => companyCodeOf(branch.branchCode)),
+            printed.map(branch => companyCodeOf(branch.branchCode)),
         );
         const artOf = branchCode => artByCompany.get(companyCodeOf(branchCode));
-        const slides = paginate(list.branches, branchCode => artOf(branchCode).layout.rows_per_slide)
+        const slides = paginate(printed, branchCode => artOf(branchCode).layout.rows_per_slide)
             .map(slide => ({ ...slide, artKey: artOf(slide.branchCode).key }));
         const arts = {};
         for (const { key, buffer, width, height, layout } of artByCompany.values()) {
