@@ -126,6 +126,34 @@ module.exports = {
       env: {
         NODE_ENV: "production"
       }
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Lembretes da reserva de espaços (REPP)
+    // ─────────────────────────────────────────────────────────────────────────
+    //
+    // ⚠️ `instances: 1`, pelo mesmo motivo dos dois acima: no cluster da API
+    //    cada ciclo rodaria duas vezes. Leve (uma consulta a cada 30s e um POST
+    //    ao WebSocket por lembrete), por isso no mesmo container.
+    {
+      name: "repp-reminder",
+      script: "./src/workers/repp-reminder.js",
+
+      exec_mode: "fork",
+      instances: 1,
+
+      kill_timeout: 10000,
+      exp_backoff_restart_delay: 100,
+      max_memory_restart: "300M",
+
+      error_file: "/app/logs/repp-reminder-error.log",
+      out_file: "/app/logs/repp-reminder-out.log",
+      merge_logs: true,
+      log_date_format: "YYYY-MM-DD HH:mm:ss",
+
+      env: {
+        NODE_ENV: "production"
+      }
     }
   ]
 };

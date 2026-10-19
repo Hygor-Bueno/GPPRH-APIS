@@ -164,8 +164,8 @@ class FakeBookingRepository extends BookingRepositoryPort {
             update: async (id, p) => {
                 const r = this.rows.get(id);
                 if (r.status !== p.expected_status) return 0;
-                const { reset_review, expected_status, ...fields } = p;
-                Object.assign(r, fields, reset_review ? { reviewed_by: null } : {});
+                const { reset_review, reset_reminder, expected_status, ...fields } = p;
+                Object.assign(r, fields, reset_review ? { reviewed_by: null } : {}, reset_reminder ? { reminder_sent_at: null } : {});
                 r.space_name = this.spaceRepository.spaces.get(r.space_id).name;
                 return 1;
             },
@@ -990,5 +990,71 @@ describe('cadastro de espaços (19/10/2026)', () => {
         const spy = jest.spyOn(ctx.spaceRepository, 'updateSpace');
         await ctx.spaces.update({ id: SALA, input: { name: 'Sala de Treinamento', blocked_weekdays: [], setup_minutes: 0 }, user: ADMIN_SALA });
         expect(spy).not.toHaveBeenCalled();
+    });
+});
+
+describe('lembrete (19/10/2026)', () => {
+    it('quem cria escolhe a antecedência; ausente ou nulo = sem lembrete', async () => {
+        const ctx = setup();
+        const with30 = await ctx.useCases.create({ input: { ...VALID, reminder_minutes: 30 }, user: COMMON });
+        expect(with30).toMatchObject({ reminder_minutes: 30, reminder_sent_at: null });
+
+        const none = await ctx.useCases.create({ input: { ...VALID, space_id: SALA }, user: COMMON });
+        expect(none.reminder_minutes).toBeNull();
+
+        const explicitNull = await ctx.useCases.create({ input: { ...VALID, start_time: '16:00', end_time: '17:00', reminder_minutes: null }, user: COMMON });
+        expect(explicitNull.reminder_minutes).toBeNull();
+    });
+
+    it('valor fora da lista é 400 REPP_INVALID_REMINDER, antes de gravar', async () => {
+        const ctx = setup();
+        for (const reminder_minutes of [10, 0, -15, 'abc', 99999]) {
+            await expect(ctx.useCases.create({ input: { ...VALID, reminder_minutes }, user: COMMON }))
+                .rejects.toMatchObject({ statusCode: 400, code: 'REPP_INVALID_REMINDER' });
+        }
+        expect(ctx.bookingRepository.rows.size).toBe(0);
+    });
+
+    describe('edição', () => {
+        let ctx;
+        let id;
+        beforeEach(async () => {
+            ctx = setup();
+            ({ id } = await ctx.useCases.create({ input: { ...VALID, reminder_minutes: 60 }, user: COMMON }));
+            await ctx.useCases.approve({ id, user: ADMIN_AUDITORIO });
+            ctx.bookingRepository.rows.get(id).reminder_sent_at = '2026-10-09T13:00:00';
+        });
+
+        it('mudar só o título não rearma o lembrete já enviado', async () => {
+            const result = await ctx.useCases.update({ id, input: { title: 'Outro' }, user: COMMON });
+            expect(result).toMatchObject({ reminder_minutes: 60, reminder_sent_at: '2026-10-09T13:00:00' });
+        });
+
+        it('remarcar rearma o lembrete', async () => {
+            const result = await ctx.useCases.update({ id, input: { start_time: '16:00', end_time: '17:00' }, user: COMMON });
+            expect(result).toMatchObject({ reminder_minutes: 60, reminder_sent_at: null });
+        });
+
+        it('criador troca a antecedência (rearma) ou tira o lembrete', async () => {
+            const changed = await ctx.useCases.update({ id, input: { reminder_minutes: 15 }, user: COMMON });
+            expect(changed).toMatchObject({ reminder_minutes: 15, reminder_sent_at: null });
+
+            const removed = await ctx.useCases.update({ id, input: { reminder_minutes: null }, user: COMMON });
+            expect(removed.reminder_minutes).toBeNull();
+        });
+
+        it('admin do espaço não muda o lembrete de outra pessoa, mas pode reenviar o mesmo valor', async () => {
+            await expect(ctx.useCases.update({ id, input: { reminder_minutes: 15 }, user: ADMIN_AUDITORIO }))
+                .rejects.toMatchObject({ statusCode: 403, code: 'REPP_REMINDER_FORBIDDEN' });
+            expect(ctx.bookingRepository.rows.get(id).reminder_minutes).toBe(60);
+
+            const same = await ctx.useCases.update({ id, input: { title: 'Pelo admin', reminder_minutes: 60 }, user: ADMIN_AUDITORIO });
+            expect(same).toMatchObject({ title: 'Pelo admin', reminder_minutes: 60 });
+        });
+
+        it('admin que remarca a reserva de outra pessoa rearma o lembrete dela', async () => {
+            const result = await ctx.useCases.update({ id, input: { start_time: '16:00', end_time: '17:00' }, user: ADMIN_AUDITORIO });
+            expect(result).toMatchObject({ status: 'approved', reminder_minutes: 60, reminder_sent_at: null });
+        });
     });
 });

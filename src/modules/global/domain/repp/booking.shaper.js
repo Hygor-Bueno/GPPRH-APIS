@@ -61,6 +61,8 @@ function shapeDetailed(row, viewer, now) {
         canceled_by_name: row.canceled_by_name ?? null,
         canceled_at: row.canceled_at,
         cancel_reason: row.cancel_reason,
+        reminder_minutes: row.reminder_minutes === null || row.reminder_minutes === undefined ? null : Number(row.reminder_minutes),
+        reminder_sent_at: row.reminder_sent_at ?? null,
         can_view_details: true,
         can_manage: canManage(viewer, row, now),
         can_review: canReview(viewer, row, now),

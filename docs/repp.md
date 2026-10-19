@@ -7,8 +7,8 @@ pessoa vê a agenda; quem administra o espaço vê os detalhes e aprova.
 - Tabelas: `re_spaces`, `re_space_admins`, `re_bookings`, `re_notifications`,
   `re_space_unblocked_dates` (MySQL `global`).
 - DDL: `GIPP-SQL/re-reserva-espacos-deploy.sql`,
-  `GIPP-SQL/re-notificacoes-deploy.sql` e `GIPP-SQL/re-regras-agenda-deploy.sql`
-  (fora do repo). As três primeiras
+  `GIPP-SQL/re-notificacoes-deploy.sql`, `GIPP-SQL/re-regras-agenda-deploy.sql`
+  e `GIPP-SQL/re-lembrete-deploy.sql` (fora do repo). As três primeiras
   tabelas nasceram `ae_*` e foram renomeadas por
   `GIPP-SQL/re-renomeia-ae-para-re.sql` em 08/10/2026.
 
@@ -206,6 +206,7 @@ por vírgula (`REPP_INVALID_STATUS` se vier um desconhecido).
 | `canceled` / `approved` / `rejected` / `updated` | outra pessoa age na reserva | criador |
 | `requested` | reserva vira pendente (pedido novo ou remarcação do criador) | administradores ativos do espaço |
 | `created` | reserva nova que já nasce aprovada (criada por admin/dono) — 15/10/2026 | administradores ativos do espaço |
+| `reminder` | chegou o horário do lembrete (worker, ver "Lembrete") — 19/10/2026 | criador |
 
 - Quem agiu nunca recebe o próprio aviso.
 - Toda reserva **nova** gera exatamente um aviso por administrador do espaço:
@@ -229,6 +230,33 @@ por vírgula (`REPP_INVALID_STATUS` se vier um desconhecido).
   lote de 1000, a cada `PATCH .../read`. Sem agendador de propósito: a API roda
   em cluster de 2 e um job de intervalo rodaria duplicado; o DELETE é
   idempotente.
+
+## Lembrete (decisões do Hygor, 19/10/2026)
+
+Quem cria escolhe, opcionalmente, `reminder_minutes` no `POST`/`PUT`:
+`15`, `30`, `60`, `120` ou `1440` (`REMINDER_OPTIONS` em `repp.enums`);
+`null` ou ausente no `POST` = sem lembrete. Outro valor →
+400 `REPP_INVALID_REMINDER`. A reserva completa devolve `reminder_minutes` e
+`reminder_sent_at` (`null` = ainda não enviado).
+
+- **Só o criador** recebe, e por isso só ele muda a antecedência. Outra pessoa
+  que manda o mesmo valor passa (o formulário reenvia o que carregou); valor
+  diferente → 403 `REPP_REMINDER_FORBIDDEN`.
+- **Só reserva aprovada** dispara. A pendente guarda a escolha e dispara se for
+  aprovada antes de começar.
+- **Horário do lembrete que já passou dispara na hora**: reserva em cima da
+  hora feita por admin, ou aprovação tardia. Reserva que começou sem o lembrete
+  sair (worker parado) fica sem ele.
+- Remarcar (espaço, data ou horário) ou trocar a antecedência **rearma**:
+  `reminder_sent_at` volta a `null`, inclusive quando quem remarca é o admin.
+- Quem dispara é o worker `repp-reminder` (`src/workers/repp-reminder.js`, app
+  PM2 `instances: 1` no container `api-gipp-enterprises`), a cada
+  `REPP_REMINDER_POLL_SECONDS` (padrão 30s): trava a reserva, carimba
+  `reminder_sent_at` e grava o aviso `reminder` na mesma transação, e depois
+  manda o `repp:event`. A regra de "vencido" vive só no SQL
+  (`repp-reminder.queries`) — `NOW()` do `global` é hora local, igual a
+  `booking_date`/`start_time`.
+- O aviso `reminder` tem `by_user_id` e `by_name` nulos (ninguém agiu).
 
 ## Pontas soltas
 

@@ -13,6 +13,12 @@
  * @module schemas/repp.schema
  */
 
+/*
+ * `reminder_minutes` (POST e PUT) fica de fora pelo mesmo motivo dos campos
+ * do cadastro de espaço: quem confere é `domain/repp/reminder.rules`, com
+ * `REPP_INVALID_REMINDER` — o `validate` sairia com `GENERIC_ERROR`.
+ */
+
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 /** `09:30` (aceita `09:30:00`). */
 const TIME_PATTERN = /^\d{2}:\d{2}(:\d{2})?$/;

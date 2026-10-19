@@ -194,9 +194,11 @@ para uma query só com campos apagados depois.
 - Aviso (`re_notifications`) é gravado na MESMA transação da ação e o GET **não**
   consome (ler e confirmar com `PATCH /notifications/read`) — o oposto do
   `gt_notify` do GTPP, de propósito. O `repp:event` leva o mesmo `id`.
+- Lembrete (`reminder_minutes`) só dispara pelo worker `repp-reminder` (app PM2,
+  `instances: 1`) — nunca pôr laço de intervalo na API, que roda em cluster de 2.
 
-Detalhes: [`docs/repp.md`](docs/repp.md). DDL: `GIPP-SQL/re-reserva-espacos-deploy.sql`
-e `GIPP-SQL/re-notificacoes-deploy.sql`.
+Detalhes: [`docs/repp.md`](docs/repp.md). DDL: `GIPP-SQL/re-reserva-espacos-deploy.sql`,
+`GIPP-SQL/re-notificacoes-deploy.sql` e `GIPP-SQL/re-lembrete-deploy.sql`.
 
 ## Permissões EPP
 | Código | Escopo |

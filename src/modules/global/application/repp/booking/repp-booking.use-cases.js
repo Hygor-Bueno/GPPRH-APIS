@@ -41,6 +41,11 @@
  * concluída sem aviso — e só depois do commit sai um `repp:event` por
  * destinatário, com o mesmo `id`, sem esperar e sem poder falhar a ação.
  *
+ * ─── Lembrete (`domain/repp/reminder.rules`) ────────────────────────────────
+ * Aqui só se grava a escolha (`reminder_minutes`) e se rearma o lembrete
+ * quando o horário ou a antecedência mudam. Quem dispara é o worker
+ * `repp-reminder` (`application/repp/reminder`).
+ *
  * @module modules/global/application/repp/booking/repp-booking.use-cases
  */
 
@@ -83,6 +88,7 @@ const {
 } = require('../../../domain/repp/booking-access.rules');
 const { shapeMasked, shapeDetailed, compareBookings } = require('../../../domain/repp/booking.shaper');
 const { buildCreatorNotice, buildRequestNotices, scheduleOf, toEventPayload } = require('../../../domain/repp/notification.rules');
+const { normalizeReminder, reminderAfterEdit } = require('../../../domain/repp/reminder.rules');
 // Paginação: a mesma do MIEPP (`?page=&limit=`, 50/200), reaproveitada sem cópia.
 const { normalizePagination, paginated } = require('../../../domain/shared/pagination.rules');
 const { resolveViewer } = require('../repp-viewer');
@@ -207,6 +213,7 @@ class ReppBookingUseCases {
 
         const title = normalizeText(input.title, 'title', { max: 150, required: true });
         const requesterName = normalizeText(input.requester_name ?? user.name, 'requester_name', { max: 150, required: true });
+        const reminderMinutes = normalizeReminder(input.reminder_minutes) ?? null;
 
         const space = await this._requireActiveSpace(schedule.space_id);
         const autoApproved = canReviewSpace(viewer, schedule.space_id);
@@ -227,6 +234,7 @@ class ReppBookingUseCases {
                 ...organization,
                 title,
                 requester_name: requesterName,
+                reminder_minutes: reminderMinutes,
                 status: initialStatus(autoApproved),
                 reviewed_by: autoApproved ? viewer.userId : null,
                 created_by: viewer.userId,
@@ -279,6 +287,12 @@ class ReppBookingUseCases {
         const requesterName = input.requester_name === undefined
             ? current.requester_name
             : normalizeText(input.requester_name, 'requester_name', { max: 150, required: true });
+        const reminder = reminderAfterEdit({
+            current,
+            value: input.reminder_minutes,
+            scheduling,
+            byCreator: isCreator(viewer, current),
+        });
 
         const organization = hasOrganizationInput(input)
             ? await this._resolveOrganization(pickOrganizationCodes(input, current))
@@ -317,6 +331,7 @@ class ReppBookingUseCases {
                 ...organization,
                 title,
                 requester_name: requesterName,
+                ...reminder,
                 status,
                 reset_review: status !== current.status,
                 updated_by: viewer.userId,

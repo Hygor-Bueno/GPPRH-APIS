@@ -9,9 +9,11 @@
  * | `updated`   | outra pessoa altera a reserva                       | criador                      |
  * | `requested` | reserva vira pendente (pedido novo ou remarcação)   | administradores do espaço    |
  * | `created`   | reserva nova já nasce aprovada (quem criou administra) | administradores do espaço |
+ * | `reminder`  | chegou o horário do lembrete (worker `repp-reminder`) | criador                    |
  *
  * Quem agiu nunca recebe o próprio aviso. Reserva sem criador (usuário
- * apagado, `created_by` nulo) não gera aviso ao criador.
+ * apagado, `created_by` nulo) não gera aviso ao criador. O `reminder` não tem
+ * quem agiu: `by_user_id` e `by_name` saem nulos.
  *
  * Toda reserva NOVA avisa os administradores do espaço com UM aviso cada:
  * `requested` quando nasce pendente (pede decisão), `created` quando nasce
@@ -109,6 +111,25 @@ function buildRequestNotices({ booking, adminIds, actor, previous = null, action
     }));
 }
 
+/**
+ * Lembrete ao CRIADOR, ou `null` para reserva sem criador. Snapshot de como a
+ * reserva está no disparo — o worker lê a linha travada.
+ *
+ * @param {object} booking - a reserva completa (`SQL_FIND_DETAILED`).
+ * @returns {?object}
+ */
+function buildReminderNotice(booking) {
+    const creatorId = toId(booking.created_by);
+    if (creatorId === null) return null;
+    return {
+        user_id: creatorId,
+        booking_id: Number(booking.id),
+        action: NotificationAction.Reminder,
+        by_user_id: null,
+        payload: snapshot(booking, {}),
+    };
+}
+
 /** Só os campos conhecidos do snapshot; ausente vira `null`. */
 function pickPayload(payload) {
     let source = payload;
@@ -170,6 +191,7 @@ module.exports = {
     scheduleOf,
     buildCreatorNotice,
     buildRequestNotices,
+    buildReminderNotice,
     toEventPayload,
     shapeNotification,
     normalizeNotificationIds,

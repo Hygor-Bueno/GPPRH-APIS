@@ -73,6 +73,7 @@ function lockedTransaction(conn, spaces) {
                 p.company_code, p.company_name,
                 p.branch_code, p.branch_name,
                 p.cost_center_code, p.cost_center_description,
+                p.reminder_minutes ?? null,
                 p.status, p.reviewed_by, p.reviewed_by, p.created_by,
             ], conn);
             return result.insertId;
@@ -86,6 +87,7 @@ function lockedTransaction(conn, spaces) {
                 p.company_code, p.company_name,
                 p.branch_code, p.branch_name,
                 p.cost_center_code, p.cost_center_description,
+                p.reminder_minutes ?? null, p.reset_reminder ? 1 : 0,
                 p.status, reset, reset, reset,
                 p.updated_by,
                 id, p.expected_status,

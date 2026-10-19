@@ -59,7 +59,9 @@ const DETAIL_COLUMNS = `${PUBLIC_COLUMNS},
         b.canceled_by,
         TRIM(ux.name) AS canceled_by_name,
         ${localDateTime('b.canceled_at')},
-        b.cancel_reason`;
+        b.cancel_reason,
+        b.reminder_minutes,
+        ${localDateTime('b.reminder_sent_at')}`;
 
 const PUBLIC_FROM = `
       FROM re_bookings b
@@ -210,13 +212,15 @@ const SQL_INSERT_BOOKING = `
         company_code, company_name,
         branch_code, branch_name,
         cost_center_code, cost_center_description,
+        reminder_minutes,
         status, reviewed_by, reviewed_at, created_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, IF(? IS NULL, NULL, NOW()), ?)`;
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, IF(? IS NULL, NULL, NOW()), ?)`;
 
 /**
  * Edição. `WHERE status = ?` com o status lido antes: se alguém aprovou,
  * recusou ou cancelou no meio, nada é gravado (0 linhas → 409 no caso de uso).
- * `reset_review` limpa a decisão anterior quando a reserva volta para a fila.
+ * `reset_review` limpa a decisão anterior quando a reserva volta para a fila;
+ * `reset_reminder` rearma o lembrete (horário ou antecedência mudaram).
  */
 const SQL_UPDATE_BOOKING = `
     UPDATE re_bookings
@@ -232,6 +236,8 @@ const SQL_UPDATE_BOOKING = `
            branch_name             = ?,
            cost_center_code        = ?,
            cost_center_description = ?,
+           reminder_minutes        = ?,
+           reminder_sent_at        = IF(?, NULL, reminder_sent_at),
            status                  = ?,
            reviewed_by             = IF(?, NULL, reviewed_by),
            reviewed_at             = IF(?, NULL, reviewed_at),
@@ -261,6 +267,8 @@ const SQL_REVIEW_BOOKING = `
 module.exports = {
     NO_USER,
     NO_SPACE,
+    DETAIL_COLUMNS,
+    DETAIL_FROM,
     sqlListBookings,
     sqlListPending,
     sqlListMine,

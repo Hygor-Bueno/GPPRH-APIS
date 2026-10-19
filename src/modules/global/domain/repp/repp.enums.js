@@ -43,8 +43,15 @@ const MAX_ADVANCE_MONTHS = 2;
 const MAX_SETUP_MINUTES = 240;
 
 /**
+ * Antecedências de lembrete aceitas, em minutos (`re_bookings.reminder_minutes`).
+ * Lista fechada: o front monta o select com ela e a API recusa o resto.
+ */
+const REMINDER_OPTIONS = Object.freeze([15, 30, 60, 120, 1440]);
+
+/**
  * Tipo de aviso. `requested` e `created` vão aos administradores do espaço;
- * os demais, ao criador da reserva. Ver `notification.rules.js`.
+ * os demais, ao criador da reserva. `reminder` não nasce de ação de ninguém:
+ * quem grava é o worker `repp-reminder`. Ver `notification.rules.js`.
  */
 const NotificationAction = Object.freeze({
     Canceled: 'canceled',
@@ -53,6 +60,7 @@ const NotificationAction = Object.freeze({
     Updated: 'updated',
     Requested: 'requested',
     Created: 'created',
+    Reminder: 'reminder',
 });
 
 /** Nome do evento do WebSocket (mensagem `{ event, payload }`). */
@@ -96,8 +104,10 @@ const ReppErrorCode = Object.freeze({
     InvalidSetupMinutes: 'REPP_INVALID_SETUP_MINUTES',
     InvalidActive: 'REPP_INVALID_ACTIVE',
     SpaceAdminRequired: 'REPP_SPACE_ADMIN_REQUIRED',
+    InvalidReminder: 'REPP_INVALID_REMINDER',
     // 403
     BookingForbidden: 'REPP_BOOKING_FORBIDDEN',
+    ReminderForbidden: 'REPP_REMINDER_FORBIDDEN',
     ReviewForbidden: 'REPP_REVIEW_FORBIDDEN',
     NotSpaceAdmin: 'REPP_NOT_SPACE_ADMIN',
     ManageAdminsForbidden: 'REPP_MANAGE_ADMINS_FORBIDDEN',
@@ -124,6 +134,7 @@ module.exports = {
     MIN_ADVANCE_HOURS,
     MAX_ADVANCE_MONTHS,
     MAX_SETUP_MINUTES,
+    REMINDER_OPTIONS,
     NotificationAction,
     REPP_WS_EVENT,
     ReppErrorCode,
