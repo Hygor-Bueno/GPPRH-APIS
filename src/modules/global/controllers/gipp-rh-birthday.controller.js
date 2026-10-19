@@ -9,18 +9,29 @@
  */
 
 const { GippRhBirthdayUseCases } = require('../application/gipp-rh/birthday/birthday.use-cases');
+const { GippRhBirthdayFlyerArtUseCases } = require('../application/gipp-rh/birthday/birthday-flyer-art.use-cases');
 const { SqlServerBirthdayRepository } = require('../infrastructure/gipp-rh/sqlserver-birthday.repository');
 const { MySqlBirthdayExclusionRepository } = require('../infrastructure/gipp-rh/mysql-birthday-exclusion.repository');
+const { MySqlBirthdayFlyerArtRepository } = require('../infrastructure/gipp-rh/mysql-birthday-flyer-art.repository');
+const { BirthdayFlyerArtStorage } = require('../infrastructure/gipp-rh/birthday-flyer-art.storage');
 const { PptxBirthdayFlyerRenderer } = require('../infrastructure/gipp-rh/pptx-birthday-flyer.renderer');
 const { respond } = require('../../../utils/respond');
 
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
+const repository = new SqlServerBirthdayRepository();
+const artRepository = new MySqlBirthdayFlyerArtRepository();
+const artStorage = new BirthdayFlyerArtStorage();
+
 const useCases = new GippRhBirthdayUseCases({
-    repository: new SqlServerBirthdayRepository(),
+    repository,
     exclusionRepository: new MySqlBirthdayExclusionRepository(),
+    artRepository,
+    artStorage,
     flyerRenderer: new PptxBirthdayFlyerRenderer(),
 });
+
+const artUseCases = new GippRhBirthdayFlyerArtUseCases({ repository, artRepository, artStorage });
 
 /**
  * Aniversariantes do mês agrupados por filial, em ordem de dia.
@@ -70,10 +81,53 @@ async function removeBirthdayExclusion(req, res) {
     return respond.message(res, 'Colaborador de volta ao cartaz.');
 }
 
+/**
+ * Empresas do Protheus com a arte do cartaz de cada uma (própria ou padrão).
+ * @route GET /gipp-rh/birthdays/flyer-arts
+ */
+async function getFlyerArts(req, res) {
+    const data = await artUseCases.list();
+    return respond.ok(res, data);
+}
+
+/**
+ * Imagem (PNG) da arte que sai no cartaz da empresa — para a tela exibir e medir.
+ * @route GET /gipp-rh/birthdays/flyer-arts/:companyCode/image
+ */
+async function getFlyerArtImage(req, res) {
+    const { buffer } = await artUseCases.getImage(req.params.companyCode);
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'no-store');
+    return res.send(buffer);
+}
+
+/**
+ * Envia ou ajusta a arte da empresa. Multipart: imagem em `file` (opcional se a
+ * empresa já tem arte) e medidas em `layout` (JSON, opcional).
+ * @route PUT /gipp-rh/birthdays/flyer-arts/:companyCode
+ */
+async function saveFlyerArt(req, res) {
+    const data = await artUseCases.save(req.params.companyCode, req.file ?? null, req.body ?? {}, req.user.id);
+    return respond.ok(res, data);
+}
+
+/**
+ * A empresa volta para a arte padrão.
+ * @route DELETE /gipp-rh/birthdays/flyer-arts/:companyCode
+ */
+async function removeFlyerArt(req, res) {
+    await artUseCases.remove(req.params.companyCode);
+    return respond.message(res, 'A empresa voltou para a arte padrão.');
+}
+
 module.exports = {
     getBirthdays,
     downloadBirthdayFlyer,
     getBirthdayExclusions,
     addBirthdayExclusion,
     removeBirthdayExclusion,
+    getFlyerArts,
+    getFlyerArtImage,
+    saveFlyerArt,
+    removeFlyerArt,
 };

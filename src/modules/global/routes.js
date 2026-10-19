@@ -362,6 +362,50 @@ router.delete('/gipp-rh/birthdays/exclusions/:id',
     canAll(['GIPPRH_VIEW_EMPLOYEE', 'GIPPRH_MANAGE_BIRTHDAY']),
     asyncHandler(gippRhBirthdayController.removeBirthdayExclusion));
 
+/**
+ * @route GET /gipp-rh/birthdays/flyer-arts
+ * @description Empresas do Protheus com a arte do cartaz de cada uma: própria
+ * (`custom: true`) ou a padrão, com as medidas (`layout`) em pixels da imagem.
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE`
+ */
+router.get('/gipp-rh/birthdays/flyer-arts',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE']),
+    asyncHandler(gippRhBirthdayController.getFlyerArts));
+
+/**
+ * @route GET /gipp-rh/birthdays/flyer-arts/:companyCode/image
+ * @description PNG da arte que sai no cartaz da empresa (própria ou padrão).
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE`
+ */
+router.get('/gipp-rh/birthdays/flyer-arts/:companyCode/image',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE']),
+    asyncHandler(gippRhBirthdayController.getFlyerArtImage));
+
+/**
+ * @route PUT /gipp-rh/birthdays/flyer-arts/:companyCode
+ * @description Envia ou ajusta a arte da empresa (`02` = Peg Pese). Multipart:
+ * `file` (PNG/JPEG na proporção do cartaz; opcional se a empresa já tem arte) e
+ * `layout` (JSON com as medidas; opcional — sem ele, o layout padrão é escalado).
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE` e `GIPPRH_MANAGE_BIRTHDAY`
+ */
+router.put('/gipp-rh/birthdays/flyer-arts/:companyCode',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE', 'GIPPRH_MANAGE_BIRTHDAY']),
+    fileUpload.single('file'),
+    asyncHandler(gippRhBirthdayController.saveFlyerArt));
+
+/**
+ * @route DELETE /gipp-rh/birthdays/flyer-arts/:companyCode
+ * @description A empresa volta para a arte padrão.
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE` e `GIPPRH_MANAGE_BIRTHDAY`
+ */
+router.delete('/gipp-rh/birthdays/flyer-arts/:companyCode',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE', 'GIPPRH_MANAGE_BIRTHDAY']),
+    asyncHandler(gippRhBirthdayController.removeFlyerArt));
+
 // ─── Recibos de Pagamento (CRUD) ──────────────────────────────────────────────
 
 /**

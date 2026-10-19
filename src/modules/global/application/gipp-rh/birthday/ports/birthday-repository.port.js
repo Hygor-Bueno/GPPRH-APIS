@@ -32,6 +32,13 @@ class BirthdayRepositoryPort {
      *   full_name: ?string, cost_center: ?string, dismissed: number }[]>}
      */
     findCurrentContractsByCpf(cpfs) { throw new Error('Not implemented'); }
+
+    /**
+     * Empresas do Protheus. A empresa é o prefixo da filial (`0202` → `02`).
+     *
+     * @returns {Promise<{ code: string, name: string }[]>}
+     */
+    findCompanies() { throw new Error('Not implemented'); }
 }
 
 module.exports = { BirthdayRepositoryPort };

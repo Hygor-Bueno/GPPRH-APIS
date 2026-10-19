@@ -2,11 +2,11 @@
  * @fileoverview Gera o cartaz de aniversariantes em `.pptx` — implementa
  * `BirthdayFlyerRendererPort`.
  *
- * O fundo (`templates/birthday-flyer/background.png`) é a arte do RH inteira:
- * balões, logo, título e o cartão com cabeçalho NOME | SETOR | DATA e 19 linhas
- * pautadas. Por cima vão só os dados, numa tabela sem borda cujas linhas caem
- * exatamente nas da arte — por isso as medidas abaixo estão em pixels da imagem
- * (842 × 1191) e não arredondadas. Trocar a arte exige medir de novo.
+ * O fundo de cada slide é a arte da empresa inteira: balões, logo, título e o
+ * cartão com cabeçalho NOME | SETOR | DATA e as linhas pautadas. Por cima vão
+ * só os dados, numa tabela sem borda cujas linhas caem exatamente nas da arte.
+ * As medidas vêm do layout da arte, em pixels da imagem (ver
+ * `birthday-flyer-art.rules`); aqui elas viram polegadas do slide.
  *
  * Saída em `.pptx` (e não PDF) de propósito: o RH ainda ajusta à mão antes de
  * imprimir (apelido, setor), como fazia no modelo.
@@ -14,44 +14,17 @@
  * @module modules/global/infrastructure/gipp-rh/pptx-birthday-flyer.renderer
  */
 
-const path = require('path');
 const { BirthdayFlyerRendererPort } = require('../../application/gipp-rh/birthday/ports/birthday-flyer-renderer.port');
-const { ROWS_PER_SLIDE } = require('../../domain/gipp-rh/birthday.rules');
+const { SLIDE_WIDTH_IN, POSTER_RATIO } = require('../../domain/gipp-rh/birthday-flyer-art.rules');
 
-const BACKGROUND = path.resolve(__dirname, '../../../../templates/birthday-flyer/background.png');
+/** Um tamanho de slide por apresentação — por isso toda arte tem a proporção do cartaz. */
+const SLIDE_W = SLIDE_WIDTH_IN;
+const SLIDE_H = SLIDE_WIDTH_IN * POSTER_RATIO;          // ≈ 14,85" — proporção A3
 
-// ─── Geometria da arte ─────────────────────────────────────────────────────────
-const IMAGE_PX = { w: 842, h: 1191 };
-const SLIDE_W = 10.5;                                   // polegadas (largura do modelo)
-const PX = SLIDE_W / IMAGE_PX.w;                        // polegadas por pixel
-const SLIDE_H = IMAGE_PX.h * PX;                        // ≈ 14,85" — proporção A3
-
-const FIRST_ROW_TOP_PX = 368;                           // fim do cabeçalho laranja
-const LAST_LINE_PX = 1112;                              // 19ª linha pautada
-const ROW_H = ((LAST_LINE_PX - FIRST_ROW_TOP_PX) / ROWS_PER_SLIDE) * PX;
-
-// Início de cada coluna = onde começa o texto do cabeçalho na arte.
-const COL_NAME_PX = 100;
-const COL_SECTOR_PX = 437;
-const COL_DATE_PX = 675;
-const CARD_RIGHT_PX = 783;
-
-const COL_W = [
-    (COL_SECTOR_PX - COL_NAME_PX) * PX,
-    (COL_DATE_PX - COL_SECTOR_PX) * PX,
-    (CARD_RIGHT_PX - COL_DATE_PX) * PX,
-];
-
-// Faixa verde entre o subtítulo e o cartão, onde vai "OUTUBRO · INTERLAGOS".
-const TAG_CENTER_X = 522 * PX;
-const TAG_Y = 240 * PX;
-const TAG_H = 34 * PX;
 const TAG_MAX_W = 5.0;
 
 // ─── Estilo ────────────────────────────────────────────────────────────────────
 const FONT = 'Arial';
-const TEXT_COLOR = '1F2A1F';
-const ACCENT = 'D44A15';                                // laranja do cabeçalho da arte
 const BODY_PT = 18;
 /** Piso legível no cartaz impresso. Duas linhas de 13 pt (≈ 31 pt) cabem na linha pautada (≈ 35 pt). */
 const MIN_PT = 13;
@@ -78,8 +51,37 @@ function cell(text, widthIn, extra = {}) {
     };
 }
 
+/**
+ * Layout em pixels da imagem → posições em polegadas do slide. Escalas
+ * separadas em x e y: a arte pode fugir até 2% da proporção e é esticada para
+ * cobrir o slide — as medidas acompanham.
+ *
+ * @param {{ width: number, height: number, layout: object }} art
+ */
+function geometry({ width, height, layout }) {
+    const sx = SLIDE_W / width;
+    const sy = SLIDE_H / height;
+    const colW = [
+        (layout.col_sector_px - layout.col_name_px) * sx,
+        (layout.col_date_px - layout.col_sector_px) * sx,
+        (layout.card_right_px - layout.col_date_px) * sx,
+    ];
+    return {
+        tableX: layout.col_name_px * sx,
+        tableY: layout.first_row_top_px * sy,
+        colW,
+        rowH: ((layout.last_line_px - layout.first_row_top_px) / layout.rows_per_slide) * sy,
+        tagCenterX: layout.tag_center_x_px * sx,
+        tagY: layout.tag_y_px * sy,
+        tagH: layout.tag_height_px * sy,
+        accent: layout.accent_color,
+        text: layout.text_color,
+        tagFill: layout.tag_fill_color,
+    };
+}
+
 class PptxBirthdayFlyerRenderer extends BirthdayFlyerRendererPort {
-    async render({ monthName, slides }) {
+    async render({ monthName, slides, arts }) {
         // Require tardio: o `routes.js` carrega este arquivo no boot, e uma imagem
         // construída sem o pacote derrubaria a API inteira — assim cai só esta rota.
         const PptxGenJS = require('pptxgenjs');
@@ -89,29 +91,34 @@ class PptxBirthdayFlyerRenderer extends BirthdayFlyerRendererPort {
         pres.title = `Aniversariantes de ${monthName}`;
         pres.company = 'Peg Pese';
 
-        pres.defineSlideMaster({
-            title: 'ANIVERSARIANTES',
-            background: { path: BACKGROUND },
-        });
+        const geometries = {};
+        for (const [key, art] of Object.entries(arts)) {
+            pres.defineSlideMaster({
+                title: `ANIVERSARIANTES_${key}`,
+                background: { data: `image/png;base64,${art.buffer.toString('base64')}` },
+            });
+            geometries[key] = geometry(art);
+        }
 
         for (const page of slides) {
-            const slide = pres.addSlide({ masterName: 'ANIVERSARIANTES' });
+            const g = geometries[page.artKey];
+            const slide = pres.addSlide({ masterName: `ANIVERSARIANTES_${page.artKey}` });
 
             const tag = `${monthName} · ${page.branchName}`.toUpperCase();
             const tagW = Math.min(TAG_MAX_W, Math.max(2.6, tag.length * 0.15 + 0.6));
             slide.addText(tag, {
                 shape: pres.ShapeType.roundRect,
-                rectRadius: TAG_H / 2,
-                x: TAG_CENTER_X - tagW / 2,
-                y: TAG_Y,
+                rectRadius: g.tagH / 2,
+                x: g.tagCenterX - tagW / 2,
+                y: g.tagY,
                 w: tagW,
-                h: TAG_H,
-                fill: { color: 'FFFFFF' },
-                line: { color: 'FFFFFF' },
+                h: g.tagH,
+                fill: { color: g.tagFill },
+                line: { color: g.tagFill },
                 fontFace: FONT,
                 fontSize: tag.length > 30 ? 14 : 16,
                 bold: true,
-                color: ACCENT,
+                color: g.accent,
                 align: 'center',
                 valign: 'middle',
                 charSpacing: 1,
@@ -120,20 +127,20 @@ class PptxBirthdayFlyerRenderer extends BirthdayFlyerRendererPort {
             });
 
             const rows = page.people.map(person => [
-                cell(person.name, COL_W[0]),
-                cell(person.sector, COL_W[1]),
-                cell(person.date, COL_W[2], { color: ACCENT }),
+                cell(person.name, g.colW[0]),
+                cell(person.sector, g.colW[1]),
+                cell(person.date, g.colW[2], { color: g.accent }),
             ]);
 
             slide.addTable(rows, {
-                x: COL_NAME_PX * PX,
-                y: FIRST_ROW_TOP_PX * PX,
-                w: COL_W.reduce((a, b) => a + b, 0),
-                colW: COL_W,
-                rowH: ROW_H,
+                x: g.tableX,
+                y: g.tableY,
+                w: g.colW.reduce((a, b) => a + b, 0),
+                colW: g.colW,
+                rowH: g.rowH,
                 fontFace: FONT,
                 bold: true,
-                color: TEXT_COLOR,
+                color: g.text,
                 valign: 'middle',
                 align: 'left',
                 margin: 0,
@@ -147,4 +154,4 @@ class PptxBirthdayFlyerRenderer extends BirthdayFlyerRendererPort {
     }
 }
 
-module.exports = { PptxBirthdayFlyerRenderer, fitFontSize };
+module.exports = { PptxBirthdayFlyerRenderer, fitFontSize, geometry };

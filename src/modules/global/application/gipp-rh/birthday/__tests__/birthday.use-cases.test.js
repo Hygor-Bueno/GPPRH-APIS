@@ -2,7 +2,10 @@ const { GippRhBirthdayUseCases } = require('../birthday.use-cases');
 const { BirthdayRepositoryPort } = require('../ports/birthday-repository.port');
 const { BirthdayExclusionRepositoryPort } = require('../ports/birthday-exclusion-repository.port');
 const { BirthdayFlyerRendererPort } = require('../ports/birthday-flyer-renderer.port');
+const { BirthdayFlyerArtRepositoryPort } = require('../ports/birthday-flyer-art-repository.port');
+const { BirthdayFlyerArtStoragePort } = require('../ports/birthday-flyer-art-storage.port');
 const { BirthdayErrorCode } = require('../../../../domain/gipp-rh/birthday.rules');
+const { DEFAULT_LAYOUT } = require('../../../../domain/gipp-rh/birthday-flyer-art.rules');
 
 function makeRepository(rows, overrides = {}) {
     const repo = new BirthdayRepositoryPort();
@@ -27,12 +30,27 @@ function makeRenderer() {
     return renderer;
 }
 
+function makeArtRepository(arts = []) {
+    const repo = new BirthdayFlyerArtRepositoryPort();
+    repo.list = jest.fn().mockResolvedValue(arts);
+    return repo;
+}
+
+function makeArtStorage() {
+    const storage = new BirthdayFlyerArtStoragePort();
+    storage.readDefaultPng = jest.fn().mockResolvedValue({ buffer: Buffer.from('default'), width: 842, height: 1191 });
+    storage.readPng = jest.fn().mockImplementation(async fileId => ({ buffer: Buffer.from(`file-${fileId}`), width: 1684, height: 2382 }));
+    return storage;
+}
+
 function makeUseCases({
     repository = makeRepository(ROWS),
     exclusionRepository = makeExclusionRepository(),
+    artRepository = makeArtRepository(),
+    artStorage = makeArtStorage(),
     flyerRenderer = makeRenderer(),
 } = {}) {
-    return new GippRhBirthdayUseCases({ repository, exclusionRepository, flyerRenderer });
+    return new GippRhBirthdayUseCases({ repository, exclusionRepository, artRepository, artStorage, flyerRenderer });
 }
 
 const ROWS = [
@@ -89,6 +107,45 @@ describe('GippRhBirthdayUseCases', () => {
         expect(flyer.monthName).toBe('março');
         expect(flyer.slides).toHaveLength(1);
         expect(flyer.slides[0].branchName).toBe('INTERLAGOS');
+    });
+
+    it('cartaz: empresa sem arte própria usa a padrão, uma vez só', async () => {
+        const flyerRenderer = makeRenderer();
+        const artStorage = makeArtStorage();
+        const rows = [...ROWS, { ...ROWS[0], branch_code: '0206', branch_name: 'PEG PESE BOLONHA', cpf: '3' }];
+
+        await makeUseCases({ repository: makeRepository(rows), flyerRenderer, artStorage }).buildFlyer({ month: 3 });
+
+        const [flyer] = flyerRenderer.render.mock.calls[0];
+        expect(Object.keys(flyer.arts)).toEqual(['default']);
+        expect(flyer.arts.default.layout).toEqual(DEFAULT_LAYOUT);
+        expect(flyer.slides.map(s => s.artKey)).toEqual(['default', 'default']);
+        expect(artStorage.readDefaultPng).toHaveBeenCalledTimes(1);
+        expect(artStorage.readPng).not.toHaveBeenCalled();
+    });
+
+    it('cartaz: cada filial sai com a arte da sua empresa e as linhas dela', async () => {
+        const flyerRenderer = makeRenderer();
+        const frugalLayout = { ...DEFAULT_LAYOUT, rows_per_slide: 1 };
+        const artRepository = makeArtRepository([
+            { company_code: '01', file_id: 77, image_width: 1684, image_height: 2382, layout: frugalLayout },
+        ]);
+        const rows = [
+            ...ROWS,
+            { ...ROWS[0], branch_code: '0102', branch_name: 'FRUGAL BOLONHA', cpf: '3' },
+            { ...ROWS[1], branch_code: '0102', branch_name: 'FRUGAL BOLONHA', cpf: '4' },
+        ];
+
+        await makeUseCases({ repository: makeRepository(rows), artRepository, flyerRenderer }).buildFlyer({ month: 3 });
+
+        const [flyer] = flyerRenderer.render.mock.calls[0];
+        expect(flyer.slides.map(s => [s.branchCode, s.artKey, s.page, s.people.length])).toEqual([
+            ['0102', '01', 1, 1],
+            ['0102', '01', 2, 1],
+            ['0202', 'default', 1, 2],
+        ]);
+        expect(flyer.arts['01']).toMatchObject({ buffer: Buffer.from('file-77'), width: 1684, layout: frugalLayout });
+        expect(Object.keys(flyer.arts).sort()).toEqual(['01', 'default']);
     });
 
     it('cartaz sem os excluídos', async () => {

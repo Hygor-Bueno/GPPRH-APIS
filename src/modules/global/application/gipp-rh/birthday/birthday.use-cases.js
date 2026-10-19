@@ -18,16 +18,22 @@ const {
     withoutExcluded,
     toExclusionEntry,
 } = require('../../../domain/gipp-rh/birthday.rules');
+const { companyCodeOf } = require('../../../domain/gipp-rh/birthday-flyer-art.rules');
+const { resolveFlyerArts } = require('./birthday-flyer-art.use-cases');
 
 class GippRhBirthdayUseCases {
     /**
      * @param {{ repository: import('./ports/birthday-repository.port').BirthdayRepositoryPort,
      *           exclusionRepository: import('./ports/birthday-exclusion-repository.port').BirthdayExclusionRepositoryPort,
+     *           artRepository: import('./ports/birthday-flyer-art-repository.port').BirthdayFlyerArtRepositoryPort,
+     *           artStorage: import('./ports/birthday-flyer-art-storage.port').BirthdayFlyerArtStoragePort,
      *           flyerRenderer: import('./ports/birthday-flyer-renderer.port').BirthdayFlyerRendererPort }} deps
      */
-    constructor({ repository, exclusionRepository, flyerRenderer }) {
+    constructor({ repository, exclusionRepository, artRepository, artStorage, flyerRenderer }) {
         this.repository = repository;
         this.exclusionRepository = exclusionRepository;
+        this.artRepository = artRepository;
+        this.artStorage = artStorage;
         this.flyerRenderer = flyerRenderer;
     }
 
@@ -54,6 +60,9 @@ class GippRhBirthdayUseCases {
     }
 
     /**
+     * Cada filial sai com a arte da sua EMPRESA (prefixo da filial) — a própria
+     * ou a padrão —, e com a quantidade de linhas daquela arte por slide.
+     *
      * @param {{ month: unknown, branches?: unknown }} query
      * @returns {Promise<{ fileName: string, buffer: Buffer }>}
      */
@@ -64,10 +73,23 @@ class GippRhBirthdayUseCases {
                 code: BirthdayErrorCode.NoBirthdays,
             });
         }
+        const artByCompany = await resolveFlyerArts(
+            { artRepository: this.artRepository, artStorage: this.artStorage },
+            list.branches.map(branch => companyCodeOf(branch.branchCode)),
+        );
+        const artOf = branchCode => artByCompany.get(companyCodeOf(branchCode));
+        const slides = paginate(list.branches, branchCode => artOf(branchCode).layout.rows_per_slide)
+            .map(slide => ({ ...slide, artKey: artOf(slide.branchCode).key }));
+        const arts = {};
+        for (const { key, buffer, width, height, layout } of artByCompany.values()) {
+            arts[key] = { buffer, width, height, layout };
+        }
+
         const buffer = await this.flyerRenderer.render({
             month: list.month,
             monthName: list.month_name,
-            slides: paginate(list.branches),
+            slides,
+            arts,
         });
         // Só ASCII: o nome vai cru no Content-Disposition ("março" quebraria o header).
         const asciiMonth = list.month_name.normalize('NFD').replace(/[̀-ͯ]/g, '');

@@ -202,23 +202,25 @@ function groupByBranch(entries) {
 }
 
 /**
- * Quebra cada filial em slides de `ROWS_PER_SLIDE` linhas.
+ * Quebra cada filial em slides de `ROWS_PER_SLIDE` linhas — ou das linhas da
+ * arte da empresa, quando `rowsPerSlide` é função da filial.
  *
  * @param {{ branchCode: string, branchName: string, people: object[] }[]} groups
- * @param {number} [rowsPerSlide]
+ * @param {number | ((branchCode: string) => number)} [rowsPerSlide]
  * @returns {{ branchCode: string, branchName: string, page: number, pages: number, people: object[] }[]}
  */
 function paginate(groups, rowsPerSlide = ROWS_PER_SLIDE) {
     const slides = [];
     for (const group of groups) {
-        const pages = Math.max(1, Math.ceil(group.people.length / rowsPerSlide));
+        const rows = typeof rowsPerSlide === 'function' ? rowsPerSlide(group.branchCode) : rowsPerSlide;
+        const pages = Math.max(1, Math.ceil(group.people.length / rows));
         for (let page = 0; page < pages; page++) {
             slides.push({
                 branchCode: group.branchCode,
                 branchName: group.branchName,
                 page: page + 1,
                 pages,
-                people: group.people.slice(page * rowsPerSlide, (page + 1) * rowsPerSlide),
+                people: group.people.slice(page * rows, (page + 1) * rows),
             });
         }
     }

@@ -121,4 +121,20 @@ function sqlFindCurrentContractsByCpf(cpfCount) {
          WHERE rn = 1;`;
 }
 
-module.exports = { sqlFindBirthdaysByMonth, sqlFindEmployeeCpf, sqlFindCurrentContractsByCpf };
+/** Empresas do Protheus (prefixo da filial), para a gestão da arte do cartaz. */
+function sqlFindCompanies() {
+    return `
+        SELECT RTRIM(M0_CODIGO)      AS code,
+               MAX(RTRIM(M0_NOME))   AS name
+          FROM TMPPRD12.dbo.SYS_COMPANY
+         WHERE D_E_L_E_T_ <> '*'
+         GROUP BY RTRIM(M0_CODIGO)
+         ORDER BY code;`;
+}
+
+module.exports = {
+    sqlFindBirthdaysByMonth,
+    sqlFindEmployeeCpf,
+    sqlFindCurrentContractsByCpf,
+    sqlFindCompanies,
+};

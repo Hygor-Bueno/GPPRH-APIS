@@ -10,6 +10,7 @@ const {
     sqlFindBirthdaysByMonth,
     sqlFindEmployeeCpf,
     sqlFindCurrentContractsByCpf,
+    sqlFindCompanies,
 } = require('../../repositories/sqlserver/birthday.queries');
 
 /** Folga sob o limite de 2100 parâmetros por request do SQL Server. */
@@ -66,6 +67,16 @@ class SqlServerBirthdayRepository extends BirthdayRepositoryPort {
             return rows;
         } catch (error) {
             throw toAppError(error, 'Erro ao buscar os colaboradores fora do cartaz');
+        }
+    }
+
+    async findCompanies() {
+        try {
+            const pool = await poolPromise;
+            const result = await pool.request().query(sqlFindCompanies());
+            return result.recordset;
+        } catch (error) {
+            throw toAppError(error, 'Erro ao buscar as empresas');
         }
     }
 }
