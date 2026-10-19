@@ -44,10 +44,15 @@ function makeFakeReplicationRepository(overrides = {}) {
     return Object.assign(repo, overrides);
 }
 
-function makeUseCases({ repository, replicationRepository } = {}) {
+// Quarta-feira 10:00 em Brasília: fora da janela de fechamento do RH, para que
+// os testes não dependam do dia em que rodam.
+const OUTSIDE_CLOSING = new Date('2026-10-21T13:00:00Z');
+
+function makeUseCases({ repository, replicationRepository, clock } = {}) {
     return new GippUseCases({
         repository: repository ?? makeFakeRepository(),
         replicationRepository: replicationRepository ?? makeFakeReplicationRepository(),
+        clock: clock ?? (() => OUTSIDE_CLOSING),
     });
 }
 
@@ -231,6 +236,48 @@ describe('GippUseCases', () => {
 
             await expect(useCases.getPaymentByLauncher(value)).rejects.toMatchObject({ statusCode: 400 });
             expect(repository.findPaymentByLauncher).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('janela de fechamento do RH (segunda a partir das 12h)', () => {
+        const MONDAY_NOON = new Date('2026-10-19T15:00:00Z');   // segunda 12:00 em Brasília
+        const MONDAY_MORNING = new Date('2026-10-19T14:59:59Z'); // segunda 11:59:59
+        const TUESDAY_START = new Date('2026-10-20T03:00:00Z');  // terça 00:00
+
+        it.each([
+            ['lançar marcação', (uc) => uc.insertTimeRecord({ employee_id: 1 }, null), 'insertTimeRecord'],
+            ['editar marcação', (uc) => uc.updateTimeRecord({ id_time_records: 1 }, null), 'updateTimeRecord'],
+            ['aprovar jornada', (uc) => uc.approveWorkSchedules(['A']), 'approveWorkSchedules'],
+        ])('recusa %s com 423 PAYROLL_CLOSING sem tocar o banco', async (_label, call, repoMethod) => {
+            const repository = makeFakeRepository();
+            const useCases = makeUseCases({ repository, clock: () => MONDAY_NOON });
+
+            await expect(call(useCases)).rejects.toMatchObject({ statusCode: 423, code: 'PAYROLL_CLOSING' });
+            expect(repository[repoMethod]).not.toHaveBeenCalled();
+            expect(repository.findWorkSchedulesStatus).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            ['segunda de manhã', MONDAY_MORNING],
+            ['terça à meia-noite', TUESDAY_START],
+        ])('libera o lançamento e a aprovação %s', async (_label, now) => {
+            const repository = makeFakeRepository({
+                findWorkSchedulesStatus: jest.fn().mockResolvedValue([status('A', 2)]),
+            });
+            const useCases = makeUseCases({ repository, clock: () => now });
+
+            await expect(useCases.insertTimeRecord({ employee_id: 1 }, null)).resolves.toBeDefined();
+            await expect(useCases.updateTimeRecord({ id_time_records: 1 }, null)).resolves.toBeDefined();
+            await expect(useCases.approveWorkSchedules(['A'])).resolves.toMatchObject({ approved: ['A'] });
+        });
+
+        it('não bloqueia o desconsiderar (estorno do RH antes do recibo)', async () => {
+            const repository = makeFakeRepository({
+                findWorkSchedulesStatus: jest.fn().mockResolvedValue([status('A', 1)]),
+            });
+            const useCases = makeUseCases({ repository, clock: () => MONDAY_NOON });
+
+            await expect(useCases.cancelWorkSchedule('A')).resolves.not.toThrow();
         });
     });
 
