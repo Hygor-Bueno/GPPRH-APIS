@@ -15,8 +15,12 @@
  *   max_booking_date     → última data aceita (`null` = sem limite: administra)
  *   booking_rules_exempt → administra: dias bloqueados, 24h e 2 meses não valem para ele
  *   can_manage_admins    → dono do sistema: adiciona e remove administradores
+ *   can_edit_space       → dono do sistema: muda nome, descrição e situação
+ *   can_edit_agenda      → administra: muda dias bloqueados e folga
+ *   active               → `false` só aparece em `/me/managed?include_inactive=true`
  *
  * Administradores do espaço: `domain/repp/space-admin.rules`.
+ * Cadastro (criar, editar, desativar): `domain/repp/space.rules`.
  *
  * Regras em `domain/repp/booking-window.rules`.
  *
@@ -26,9 +30,10 @@
 const { AppError } = require('../../../../../errors/app.error');
 const { ReppErrorCode } = require('../../../domain/repp/repp.enums');
 const { normalizeDate, parseId } = require('../../../domain/repp/booking.rules');
-const { bookingLimits, assertUnblockable, toLocalDate } = require('../../../domain/repp/booking-window.rules');
+const { bookingLimits, assertUnblockable, toLocalDate, isoWeekday } = require('../../../domain/repp/booking-window.rules');
 const { canReviewSpace } = require('../../../domain/repp/booking-access.rules');
 const { canManageAdmins, assertAdminCandidate, assertAdminRemovable } = require('../../../domain/repp/space-admin.rules');
+const { canManageSpaces, canEditSpaceAgenda, normalizeNewSpace, spaceChanges, assertCanEditSpace } = require('../../../domain/repp/space.rules');
 const { resolveViewer } = require('../repp-viewer');
 
 const spaceNotFound = () => new AppError('Espaço não encontrado.', 404, { code: ReppErrorCode.SpaceNotFound });
@@ -48,22 +53,28 @@ class ReppSpaceUseCases {
     _shape(space, viewer, now, unblockedDates) {
         const admin = canReviewSpace(viewer, space.id);
         const limits = bookingLimits(space, admin, now);
+        const bookable = viewer.authenticated && space.active;
         return {
             id: Number(space.id),
             name: space.name,
             description: space.description ?? null,
+            active: space.active,
             can_view_details: admin,
             can_manage: admin,
             can_review: admin,
-            can_book: viewer.authenticated,
-            requires_approval: viewer.authenticated && !admin,
+            can_book: bookable,
+            requires_approval: bookable && !admin,
             blocked_weekdays: limits.blocked_weekdays,
-            unblocked_dates: unblockedDates.get(Number(space.id)) ?? [],
+            // Data liberada de um dia que deixou de ser bloqueado não tem efeito: não sai.
+            unblocked_dates: (unblockedDates.get(Number(space.id)) ?? [])
+                .filter((date) => space.blocked_weekdays.includes(isoWeekday(date))),
             setup_minutes: limits.setup_minutes,
             min_booking_at: limits.min_booking_at,
             max_booking_date: limits.max_booking_date,
             booking_rules_exempt: limits.booking_rules_exempt,
             can_manage_admins: canManageAdmins(viewer),
+            can_edit_space: canManageSpaces(viewer),
+            can_edit_agenda: canEditSpaceAgenda(viewer, space.id),
         };
     }
 
@@ -86,13 +97,61 @@ class ReppSpaceUseCases {
         return this._shapeAll(spaces, viewer);
     }
 
-    /** `GET /spaces/me/managed` — os que o usuário administra; dono do sistema = todos. */
-    async listManaged(user) {
+    /**
+     * `GET /spaces/me/managed[?include_inactive=true]` — os que o usuário
+     * administra; dono do sistema = todos. Com `includeInactive`, também os
+     * desativados (a tela de gestão reativa por aqui).
+     */
+    async listManaged(user, { includeInactive = false } = {}) {
         const [spaces, viewer] = await Promise.all([
-            this.spaceRepository.listActive(),
+            includeInactive ? this.spaceRepository.listAll() : this.spaceRepository.listActive(),
             resolveViewer(this.spaceRepository, user),
         ]);
         return this._shapeAll(spaces.filter((space) => canReviewSpace(viewer, space.id)), viewer);
+    }
+
+    // ─── Cadastro ───────────────────────────────────────────────────────────
+
+    /**
+     * `POST /spaces` — só o dono. Nasce ativo e com os administradores de
+     * `admin_user_ids` (pelo menos um, todos ativos). Devolve o espaço como no
+     * `GET /spaces`.
+     */
+    async create({ input, user }) {
+        const viewer = await resolveViewer(this.spaceRepository, user);
+        if (!canManageSpaces(viewer)) {
+            throw new AppError('Somente o dono do sistema pode cadastrar espaços.', 403, { code: ReppErrorCode.ManageSpacesForbidden });
+        }
+        const space = normalizeNewSpace(input);
+        for (const userId of space.admin_user_ids) {
+            assertAdminCandidate(await this.spaceRepository.findUserStatus(userId));
+        }
+        const { admin_user_ids: adminIds, ...columns } = space;
+        const id = await this.spaceRepository.createSpace(columns, adminIds, viewer.userId);
+        return this._reload(id, user);
+    }
+
+    /**
+     * `PUT /spaces/:id` — campos ausentes ficam. Dono muda tudo; admin do
+     * espaço só `blocked_weekdays` e `setup_minutes`. Só conta o que muda, e
+     * sem mudança nada é gravado. Reservas já feitas não são tocadas.
+     */
+    async update({ id, input, user }) {
+        const { space, viewer } = await this._loadSpace(id, user);
+        const changes = spaceChanges(space, input);
+        assertCanEditSpace(viewer, space.id, Object.keys(changes));
+        if (Object.keys(changes).length) await this.spaceRepository.updateSpace(space.id, changes);
+        return this._reload(space.id, user);
+    }
+
+    /** @private o espaço recém-gravado, no formato do `GET /spaces` (resolve de novo quem consulta). */
+    async _reload(id, user) {
+        const [space, viewer] = await Promise.all([
+            this.spaceRepository.findById(id),
+            resolveViewer(this.spaceRepository, user),
+        ]);
+        if (!space) throw spaceNotFound();
+        return (await this._shapeAll([space], viewer))[0];
     }
 
     /**

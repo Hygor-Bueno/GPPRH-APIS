@@ -59,4 +59,23 @@ const spaceAdminSchema = {
     user_id: { type: 'number', required: true, min: 1 },
 };
 
-module.exports = { postBookingSchema, putBookingSchema, reasonSchema, unblockDateSchema, spaceAdminSchema };
+/*
+ * Cadastro de espaço. `blocked_weekdays`, `setup_minutes`, `active` e
+ * `admin_user_ids` ficam de fora de propósito: são conferidos em
+ * `domain/repp/space.rules`, que responde com `code` próprio
+ * (`REPP_INVALID_WEEKDAYS` etc.) — o `validate` sairia com `GENERIC_ERROR`.
+ */
+const postSpaceSchema = {
+    name:        { type: 'string', required: true,  minLength: 1, maxLength: 100 },
+    description: { type: 'string', required: false, maxLength: 255 },
+};
+
+/** Tudo opcional: campo ausente fica como está. */
+const putSpaceSchema = {
+    name:        { type: 'string', required: false, minLength: 1, maxLength: 100 },
+    description: { type: 'string', required: false, maxLength: 255 },
+};
+
+module.exports = {
+    postBookingSchema, putBookingSchema, reasonSchema, unblockDateSchema, spaceAdminSchema, postSpaceSchema, putSpaceSchema,
+};

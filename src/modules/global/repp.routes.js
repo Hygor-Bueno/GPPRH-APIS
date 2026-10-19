@@ -17,7 +17,9 @@
  * | Rota                                   | Acesso                                   |
  * |----------------------------------------|------------------------------------------|
  * | `GET   /spaces`                        | público                                  |
- * | `GET   /spaces/me/managed`             | logado                                   |
+ * | `GET   /spaces/me/managed`             | logado (`?include_inactive=true`)        |
+ * | `POST  /spaces`                        | dono (nasce com ≥ 1 administrador)       |
+ * | `PUT   /spaces/:id`                    | dono; admin do espaço só agenda          |
  * | `GET   /spaces/bookings`               | público (máx. 62 dias)                   |
  * | `GET   /spaces/bookings/mine`          | logado (as que criou, todos os status)   |
  * | `GET   /spaces/bookings/pending`       | administrador de espaço / dono           |
@@ -59,7 +61,9 @@ const authMiddleware = require('../../middlewares/auth.middleware');
 const { optionalAuth } = require('../../middlewares/optional-auth.middleware');
 const { asyncHandler } = require('../../middlewares/async-handler.middleware');
 const { validate } = require('../../middlewares/validate.middleware');
-const { postBookingSchema, putBookingSchema, reasonSchema, unblockDateSchema, spaceAdminSchema } = require('../../schemas/repp.schema');
+const {
+    postBookingSchema, putBookingSchema, reasonSchema, unblockDateSchema, spaceAdminSchema, postSpaceSchema, putSpaceSchema,
+} = require('../../schemas/repp.schema');
 
 // ─── Espaços ─────────────────────────────────────────────────────────────────
 
@@ -75,13 +79,39 @@ router.get('/',
     asyncHandler(spaceController.list));
 
 /**
- * @route GET /spaces/me/managed
+ * @route GET /spaces/me/managed?include_inactive=true
  * @description Espaços que o usuário administra (dono do sistema: todos).
+ * Com `include_inactive=true`, também os desativados (`active: false`).
  * @access logado
  */
 router.get('/me/managed',
     authMiddleware,
     asyncHandler(spaceController.listManaged));
+
+/**
+ * @route POST /spaces
+ * @description Cadastra o espaço (`{ name, description?, blocked_weekdays?,
+ * setup_minutes?, admin_user_ids }`) com os administradores iniciais, na
+ * mesma transação. 409 `REPP_SPACE_NAME_TAKEN` se o nome já existe. Devolve o
+ * espaço no formato do `GET /spaces`.
+ * @access dono do sistema
+ */
+router.post('/',
+    authMiddleware,
+    validate(postSpaceSchema),
+    asyncHandler(spaceController.create));
+
+/**
+ * @route PUT /spaces/:id
+ * @description Edita (campos ausentes ficam): `name`, `description`,
+ * `active` (só o dono) e `blocked_weekdays`, `setup_minutes` (dono ou admin
+ * do espaço). Desativar não mexe nas reservas já feitas. Devolve o espaço.
+ * @access dono do sistema; administrador do espaço só nos campos de agenda
+ */
+router.put('/:id',
+    authMiddleware,
+    validate(putSpaceSchema),
+    asyncHandler(spaceController.update));
 
 /**
  * @route POST /spaces/:id/unblocked-dates

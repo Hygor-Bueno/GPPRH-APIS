@@ -22,8 +22,29 @@ class ReppSpaceRepositoryPort {
     /** Espaços ativos, por nome. @returns {Promise<ReppSpace[]>} */
     listActive() { throw new Error('Not implemented'); }
 
+    /** Todos os espaços, ativos primeiro, por nome. @returns {Promise<ReppSpace[]>} */
+    listAll() { throw new Error('Not implemented'); }
+
     /** @param {number} id @returns {Promise<?ReppSpace>} inclusive inativo. */
     findById(id) { throw new Error('Not implemented'); }
+
+    /**
+     * Cria o espaço e os administradores iniciais na mesma transação. Nome
+     * repetido → 409 `REPP_SPACE_NAME_TAKEN`.
+     * @param {{name: string, description: ?string, blocked_weekdays: number[], setup_minutes: number}} space
+     * @param {number[]} adminIds
+     * @param {number} createdBy - quem cria (vai em `re_space_admins.created_by`).
+     * @returns {Promise<number>} id do espaço.
+     */
+    createSpace(space, adminIds, createdBy) { throw new Error('Not implemented'); }
+
+    /**
+     * Grava só os campos de `changes` (`name`, `description`, `active`,
+     * `blocked_weekdays`, `setup_minutes`). Nome repetido → 409
+     * `REPP_SPACE_NAME_TAKEN`.
+     * @param {number} id @param {object} changes
+     */
+    updateSpace(id, changes) { throw new Error('Not implemented'); }
 
     /**
      * Ids dos espaços que o usuário administra (`re_space_admins`), ativos ou não.

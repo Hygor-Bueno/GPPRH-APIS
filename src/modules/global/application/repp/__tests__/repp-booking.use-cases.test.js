@@ -42,7 +42,23 @@ class FakeSpaceRepository extends ReppSpaceRepositoryPort {
         this.unblocked = new Set();
     }
     async listActive() { return [...this.spaces.values()].filter((s) => s.active); }
+    async listAll() { return [...this.spaces.values()]; }
     async findById(id) { return this.spaces.get(Number(id)) || null; }
+    async createSpace(space, adminIds) {
+        this._assertNameFree(space.name);
+        const id = Math.max(...this.spaces.keys()) + 1;
+        this.spaces.set(id, { ...space, id, active: true });
+        for (const userId of adminIds) this.admins.push([id, userId]);
+        return id;
+    }
+    async updateSpace(id, changes) {
+        if ('name' in changes) this._assertNameFree(changes.name, id);
+        Object.assign(this.spaces.get(id), changes);
+    }
+    _assertNameFree(name, exceptId) {
+        const taken = [...this.spaces.values()].some((s) => s.id !== exceptId && s.name.toLowerCase() === name.toLowerCase());
+        if (taken) throw Object.assign(new Error('dup'), { statusCode: 409, code: 'REPP_SPACE_NAME_TAKEN' });
+    }
     async findManagedSpaceIds(userId) { return this.admins.filter(([, u]) => u === userId).map(([s]) => s); }
     async findAdminIds(spaceId) { return this.admins.filter(([s]) => s === spaceId).map(([, u]) => u); }
     async listUnblockedDates(spaceIds, fromDate) {
@@ -864,5 +880,115 @@ describe('administradores do espaço (16/10/2026)', () => {
         await expect(ctx.spaces.removeAdmin({ id: AUDITORIO, userId: 476, user: OWNER })).resolves.toMatchObject({ space_id: AUDITORIO });
         // A ex-admin perde o espaço.
         expect((await ctx.spaces.list(ADMIN_AUDITORIO)).find((s) => s.id === AUDITORIO)).toMatchObject({ can_manage: false });
+    });
+});
+
+describe('cadastro de espaços (19/10/2026)', () => {
+    const NEW = { name: 'Sala de Reunião 2', description: 'Térreo', blocked_weekdays: [4, 2, 2], setup_minutes: 30, admin_user_ids: [301, 301] };
+
+    it('dono cria com administradores; o espaço sai no GET /spaces e o admin já administra', async () => {
+        const ctx = setup();
+        const created = await ctx.spaces.create({ input: NEW, user: OWNER });
+        expect(created).toMatchObject({
+            name: 'Sala de Reunião 2', description: 'Térreo', active: true,
+            blocked_weekdays: [2, 4], setup_minutes: 30, can_edit_space: true, can_edit_agenda: true,
+        });
+        expect(ctx.spaceRepository.admins.filter(([s]) => s === created.id)).toEqual([[created.id, 301]]);
+
+        expect((await ctx.spaces.list(null)).map((s) => s.id)).toContain(created.id);
+        expect((await ctx.spaces.list(OTHER)).find((s) => s.id === created.id))
+            .toMatchObject({ can_manage: true, can_edit_agenda: true, can_edit_space: false, booking_rules_exempt: true });
+    });
+
+    it('padrões: sem descrição, sem dias bloqueados e sem folga', async () => {
+        const ctx = setup();
+        const created = await ctx.spaces.create({ input: { name: 'Copa', admin_user_ids: [9] }, user: OWNER });
+        expect(created).toMatchObject({ description: null, blocked_weekdays: [], setup_minutes: 0 });
+    });
+
+    it('criar: só o dono, com pelo menos um admin ativo e nome livre', async () => {
+        const ctx = setup();
+        const cases = [
+            [ADMIN_AUDITORIO, NEW, 403, 'REPP_MANAGE_SPACES_FORBIDDEN'],
+            [COMMON, NEW, 403, 'REPP_MANAGE_SPACES_FORBIDDEN'],
+            [OWNER, { ...NEW, admin_user_ids: [] }, 400, 'REPP_SPACE_ADMIN_REQUIRED'],
+            [OWNER, { ...NEW, admin_user_ids: undefined }, 400, 'REPP_SPACE_ADMIN_REQUIRED'],
+            [OWNER, { ...NEW, admin_user_ids: ['x'] }, 404, 'REPP_USER_NOT_FOUND'],
+            [OWNER, { ...NEW, admin_user_ids: [999] }, 404, 'REPP_USER_NOT_FOUND'],
+            [OWNER, { ...NEW, admin_user_ids: [9, 302] }, 400, 'REPP_USER_INACTIVE'],
+            [OWNER, { ...NEW, name: '  ' }, 400, 'REPP_REQUIRED_FIELD'],
+            [OWNER, { ...NEW, name: 'x'.repeat(101) }, 400, 'REPP_FIELD_TOO_LONG'],
+            [OWNER, { ...NEW, blocked_weekdays: [0] }, 400, 'REPP_INVALID_WEEKDAYS'],
+            [OWNER, { ...NEW, blocked_weekdays: '2,4' }, 400, 'REPP_INVALID_WEEKDAYS'],
+            [OWNER, { ...NEW, setup_minutes: 241 }, 400, 'REPP_INVALID_SETUP_MINUTES'],
+            [OWNER, { ...NEW, setup_minutes: 1.5 }, 400, 'REPP_INVALID_SETUP_MINUTES'],
+            [OWNER, { ...NEW, name: 'auditório' }, 409, 'REPP_SPACE_NAME_TAKEN'],
+        ];
+        for (const [user, input, statusCode, code] of cases) {
+            await expect(ctx.spaces.create({ input, user })).rejects.toMatchObject({ statusCode, code });
+        }
+        expect(ctx.spaceRepository.spaces.size).toBe(3);
+    });
+
+    it('admin do espaço muda dias bloqueados e folga; o resto é do dono', async () => {
+        const ctx = setup();
+        const updated = await ctx.spaces.update({ id: AUDITORIO, input: { blocked_weekdays: ['2', 4], setup_minutes: 60 }, user: ADMIN_AUDITORIO });
+        expect(updated).toMatchObject({ blocked_weekdays: [2, 4], setup_minutes: 60 });
+
+        // O formulário inteiro com o nome igual não é "mudar o nome".
+        await expect(ctx.spaces.update({ id: AUDITORIO, input: { name: 'Auditório', description: null, blocked_weekdays: [2] }, user: ADMIN_AUDITORIO }))
+            .resolves.toMatchObject({ blocked_weekdays: [2] });
+
+        await expect(ctx.spaces.update({ id: AUDITORIO, input: { name: 'Auditório Novo' }, user: ADMIN_AUDITORIO }))
+            .rejects.toMatchObject({ statusCode: 403, code: 'REPP_MANAGE_SPACES_FORBIDDEN', fields: { forbidden: ['name'] } });
+        await expect(ctx.spaces.update({ id: AUDITORIO, input: { active: false }, user: ADMIN_AUDITORIO }))
+            .rejects.toMatchObject({ statusCode: 403, code: 'REPP_MANAGE_SPACES_FORBIDDEN' });
+        await expect(ctx.spaces.update({ id: AUDITORIO, input: { setup_minutes: 10 }, user: ADMIN_SALA }))
+            .rejects.toMatchObject({ statusCode: 403, code: 'REPP_NOT_SPACE_ADMIN' });
+        await expect(ctx.spaces.update({ id: AUDITORIO, input: { setup_minutes: 10 }, user: COMMON }))
+            .rejects.toMatchObject({ statusCode: 403, code: 'REPP_NOT_SPACE_ADMIN' });
+        await expect(ctx.spaces.update({ id: 99, input: {}, user: OWNER }))
+            .rejects.toMatchObject({ statusCode: 404, code: 'REPP_SPACE_NOT_FOUND' });
+        await expect(ctx.spaces.update({ id: AUDITORIO, input: { name: 'Sala de Treinamento' }, user: OWNER }))
+            .rejects.toMatchObject({ statusCode: 409, code: 'REPP_SPACE_NAME_TAKEN' });
+        await expect(ctx.spaces.update({ id: AUDITORIO, input: { active: 'sim' }, user: OWNER }))
+            .rejects.toMatchObject({ statusCode: 400, code: 'REPP_INVALID_ACTIVE' });
+    });
+
+    it('bloquear a terça pela API vale na hora para a reserva comum', async () => {
+        const ctx = setup();
+        await ctx.spaces.update({ id: AUDITORIO, input: { blocked_weekdays: [2, 4] }, user: ADMIN_AUDITORIO });
+        // 13/10/2026 é terça.
+        await expect(ctx.useCases.create({ input: { ...VALID, booking_date: '2026-10-13' }, user: COMMON }))
+            .rejects.toMatchObject({ code: 'REPP_BOOKING_WEEKDAY_BLOCKED' });
+        await ctx.spaces.unblockDate({ id: AUDITORIO, date: '2026-10-13', user: ADMIN_AUDITORIO });
+        await expect(ctx.useCases.create({ input: { ...VALID, booking_date: '2026-10-13' }, user: COMMON }))
+            .resolves.toMatchObject({ status: 'pending' });
+
+        // Tirar o bloqueio da terça esconde a data liberada (não tem mais efeito).
+        const after = await ctx.spaces.update({ id: AUDITORIO, input: { blocked_weekdays: [4] }, user: ADMIN_AUDITORIO });
+        expect(after.unblocked_dates).toEqual([]);
+    });
+
+    it('dono desativa e reativa; inativo some do GET /spaces e não aceita reserva', async () => {
+        const ctx = setup();
+        const off = await ctx.spaces.update({ id: SALA, input: { active: false }, user: OWNER });
+        expect(off).toMatchObject({ active: false, can_book: false, requires_approval: false });
+        expect((await ctx.spaces.list(null)).map((s) => s.id)).not.toContain(SALA);
+        expect((await ctx.spaces.listManaged(OWNER)).map((s) => s.id)).not.toContain(SALA);
+        expect((await ctx.spaces.listManaged(OWNER, { includeInactive: true })).map((s) => s.id)).toEqual(expect.arrayContaining([SALA, 3]));
+        expect((await ctx.spaces.listManaged(ADMIN_SALA, { includeInactive: true })).map((s) => s.id)).toEqual([SALA]);
+        await expect(ctx.useCases.create({ input: { ...VALID, space_id: SALA }, user: COMMON }))
+            .rejects.toMatchObject({ code: 'REPP_SPACE_INACTIVE' });
+
+        const on = await ctx.spaces.update({ id: SALA, input: { active: true }, user: OWNER });
+        expect(on).toMatchObject({ active: true, can_book: true });
+    });
+
+    it('sem mudança, nada é gravado', async () => {
+        const ctx = setup();
+        const spy = jest.spyOn(ctx.spaceRepository, 'updateSpace');
+        await ctx.spaces.update({ id: SALA, input: { name: 'Sala de Treinamento', blocked_weekdays: [], setup_minutes: 0 }, user: ADMIN_SALA });
+        expect(spy).not.toHaveBeenCalled();
     });
 });

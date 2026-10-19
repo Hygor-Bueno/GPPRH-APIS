@@ -46,6 +46,27 @@ SQL).
 - Os donos não aparecem na lista (administram tudo sem vínculo), salvo quem
   também foi adicionado ao espaço.
 
+**Cadastro de espaço pela API (19/10/2026)** — `domain/repp/space.rules.js`,
+sem DDL novo (usa as colunas que já existem em `re_spaces`):
+
+| Rota | Acesso | Comportamento |
+|---|---|---|
+| `POST /spaces` `{ name, description?, blocked_weekdays?, setup_minutes?, admin_user_ids }` | só o dono | 201; espaço + administradores na mesma transação; pelo menos 1 admin ativo (`REPP_SPACE_ADMIN_REQUIRED`); nome repetido → 409 `REPP_SPACE_NAME_TAKEN` |
+| `PUT /spaces/:id` (campos ausentes ficam) | dono: tudo; admin do espaço: só `blocked_weekdays` e `setup_minutes` | só conta o que muda — mandar o formulário inteiro com o nome igual não é 403; admin que muda nome/descrição/`active` → 403 `REPP_MANAGE_SPACES_FORBIDDEN` com `fields.forbidden` |
+| `GET /spaces/me/managed?include_inactive=true` | logado | inclui os desativados, para reativar |
+
+- `blocked_weekdays` é lista ISO (`[2, 4]`); `[]` tira todos os bloqueios.
+  Inválido → 400 `REPP_INVALID_WEEKDAYS`. `setup_minutes` inteiro de 0 a 240
+  (`MAX_SETUP_MINUTES`) → senão 400 `REPP_INVALID_SETUP_MINUTES`.
+- Não há exclusão: `active: false` tira o espaço do `GET /spaces` e recusa
+  reserva nova (`REPP_SPACE_INACTIVE`); reservas, administradores e avisos
+  ficam. Mudar dias bloqueados ou folga também não mexe em reservas já feitas.
+- Data liberada de um dia que deixou de ser bloqueado continua no banco, mas
+  sai de `unblocked_dates` (não tem efeito); volta a valer se o dia voltar a
+  ser bloqueado.
+- Cada espaço do `GET /spaces` ganhou `active`, `can_edit_space` (= dono) e
+  `can_edit_agenda` (= administra o espaço).
+
 | Quem | Vê detalhes | Edita/cancela | Aprova/recusa |
 |---|---|---|---|
 | anônimo / logado comum | não | não | não |
@@ -115,6 +136,7 @@ espaço ou dono do sistema (o mesmo critério da aprovação automática).
 | Folga de organização antes e depois de cada reserva | **todo mundo** | `re_spaces.setup_minutes` | 409 `REPP_BOOKING_CONFLICT` com `reason: 'setup'` |
 
 Hoje só o Auditório tem regra: terça e quinta bloqueadas, 60 min de folga.
+Desde 19/10/2026 as duas colunas mudam por `PUT /spaces/:id` (ver acima).
 
 - A folga entra na checagem de conflito, sob a trava, com `setup_minutes` lido
   na própria linha travada: a busca é na janela `[início − folga, fim + folga)`
@@ -210,12 +232,11 @@ por vírgula (`REPP_INVALID_STATUS` se vier um desconhecido).
 
 ## Pontas soltas
 
-- Não há tela/rota para cadastrar espaço (só SQL). Administrador tem rota
-  desde 16/10/2026.
+- Espaço, dias bloqueados e folga têm rota desde 19/10/2026; administrador,
+  desde 16/10/2026. Falta a tela.
 - A agenda pública não lista recusadas/canceladas (o criador as vê em
   `/bookings/mine`).
 - Sem horário de funcionamento nem passo mínimo.
-- Dias bloqueados e folga só se configuram por SQL em `re_spaces`.
 - O dono do sistema (`SYSTEM_OWNER`) não recebe `requested`/`created` — só
   quem está em `re_space_admins`. **Decisão do Hygor, 16/10/2026**: fica
   assim (são 7 donos ativos; todos receberiam todo pedido dos dois espaços).

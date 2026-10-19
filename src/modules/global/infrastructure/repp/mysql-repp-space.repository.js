@@ -9,9 +9,16 @@
 
 const { ReppSpaceRepositoryPort } = require('../../application/repp/ports/repp-space-repository.port');
 const { query, transaction } = require('./repp-mysql.helper');
+const { AppError } = require('../../../../errors/app.error');
+const { ReppErrorCode } = require('../../domain/repp/repp.enums');
 const { parseWeekdays } = require('../../domain/repp/booking-window.rules');
+const { weekdaysToColumn } = require('../../domain/repp/space.rules');
 const {
     SQL_LIST_ACTIVE_SPACES,
+    SQL_LIST_ALL_SPACES,
+    SQL_INSERT_SPACE,
+    SQL_UPDATE_SPACE,
+    SQL_INSERT_SPACE_ADMINS,
     SQL_GET_SPACE_BY_ID,
     SQL_LIST_MANAGED_SPACE_IDS,
     SQL_LIST_SPACE_ADMIN_IDS,
@@ -42,15 +49,60 @@ function shape(row) {
     };
 }
 
+/** `uq_re_spaces_name` — o `query` do helper guarda o erro do MySQL em `details`. */
+async function guardNameTaken(run) {
+    try {
+        return await run();
+    } catch (error) {
+        if (error?.details?.code === 'ER_DUP_ENTRY') {
+            throw new AppError('Já existe um espaço com esse nome.', 409, { code: ReppErrorCode.SpaceNameTaken });
+        }
+        throw error;
+    }
+}
+
+/** Mudança do caso de uso → colunas de `re_spaces`. Lista fechada: nada do corpo vira coluna. */
+function toColumns(changes) {
+    const columns = {};
+    if ('name' in changes) columns.name = changes.name;
+    if ('description' in changes) columns.description = changes.description;
+    if ('active' in changes) columns.active = changes.active ? 1 : 0;
+    if ('blocked_weekdays' in changes) columns.blocked_weekdays = weekdaysToColumn(changes.blocked_weekdays);
+    if ('setup_minutes' in changes) columns.setup_minutes = changes.setup_minutes;
+    return columns;
+}
+
 class MysqlReppSpaceRepository extends ReppSpaceRepositoryPort {
     async listActive() {
         const rows = await query(SQL_LIST_ACTIVE_SPACES);
         return rows.map(shape);
     }
 
+    async listAll() {
+        const rows = await query(SQL_LIST_ALL_SPACES);
+        return rows.map(shape);
+    }
+
     async findById(id) {
         const rows = await query(SQL_GET_SPACE_BY_ID, [id]);
         return shape(rows[0]);
+    }
+
+    async createSpace(space, adminIds, createdBy) {
+        return guardNameTaken(() => transaction(async (conn) => {
+            const result = await query(SQL_INSERT_SPACE, [
+                space.name, space.description, weekdaysToColumn(space.blocked_weekdays), space.setup_minutes,
+            ], conn);
+            const spaceId = Number(result.insertId);
+            await query(SQL_INSERT_SPACE_ADMINS, [adminIds.map((userId) => [spaceId, userId, createdBy])], conn);
+            return spaceId;
+        }));
+    }
+
+    async updateSpace(id, changes) {
+        const columns = toColumns(changes);
+        if (!Object.keys(columns).length) return;
+        await guardNameTaken(() => query(SQL_UPDATE_SPACE, [columns, id]));
     }
 
     async findManagedSpaceIds(userId) {

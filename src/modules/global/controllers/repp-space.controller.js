@@ -17,9 +17,20 @@ async function list(req, res) {
     return respond.ok(res, await useCases.list(req.user));
 }
 
-/** @route GET /spaces/me/managed */
+/** @route GET /spaces/me/managed[?include_inactive=true] */
 async function listManaged(req, res) {
-    return respond.ok(res, await useCases.listManaged(req.user));
+    const includeInactive = ['true', '1'].includes(String(req.query.include_inactive ?? '').toLowerCase());
+    return respond.ok(res, await useCases.listManaged(req.user, { includeInactive }));
+}
+
+/** @route POST /spaces */
+async function create(req, res) {
+    return respond.created(res, await useCases.create({ input: req.body, user: req.user }));
+}
+
+/** @route PUT /spaces/:id */
+async function update(req, res) {
+    return respond.ok(res, await useCases.update({ id: req.params.id, input: req.body, user: req.user }));
 }
 
 /** @route POST /spaces/:id/unblocked-dates */
@@ -47,4 +58,4 @@ async function removeAdmin(req, res) {
     return respond.ok(res, await useCases.removeAdmin({ id: req.params.id, userId: req.params.userId, user: req.user }));
 }
 
-module.exports = { list, listManaged, unblockDate, reblockDate, listAdmins, addAdmin, removeAdmin };
+module.exports = { list, listManaged, create, update, unblockDate, reblockDate, listAdmins, addAdmin, removeAdmin };

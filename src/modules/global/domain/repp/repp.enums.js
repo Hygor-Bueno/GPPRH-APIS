@@ -39,6 +39,9 @@ const MAX_RANGE_DAYS = 62;
 const MIN_ADVANCE_HOURS = 24;
 const MAX_ADVANCE_MONTHS = 2;
 
+/** Teto da folga de organização (`re_spaces.setup_minutes`) aceita pela API. */
+const MAX_SETUP_MINUTES = 240;
+
 /**
  * Tipo de aviso. `requested` e `created` vão aos administradores do espaço;
  * os demais, ao criador da reserva. Ver `notification.rules.js`.
@@ -89,11 +92,16 @@ const ReppErrorCode = Object.freeze({
     BookingWeekdayBlocked: 'REPP_BOOKING_WEEKDAY_BLOCKED',
     DateNotBlocked: 'REPP_DATE_NOT_BLOCKED',
     UserInactive: 'REPP_USER_INACTIVE',
+    InvalidWeekdays: 'REPP_INVALID_WEEKDAYS',
+    InvalidSetupMinutes: 'REPP_INVALID_SETUP_MINUTES',
+    InvalidActive: 'REPP_INVALID_ACTIVE',
+    SpaceAdminRequired: 'REPP_SPACE_ADMIN_REQUIRED',
     // 403
     BookingForbidden: 'REPP_BOOKING_FORBIDDEN',
     ReviewForbidden: 'REPP_REVIEW_FORBIDDEN',
     NotSpaceAdmin: 'REPP_NOT_SPACE_ADMIN',
     ManageAdminsForbidden: 'REPP_MANAGE_ADMINS_FORBIDDEN',
+    ManageSpacesForbidden: 'REPP_MANAGE_SPACES_FORBIDDEN',
     // 404
     BookingNotFound: 'REPP_BOOKING_NOT_FOUND',
     SpaceNotFound: 'REPP_SPACE_NOT_FOUND',
@@ -103,6 +111,7 @@ const ReppErrorCode = Object.freeze({
     BookingStale: 'REPP_BOOKING_STALE',
     BookingNotPending: 'REPP_BOOKING_NOT_PENDING',
     LastSpaceAdmin: 'REPP_LAST_SPACE_ADMIN',
+    SpaceNameTaken: 'REPP_SPACE_NAME_TAKEN',
     // 500
     MysqlError: 'REPP_MYSQL_ERROR',
     ProtheusError: 'REPP_PROTHEUS_ERROR',
@@ -114,6 +123,7 @@ module.exports = {
     MAX_RANGE_DAYS,
     MIN_ADVANCE_HOURS,
     MAX_ADVANCE_MONTHS,
+    MAX_SETUP_MINUTES,
     NotificationAction,
     REPP_WS_EVENT,
     ReppErrorCode,

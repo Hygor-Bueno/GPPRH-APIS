@@ -16,6 +16,27 @@ const SQL_LIST_ACTIVE_SPACES = `
      WHERE active = 1
      ORDER BY name`;
 
+/** Ativos e inativos — a tela de gestão reativa espaço desativado. */
+const SQL_LIST_ALL_SPACES = `
+    SELECT ${SPACE_COLUMNS}
+      FROM re_spaces
+     ORDER BY active DESC, name`;
+
+const SQL_INSERT_SPACE = `
+    INSERT INTO re_spaces (name, description, blocked_weekdays, setup_minutes)
+    VALUES (?, ?, ?, ?)`;
+
+/** `SET ?` com objeto: as colunas vêm da lista fechada do adapter, nunca do corpo. */
+const SQL_UPDATE_SPACE = `
+    UPDATE re_spaces
+       SET ?
+     WHERE id = ?`;
+
+/** Administradores iniciais do espaço novo, em lote (`VALUES ?`). */
+const SQL_INSERT_SPACE_ADMINS = `
+    INSERT IGNORE INTO re_space_admins (space_id, user_id, created_by)
+    VALUES ?`;
+
 const SQL_GET_SPACE_BY_ID = `
     SELECT ${SPACE_COLUMNS}
       FROM re_spaces
@@ -113,6 +134,10 @@ module.exports = {
     SQL_DELETE_SPACE_ADMIN,
     SQL_LIST_SPACE_ADMIN_IDS,
     SQL_LIST_ACTIVE_SPACES,
+    SQL_LIST_ALL_SPACES,
+    SQL_INSERT_SPACE,
+    SQL_UPDATE_SPACE,
+    SQL_INSERT_SPACE_ADMINS,
     SQL_GET_SPACE_BY_ID,
     SQL_LIST_MANAGED_SPACE_IDS,
     SQL_LIST_UNBLOCKED_DATES,
