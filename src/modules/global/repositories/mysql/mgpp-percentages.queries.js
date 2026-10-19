@@ -15,6 +15,10 @@ function sqlInsertPercentage() {
             )`
 };
 
+function sqlGetTotalPercentageSector(branchCode, costcenterCode) {
+    return `SELECT sum(value_sector_percentage) as total FROM global.mg_percentage WHERE branch_code = ${branchCode} AND costcenter_code != ${costcenterCode}`
+}
+
 function buildInsertPercentage(data) {
     return [
         data.id_user_fk ?? null,
@@ -50,4 +54,4 @@ function buildUpdatePercentage(data, id) {
 }
 
 
-module.exports = { sqlListPercentage, sqlInsertPercentage, sqlUpdatePercentage, buildInsertPercentage, buildUpdatePercentage }
+module.exports = { sqlListPercentage, sqlInsertPercentage, sqlUpdatePercentage, buildInsertPercentage, buildUpdatePercentage, sqlGetTotalPercentageSector }

@@ -2347,64 +2347,64 @@ router.put('/gapp/settings/subdepartament/:id',
 /**
  * @route GET /targets/awards
  * @description Lista as premiações registradas no banco mg_awards
- * @access MG_MANAGER_VIEW
+ * @access MG_AWARDS_VIEW
  */
 router.get('/targets/awards',
     authMiddleware,
-    canAll(['MG_MANAGER_VIEW']),
+    canAll(['MG_AWARDS_VIEW']),
     asyncHandler(mgppAwardsController.list)
 );
 
 /**
  * @route POST /targets/awards
  * @description Realiza o registro no banco mg_awards
- * @access MG_MANAGER_VIEW
+ * @access MG_AWARDS_VIEW
  */
 router.post('/targets/awards',
     authMiddleware,
-    canAll(['MG_MANAGER_CREATE']),
+    canAll(['MG_AWARDS_CREATE']),
     asyncHandler(mgppAwardsController.create)
 );
 
 /**
  * @route PUT /targets/awards
  * @description Atualiza as premiações registradas no banco mg_awards
- * @access MG_MANAGER_VIEW
+ * @access MG_AWARDS_VIEW
  */
 router.put('/targets/awards/:id',
     authMiddleware,
-    canAll(['MG_MANAGER_UPDATE']),
+    canAll(['MG_AWARDS_UPDATE']),
     asyncHandler(mgppAwardsController.update)
 );
 
 /**
  * @route GET /targets/percentage
  * @description Lista as porcentagens de cada setor registrado no banco mg_percentage
- * @access MG_MANAGER_VIEW
+ * @access MG_PERCENTAGE_VIEW
  */
 router.get('/targets/percentages',
     authMiddleware,
-    canAll(['MG_MANAGER_VIEW']),
+    canAll(['MG_PERCENTAGE_VIEW']),
     asyncHandler(mgppPercentageController.list)
 );
 /**
  * @route POST /targets/percentage
  * @description Cria as porcentagens de cada setor registrando no banco mg_percentage
- * @access MG_MANAGER_CREATE
+ * @access MG_PERCENTAGE_CREATE
  */
 router.post('/targets/percentages',
     authMiddleware,
-    canAll(['MG_MANAGER_CREATE']),
+    canAll(['MG_PERCENTAGE_CREATE']),
     asyncHandler(mgppPercentageController.create)
 );
 /**
  * @route PUT /targets/percentage
  * @description Atualiza as porcentagens de cada setor registrado no banco mg_percentage
- * @access MG_MANAGER_UPDATE
+ * @access MG_PERCENTAGE_UPDATE
  */
 router.put('/targets/percentages/:id',
     authMiddleware,
-    canAll(['MG_MANAGER_UPDATE']),
+    canAll(['MG_PERCENTAGE_UPDATE']),
     asyncHandler(mgppPercentageController.update)
 );
 
@@ -2412,71 +2412,72 @@ router.put('/targets/percentages/:id',
 /**
  * @route GET /targets/inventory-configs
  * @description Lista as configurações de inventarios de cada setor registrado no banco (mg_inventory_configs)
- * @access MG_MANAGER_VIEW
+ * @access MG_INVENTORY_CONFIG_VIEW
  */
 router.get('/targets/inventory-configs',
     authMiddleware,
-    canAll(['MG_MANAGER_VIEW']),
+    canAll(['MG_INVENTORY_CONFIG_VIEW']),
     asyncHandler(mgppInventoryConfigsController.list)
 );
+
 router.get('/targets/inventory-configs/pendings',
     authMiddleware,
-    canAll(['MG_MANAGER_VIEW']),
+    canAll(['MG_INVENTORY_CONFIG_VIEW']),
     asyncHandler(mgppInventoryConfigsController.listPendings)
 );
 
 /**
  * @route POST /targets/inventory-configs
  * @description Cria as configurações de inventario de cada setor banco (mg_inventory_configs)
- * @access MG_MANAGER_CREATE
+ * @access MG_INVENTORY_CONFIG_CREATE
  */
 router.post('/targets/inventory-configs',
     authMiddleware,
-    canAll(['MG_MANAGER_CREATE']),
+    canAll(['MG_INVENTORY_CONFIG_CREATE']),
     asyncHandler(mgppInventoryConfigsController.create)
 );
 
 /**
  * @route PUT /targets/inventory-configs
  * @description Atualiza as configurações de inventario de cada setor registrado no banco (mg_inventory_configs)
- * @access MG_MANAGER_UPDATE
+ * @access MG_INVENTORY_CONFIG_UPDATE
  */
 router.put('/targets/inventory-configs/:id',
     authMiddleware,
-    canAll(['MG_MANAGER_UPDATE']),
+    canAll(['MG_INVENTORY_CONFIG_UPDATE']),
     asyncHandler(mgppInventoryConfigsController.update)
 );
 
 /**
  * @route GET /targets/inventory-
  * @description Lista os inventarios de cada setor registrado no banco (mg_inventory)
- * @access MG_MANAGER_VIEW
+ * @access MG_INVENTORY_CONFIG_VIEW
  */
 router.get('/targets/inventory',
     authMiddleware,
-    canAll(['MG_MANAGER_VIEW']),
+    canAll(['MG_INVENTORY_MANAGER_VIEW']),
     asyncHandler(mgppInventoryController.list)
 );
 
 /**
  * @route POST /targets/inventory-
  * @description Registra inventario banco (mg_inventory)
- * @access MG_MANAGER_CREATE
+ * @access MG_INVENTORY_CREATE
  */
 router.post('/targets/inventory',
     authMiddleware,
-    canAll(['MG_MANAGER_CREATE']),
+    canAll(['MG_INVENTORY_CREATE']),
     asyncHandler(mgppInventoryController.create)
 );
 
 /**
  * @route PUT /targets/inventory-
  * @description Atualiza de inventarios registrados no banco (mg_inventory)
- * @access MG_MANAGER_UPDATE
+ * @access MG_INVENTORY_UPDATE
  */
 router.put('/targets/inventory/:id',
     authMiddleware,
-    canAll(['MG_MANAGER_UPDATE']),
+    canAll(['MG_INVENTORY_UPDATE']),
     asyncHandler(mgppInventoryController.update)
 );
 

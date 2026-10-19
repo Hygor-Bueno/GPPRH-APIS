@@ -4,6 +4,8 @@ class MgppPercentageRepositoryPort {
      */
     list() { throw new Error('Not implemented'); }
 
+    getTotalpercentageSector(branchCode, costcenterCode) { throw new Error('Not implemented'); }
+
     /**
      * @param {object} data
      */

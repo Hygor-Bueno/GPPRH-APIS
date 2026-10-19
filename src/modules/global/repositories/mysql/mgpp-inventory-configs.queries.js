@@ -40,19 +40,14 @@ function sqlListInventoryConfigsPendings() {
             mg.id_inventory_config,
             mg.costcenter_code,
             mg.branch_code,
-            mg.quantity_for_month,
-            (
-                mg.quantity_for_month - (
-                    SELECT COUNT(*)
-                    FROM global.mg_inventories AS inv
-                    WHERE inv.created_at >= '${formatDate(initialDate)}'
-                      AND inv.created_at < '${formatDate(finalDate)}'
-                      AND inv.costcenter_code = mg.costcenter_code
-                      AND inv.branch_code = mg.branch_code
-                      AND inv.status_inventory != 2
-                )
-            ) AS quantity_pending
-        FROM global.mg_inventory_configs AS mg;
+            mg.quantity_for_month
+        FROM global.mg_inventory_configs AS mg 
+            WHERE id_inventory_config NOT IN (
+                SELECT id_inventory_config 
+                    FROM global.mg_inventories inv
+                WHERE inv.id_inventory_config IS NOT NULL
+                    AND inv.created_at >= '${formatDate(initialDate)}'
+                    AND inv.created_at < '${formatDate(finalDate)}');
     `;
 }
 

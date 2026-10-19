@@ -1,7 +1,7 @@
 const { poolGlobal } = require('../../../../config/mysql');
 const { AppError } = require('../../../../errors/app.error');
 const { MgppPercentageRepositoryPort } = require("../../../global/application/mgpp/percentage/ports/mgpp-percentage-repositoy-port")
-const { sqlListPercentage, sqlInsertPercentage, sqlUpdatePercentage, buildUpdatePercentage, buildInsertPercentage } = require('../../repositories/mysql/mgpp-percentages.queries')
+const { sqlListPercentage, sqlInsertPercentage, sqlUpdatePercentage, buildUpdatePercentage, buildInsertPercentage, sqlGetTotalPercentageSector } = require('../../repositories/mysql/mgpp-percentages.queries')
 
 class MysqlPercentegeRepository {
     /** @private */
@@ -21,6 +21,12 @@ class MysqlPercentegeRepository {
     async list() {
         const [rows] = await this._query(sqlListPercentage())
         return rows
+    }
+
+    async getTotalpercentageSector(branchCode, costcenterCode) {
+        const [rows] = await this._query(sqlGetTotalPercentageSector(branchCode, costcenterCode))
+
+        return rows[0].total
     }
 
     async create(data) {
