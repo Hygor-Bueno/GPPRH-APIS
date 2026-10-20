@@ -4,9 +4,11 @@ class MgppInventoryUseCase {
     /**
         * @param {Object} deps
         * @param {import('./ports/mgpp-inventory-repository-port').MgppInventoryRepositoryPorts} deps.repository
+        * @param {import('../ports/oracle-mgpp.repository.port').OracleMgppRepositoryPort} deps.repository
         */
     constructor({ repository }) {
         this.repository = repository;
+        this.oracleRepository = repository
     }
 
     async _validateData(data, isUpdate) {
@@ -53,6 +55,11 @@ class MgppInventoryUseCase {
 
         const payload = { ...data, id_user_fk: user.id };
         const res = this.repository.update(id, payload);
+        return res
+    }
+
+    async getCostCenterCetegory() {
+        const res = this.oracleRepository.getCostCenterCetegory()
         return res
     }
 }

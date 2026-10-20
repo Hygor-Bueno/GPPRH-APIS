@@ -1,6 +1,8 @@
 const { poolGlobal } = require('../../../../config/mysql');
+const { oracleQuery } = require('../../../../config/oracle');
 const { AppError } = require('../../../../errors/app.error');
 const { MgppInventoryRepositoryPorts } = require("../../application/mgpp/inventory/ports/mgpp-inventory-repository-port")
+const { OracleMgppRepositoryPort } = require("../../application/mgpp/ports/oracle-mgpp.repository.port")
 const {
     sqlListInventory, sqlInsertInventory, sqlUpdateInventory,
     buildInsertInventory, buildUpdateInventory,
@@ -38,9 +40,20 @@ class MysqlInventoryRepository {
         const [rows] = await this._query(sqlValidateInventoryStatus(id));
         return rows[0].status_inventory
     }
+
     async getNumberReleasesForMonth(date, id) {
         const [rows] = await this._query(sqlGetNumberReleasesForMonth(date, id))
         return rows[0].quantity
+    }
+
+    async getCostCenterCetegory() {
+        return await oracleQuery(
+            `SELECT 
+                DISTINCT CATEGORIANIVEL1 as COSTCENTER_DESC,
+                SKCATEGORIANIVEL1 as COSTCENTER_CODE
+            FROM CONSINCODW.DWV_CATEGORIA
+                WHERE SKCATEGORIANIVEL1 IN(701, 12301, 12701, 21601, 35401, 111101, 122701, 140501, 192201, 198801)`
+        );
     }
 
     async create(data) {
@@ -70,5 +83,7 @@ class MysqlInventoryRepository {
             if (conn) conn.release();
         }
     }
+
+
 }
 module.exports = { MysqlInventoryRepository }
