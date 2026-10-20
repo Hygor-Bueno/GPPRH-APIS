@@ -29,6 +29,7 @@ const chatController = require('./controllers/chat.controller');
 const filesController = require('./controllers/files.controller');
 const gtppTaskController = require('./controllers/gtpp-task.controller');
 const gtppTaskOverviewController = require('./controllers/gtpp-task-overview.controller');
+const gtppTaskDossierController = require('./controllers/gtpp-task-dossier.controller');
 const gtppItemController = require('./controllers/gtpp-task-item.controller');
 const gtppResponseController = require('./controllers/gtpp-task-item-response.controller');
 const gtppTaskUserController = require('./controllers/gtpp-task-user.controller');
@@ -1072,6 +1073,17 @@ router.get('/gtpp/tasks/:taskId/historic',
     authMiddleware,
     canAny(['GTPP_USE']),
     asyncHandler(gtppTaskController.getTaskHistoric));
+
+/**
+ * @route GET /gtpp/tasks/:id/dossier
+ * @description Gera o PDF "Dossiê da tarefa" (resumo, pontos de atenção,
+ * checklist com evidências, linha do tempo, índice de anexos e chat).
+ * @access Requer `GTPP_USE` e ser criador/participante da tarefa, ou `GTPP_MANAGE`
+ */
+router.get('/gtpp/tasks/:id/dossier',
+    authMiddleware,
+    canAny(['GTPP_USE']),
+    asyncHandler(gtppTaskDossierController.downloadTaskDossier));
 
 /**
  * @route GET /gtpp/tasks/:id
