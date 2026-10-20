@@ -11,6 +11,7 @@ class EmployeeRepositoryPort {
     findEmployeesFiltered(params) { throw new Error('Not implemented'); }
 
     /**
+     * `status`: 1 = ad_status 'active', 0 = demais, null = todos. Cada linha traz `status` com o ad_status em texto.
      * @param {{page:number, pageSize:number, name:?string, applicationId:?number, status:?number}} params
      * @returns {Promise<{rows:object[], totalRecords:number, limitPage:number}>}
      */

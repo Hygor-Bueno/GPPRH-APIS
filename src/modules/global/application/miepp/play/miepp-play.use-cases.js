@@ -10,7 +10,7 @@
  */
 
 const { AppError } = require('../../../../../errors/app.error');
-const { normalizePagination, paginated } = require('../../../domain/miepp/pagination.rules');
+const { normalizePagination, paginated } = require('../../../domain/shared/pagination.rules');
 const { normalizeRange } = require('../../../domain/miepp/play/play-range.rules');
 const {
     shapeMediaRow,

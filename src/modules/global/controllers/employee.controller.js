@@ -68,8 +68,9 @@ async function getEmployees(req, res) {
  * Lista usuários paginados com enriquecimento do Protheus.
  *
  * @route GET /users
- * @param {import('express').Request}  req - Query: pPage, pPageSize, pName, pApplicationId, pStatus
- * @param {import('express').Response} res
+ * @param {import('express').Request}  req - Query: pPage, pPageSize, pName, pApplicationId,
+ *   pStatus (1 = ad_status 'active', 0 = demais, ausente = todos)
+ * @param {import('express').Response} res - `status` de cada usuário vem como `ad_status` em texto.
  */
 async function getUsers(req, res) {
     const result = await useCases.getUsersFiltered(req.query);

@@ -71,6 +71,7 @@ const MIME_TO_EXT = {
     'image/png':                                                                           'png',
     'image/jpeg':                                                                          'jpg',
     'image/webp':                                                                          'webp',
+    'image/gif':                                                                           'gif',
     'application/pdf':                                                                     'pdf',
     'text/plain':                                                                          'txt',
     'text/csv':                                                                            'csv',
@@ -113,6 +114,7 @@ const EXT_TO_EXPECTED_MIME = {
     jpg:  ['image/jpeg'],
     jpeg: ['image/jpeg'],
     webp: ['image/webp'],
+    gif:  ['image/gif'],
     doc:  ['application/msword'],
     xls:  ['application/vnd.ms-excel'],
     // Sem exceção para o formato legado: quando nome e conteúdo divergem, o

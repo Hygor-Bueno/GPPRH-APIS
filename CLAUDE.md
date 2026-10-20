@@ -154,6 +154,52 @@ IP, e as telas de uma mesma loja derrubariam umas às outras.
 Detalhes, regra de resolução de playlist e pontas soltas:
 [`docs/miepp.md`](docs/miepp.md). DDL: `GIPP-SQL/miepp-deploy.sql` (fora do repo).
 
+### ⚠️ CPPP (ponto Control iD) — o espelho do relógio é imutável
+
+`cppp_afd_records` é o AFD do relógio REP-C (registro fiscal, Portaria 671):
+**só INSERT**. O banco recusa UPDATE/DELETE por trigger e um teste falha se
+aparecer código escrevendo nela. Também **não existe rota de escrita contra o
+relógio** — o cliente só conhece `login`, `get_afd` e `logout`. Correção de
+marcação é linha em `cppp_punch_adjustments`, que só se cancela, nunca se apaga.
+
+- Quem coleta é só o worker `cppp-afd-collector` (app PM2, `instances: 1`);
+  a rota da tela só enfileira. A API fala com o relógio apenas no "testar
+  conexão" do cadastro (login + logout).
+- Relógios são cadastrados pela tela, cada um com seu IP; login/senha é um só,
+  no `.env` (`CPPP_DEVICE_LOGIN`/`CPPP_DEVICE_PASSWORD`). O IP é restrito a IP
+  literal de rede interna — o servidor manda a senha compartilhada para ele.
+- Toda chamada ao relógio abre e fecha sessão (login → operação → logout); o
+  login expira, nunca reaproveitar sessão.
+- O campo "CPF" do AFD deste relógio guarda **CPF ou PIS** — validar pelos dois
+  dígitos (`domain/cppp/cpf.rules.js`), nunca descartar "CPF inválido".
+- Anexo de ajuste (atestado) é dado de saúde: o módulo `CPPP` não sai pela rota
+  genérica `/files/:fileId` (`RESTRICTED_MODULES` no `files.controller`).
+
+Detalhes, decisões e pontas soltas: [`docs/cppp.md`](docs/cppp.md). DDL:
+`GIPP-SQL/cppp-deploy.sql` (fora do repo).
+
+### ⚠️ REPP (reserva de espaços) — consulta pública, mascaramento no backend
+
+`GET /spaces` e `GET /spaces/bookings[/:id]` são **públicos**
+(`optional-auth.middleware`, nunca 401). Quem não administra o espaço nem criou
+a reserva recebe só espaço, data, horário e status: a consulta mascarada **não
+lê** as colunas sensíveis, e as chaves não existem na resposta. Não "simplificar"
+para uma query só com campos apagados depois.
+
+- Administrador do espaço = linha em `re_space_admins` (não é `_permissions`);
+  dono do sistema = `SYSTEM_OWNER`.
+- Não-admin cria `pending`; criador que troca data/horário volta para `pending`.
+  Pendente ocupa o horário.
+- Conflito só se checa dentro de `runLocked` (`FOR UPDATE` na linha do espaço).
+- Aviso (`re_notifications`) é gravado na MESMA transação da ação e o GET **não**
+  consome (ler e confirmar com `PATCH /notifications/read`) — o oposto do
+  `gt_notify` do GTPP, de propósito. O `repp:event` leva o mesmo `id`.
+- Lembrete (`reminder_minutes`) só dispara pelo worker `repp-reminder` (app PM2,
+  `instances: 1`) — nunca pôr laço de intervalo na API, que roda em cluster de 2.
+
+Detalhes: [`docs/repp.md`](docs/repp.md). DDL: `GIPP-SQL/re-reserva-espacos-deploy.sql`,
+`GIPP-SQL/re-notificacoes-deploy.sql` e `GIPP-SQL/re-lembrete-deploy.sql`.
+
 ## Permissões EPP
 | Código | Escopo |
 |---|---|
@@ -170,3 +216,13 @@ Detalhes, regra de resolução de playlist e pontas soltas:
 | `BPPP_MANAGE` | Administração do módulo (hoje equivale a `BPPP_USE`) |
 
 Seed: `src/modules/global/repositories/mysql/bppp-permissions.sql`
+
+## Permissões CPPP
+| Código | Escopo |
+|---|---|
+| `CPPP_USE` | Ver inconsistências, marcações, ajustes e histórico de coleta |
+| `CPPP_ADJUST` | Lançar e cancelar ajuste de ponto; abrir o atestado anexado |
+| `CPPP_COLLECT` | Cadastrar/editar relógios (IP), disparar coleta e baixar o AFD bruto |
+
+Papéis: `CPPP_RH` (USE + ADJUST) e `CPPP_MANAGER` (os três). Seed em
+`GIPP-SQL/cppp-deploy.sql`.

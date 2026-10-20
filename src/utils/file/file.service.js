@@ -15,7 +15,7 @@
  * ```javascript
  * const { FileService } = require('../../../utils/file/file.service');
  *
- * // Middleware multer (memoryStorage, 10 MB)
+ * // Middleware multer (diskStorage, 200 MB; o teto por tipo é aplicado no save)
  * router.post('/upload', authMiddleware, FileService.upload.single('file'),
  *     asyncHandler(async (req, res) => {
  *         const record = await FileService.save(req.file, 'CHAT', req.user.id);
@@ -42,6 +42,7 @@ const { scanForBinaryThreats, scanPdfContent, scanForCode, checkTextComplexity, 
 const { MAX_FILE_BYTES, MAX_VIDEO_BYTES, MAX_REQUEST_BYTES, BUFFER_THRESHOLD_BYTES,
         UPLOAD_TEMP_DIR, MIME_TO_EXT, VIDEO_MIMES } = require('./constants');
 const { probeVideoCodec, probeVideoCodecFromFile } = require('./video-codec');
+const { withUploadLimit } = require('./upload-limit');
 const { decideTranscode } = require('../video/transcode-policy');
 const { SQL_ENQUEUE } = require('../../modules/global/repositories/mysql/video-transcode.queries');
 const { sqlFindByHash, sqlFindById, sqlInsertFile, sqlSoftDeleteFile } = require('../../modules/global/repositories/mysql/files.queries');
@@ -77,7 +78,7 @@ const { STORAGE_ROOT, resolveStoragePath, assertStorageReady } = require('./stor
 const TRANSCODE_ENABLED = process.env.VIDEO_TRANSCODE_ENABLED === 'true';
 
 /** MIMEs de imagem que recebem strip de metadados EXIF (quando possível). */
-const IMAGE_MIMES  = new Set(['image/png', 'image/jpeg', 'image/webp']);
+const IMAGE_MIMES  = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 /** MIMEs de texto que recebem scan de código + complexidade. */
 const TEXT_MIMES   = new Set([
     'text/plain', 'text/csv', 'text/html', 'text/css', 'application/javascript',
@@ -148,14 +149,14 @@ fs.mkdirSync(TEMP_DIR, { recursive: true });
  *
  * @type {import('multer').Multer}
  */
-const upload = multer({
+const upload = withUploadLimit(multer({
     storage: multer.diskStorage({
         destination: (_req, _file, cb) => cb(null, TEMP_DIR),
         filename: (_req, _file, cb) =>
             cb(null, `upload-${Date.now()}-${crypto.randomBytes(8).toString('hex')}`),
     }),
     limits: { fileSize: MAX_VIDEO_BYTES },
-});
+}), MAX_VIDEO_BYTES);
 
 // ─── FileService ──────────────────────────────────────────────────────────────
 
@@ -279,7 +280,9 @@ class FileService {
         // ── Conversão para WebP (imagens PNG e JPEG) ──────────────────────────
         // Scans já rodaram no conteúdo original; a deduplicação e o armazenamento
         // usam o buffer final (já convertido) para máxima economia de espaço.
-        if (IMAGE_MIMES.has(mimeType) && mimeType !== 'image/webp') {
+        // GIF fica como veio: o `_convertToWebP` achata para o primeiro quadro
+        // e o GIF animado viraria imagem parada.
+        if (IMAGE_MIMES.has(mimeType) && mimeType !== 'image/webp' && mimeType !== 'image/gif') {
             buf      = await FileService._convertToWebP(buf);
             mimeType = 'image/webp';
         }

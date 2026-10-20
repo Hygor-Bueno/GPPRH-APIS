@@ -318,14 +318,14 @@ function checkZipBomb(buf) {
 // ─── Scan específico: imagens ─────────────────────────────────────────────────
 
 /**
- * Verifica as dimensões de imagens PNG, JPEG e WEBP diretamente do Buffer,
+ * Verifica as dimensões de imagens PNG, JPEG, WEBP e GIF diretamente do Buffer,
  * sem decodificar o arquivo. Impede que imagens com headers forjados (ex: PNG
  * declarando 100.000×100.000 px) esgotem a memória do processo.
  *
  * Limite: 8.000 × 8.000 px.
  *
  * @param {Buffer} buf
- * @param {string} mimeType - MIME real detectado (`image/png`, `image/jpeg`, `image/webp`).
+ * @param {string} mimeType - MIME real detectado (`image/png`, `image/jpeg`, `image/webp`, `image/gif`).
  * @throws {AppError} 400 se as dimensões excederem o limite ou não puderem ser lidas.
  */
 function checkImageDimensions(buf, mimeType) {
@@ -337,6 +337,12 @@ function checkImageDimensions(buf, mimeType) {
             if (buf.length < 24) throw new Error('buffer curto');
             width  = buf.readUInt32BE(16);
             height = buf.readUInt32BE(20);
+
+        } else if (mimeType === 'image/gif') {
+            // Logical Screen Descriptor: bytes 6-7 = width, 8-9 = height (little-endian)
+            if (buf.length < 10) throw new Error('buffer curto');
+            width  = buf.readUInt16LE(6);
+            height = buf.readUInt16LE(8);
 
         } else if (mimeType === 'image/jpeg') {
             // Percorre markers até SOF0 (FF C0) ou SOF2 (FF C2)

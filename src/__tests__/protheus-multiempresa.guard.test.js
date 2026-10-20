@@ -39,8 +39,13 @@ const PER_COMPANY_TABLE = /\b(?:SRA|CTT)0\d0\b/g;
  *
  * - `meal-enroll.queries.js` roda no pool do GIPP, então poderia usar a view.
  *   Fica como melhoria, não correção.
+ *
+ * - `birthday.queries.js` (15/10/2026) precisa de `RA_NASC` e `RA_SITFOLH`, que a
+ *   view não expõe. Faz o UNION das sete, cada uma com o seu CTT. Se a view
+ *   ganhar as duas colunas, migrar e tirar daqui.
  */
 const CONHECIDOS = new Set([
+    'src/modules/global/repositories/sqlserver/birthday.queries.js',
     'src/modules/meal/repositories/sqlserver/meal-enroll.queries.js',
     'src/modules/protheus/repositories/cost-center.queries.js',
 ]);

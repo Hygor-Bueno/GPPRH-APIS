@@ -22,6 +22,7 @@ const router = express.Router();
 const authController = require('./controllers/auth.controller');
 const employeeController = require('./controllers/employee.controller');
 const gippRhController = require('./controllers/gipp-rh.controller');
+const gippRhBirthdayController = require('./controllers/gipp-rh-birthday.controller');
 const payeeController = require('./controllers/payee.controller');
 const accessController = require('./controllers/access.controller');
 const chatController = require('./controllers/chat.controller');
@@ -58,6 +59,8 @@ const mgppPercentageController = require('./controllers/mgpp-percentage.controll
 const mgppInventoryConfigsController = require('./controllers/mgpp-inventory-configs.controller');
 const mgppInventoryController = require('./controllers/mgpp-inventory.controller');
 const mieppRoutes = require('./miepp.routes');
+const cpppRoutes = require('./cppp.routes');
+const reppRoutes = require('./repp.routes');
 const { upload: fileUpload } = require('../../utils/file/file.service');
 const authMiddleware = require('../../middlewares/auth.middleware');
 const upload = require('../../middlewares/upload.middleware');
@@ -187,6 +190,9 @@ router.get('/employees',
  * @route GET /users
  * @description Lista usuários paginados com enriquecimento do Protheus (empresa, filial, CC).
  * Query params: pPage, pPageSize, pName, pApplicationId, pStatus.
+ * `pStatus` filtra por `_user.ad_status`: 1 = 'active', 0 = qualquer outro
+ * (pending, blocked, delete), ausente = todos. O campo `status` da resposta
+ * traz o `ad_status` em texto ('active', 'blocked'...), não mais 1/0.
  * @access Requer `CORE_VIEW_EMPLOYEE`
  */
 router.get('/users',
@@ -302,6 +308,109 @@ router.get('/gipp-rh/event-codes',
     authMiddleware,
     canAll(['GIPPRH_VIEW_EMPLOYEE']),
     asyncHandler(gippRhController.getEventCodes));
+
+// ─── Aniversariantes do mês ───────────────────────────────────────────────────
+
+/**
+ * @route GET /gipp-rh/birthdays
+ * @description Aniversariantes do mês (`?month=1..12`, `&branches=0202,0206` opcional),
+ * agrupados por filial e em ordem de dia. Só dia/mês, sem ano; a matrícula vem
+ * para a tela poder tirar alguém do cartaz. Quem está na lista de exclusão não vem.
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE`
+ */
+router.get('/gipp-rh/birthdays',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE']),
+    asyncHandler(gippRhBirthdayController.getBirthdays));
+
+/**
+ * @route GET /gipp-rh/birthdays/flyer
+ * @description Cartaz `.pptx` dos aniversariantes no layout do RH — um slide por
+ * filial, 19 nomes por slide. Mesmos filtros de `/gipp-rh/birthdays`, mais
+ * `merge=0202,0209` (repetível) para juntar filiais num slide só na impressão;
+ * a primeira do grupo dá o nome e a arte.
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE`
+ */
+router.get('/gipp-rh/birthdays/flyer',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE']),
+    asyncHandler(gippRhBirthdayController.downloadBirthdayFlyer));
+
+/**
+ * @route GET /gipp-rh/birthdays/exclusions
+ * @description Lista de exclusão do cartaz — quem não sai em mês nenhum, com o
+ * contrato atual de cada pessoa no Protheus.
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE`
+ */
+router.get('/gipp-rh/birthdays/exclusions',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE']),
+    asyncHandler(gippRhBirthdayController.getBirthdayExclusions));
+
+/**
+ * @route POST /gipp-rh/birthdays/exclusions
+ * @description Tira o colaborador do cartaz. Body `{ branch_code, registration, reason? }`;
+ * a exclusão vale pelo CPF, então sobrevive a transferência de filial.
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE` e `GIPPRH_MANAGE_BIRTHDAY`
+ */
+router.post('/gipp-rh/birthdays/exclusions',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE', 'GIPPRH_MANAGE_BIRTHDAY']),
+    asyncHandler(gippRhBirthdayController.addBirthdayExclusion));
+
+/**
+ * @route DELETE /gipp-rh/birthdays/exclusions/:id
+ * @description Devolve o colaborador ao cartaz.
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE` e `GIPPRH_MANAGE_BIRTHDAY`
+ */
+router.delete('/gipp-rh/birthdays/exclusions/:id',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE', 'GIPPRH_MANAGE_BIRTHDAY']),
+    asyncHandler(gippRhBirthdayController.removeBirthdayExclusion));
+
+/**
+ * @route GET /gipp-rh/birthdays/flyer-arts
+ * @description Empresas do Protheus com a arte do cartaz de cada uma: própria
+ * (`custom: true`) ou a padrão, com as medidas (`layout`) em pixels da imagem.
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE`
+ */
+router.get('/gipp-rh/birthdays/flyer-arts',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE']),
+    asyncHandler(gippRhBirthdayController.getFlyerArts));
+
+/**
+ * @route GET /gipp-rh/birthdays/flyer-arts/:companyCode/image
+ * @description PNG da arte que sai no cartaz da empresa (própria ou padrão).
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE`
+ */
+router.get('/gipp-rh/birthdays/flyer-arts/:companyCode/image',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE']),
+    asyncHandler(gippRhBirthdayController.getFlyerArtImage));
+
+/**
+ * @route PUT /gipp-rh/birthdays/flyer-arts/:companyCode
+ * @description Envia ou ajusta a arte da empresa (`02` = Peg Pese). Multipart:
+ * `file` (PNG/JPEG na proporção do cartaz; opcional se a empresa já tem arte) e
+ * `layout` (JSON com as medidas; opcional — sem ele, o layout padrão é escalado).
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE` e `GIPPRH_MANAGE_BIRTHDAY`
+ */
+router.put('/gipp-rh/birthdays/flyer-arts/:companyCode',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE', 'GIPPRH_MANAGE_BIRTHDAY']),
+    fileUpload.single('file'),
+    asyncHandler(gippRhBirthdayController.saveFlyerArt));
+
+/**
+ * @route DELETE /gipp-rh/birthdays/flyer-arts/:companyCode
+ * @description A empresa volta para a arte padrão.
+ * @access Requer `GIPPRH_VIEW_EMPLOYEE` e `GIPPRH_MANAGE_BIRTHDAY`
+ */
+router.delete('/gipp-rh/birthdays/flyer-arts/:companyCode',
+    authMiddleware,
+    canAll(['GIPPRH_VIEW_EMPLOYEE', 'GIPPRH_MANAGE_BIRTHDAY']),
+    asyncHandler(gippRhBirthdayController.removeFlyerArt));
 
 // ─── Recibos de Pagamento (CRUD) ──────────────────────────────────────────────
 
@@ -2605,5 +2714,26 @@ router.get('/gapp/infractions', authMiddleware, asyncHandler(gappLookupControlle
  * Prefixo final: `/api/v1/global/miepp/...`
  */
 router.use('/miepp', mieppRoutes);
+
+/**
+ * Suite CPPP — Controle de Ponto Peg Pese (relógio Control iD REP-C).
+ *
+ * Roteador próprio (`cppp.routes.js`): a suite é auto-contida e o cabeçalho de
+ * lá documenta a restrição que não pode se perder — nenhuma rota escreve no
+ * relógio nem altera o espelho do AFD.
+ *
+ * Prefixo final: `/api/v1/global/cppp/...`
+ */
+router.use('/cppp', cpppRoutes);
+
+/**
+ * Suite REPP — Reserva de Espaços Peg Pese (Sala de Treinamento, Auditório).
+ *
+ * Roteador próprio (`repp.routes.js`) porque a consulta da agenda é PÚBLICA
+ * (`optionalAuth`, nunca 401) — aqui toda rota começa por `authMiddleware`.
+ *
+ * Prefixo final: `/api/v1/global/spaces/...`
+ */
+router.use('/spaces', reppRoutes);
 
 module.exports = router;

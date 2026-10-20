@@ -14,6 +14,7 @@ const { validateTimeRecords } = require('../domain/time-record-validation.rules'
 const { buildReceiptItems } = require('../domain/receipt-items.builder');
 const { WORK_SCHEDULE_STATUS, DISCARDABLE_STATUSES } = require('../domain/work-schedule-status');
 const { CHANGE_REASON } = require('../domain/work-schedule-change-reason');
+const { assertOutsidePayrollClosing } = require('../domain/payroll-closing-window.rules');
 const { CHANGE_SOURCE } = require('../../../infra/sqlserver/session-context');
 
 /**
@@ -33,11 +34,13 @@ class GippUseCases {
      * @param {{
      *   repository: import('./ports/gipp-repository.port').GippRepositoryPort,
      *   replicationRepository: import('./ports/gipp-replication-repository.port').GippReplicationRepositoryPort,
-     * }} deps
+     *   clock?: () => Date,
+     * }} deps - `clock` é injetável nos testes (janela de fechamento do RH).
      */
-    constructor({ repository, replicationRepository }) {
+    constructor({ repository, replicationRepository, clock = () => new Date() }) {
         this.repository = repository;
         this.replicationRepository = replicationRepository;
+        this.clock = clock;
     }
 
     // ─── Consultas de Suporte ───────────────────────────────────────────────
@@ -159,16 +162,20 @@ class GippUseCases {
     /**
      * @param {object} payload - Dados da marcação, incluindo o colaborador.
      * @param {import('../../../utils/audit-actor').AuditActor} actor - Quem lançou.
+     * @throws {AppError} 423 na janela de fechamento do RH (segunda a partir das 12h)
      */
     async insertTimeRecord(payload, actor) {
+        assertOutsidePayrollClosing(this.clock());
         return this.repository.insertTimeRecord(payload, actor);
     }
 
     /**
      * @param {object} payload
      * @param {import('../../../utils/audit-actor').AuditActor} actor - Quem editou.
+     * @throws {AppError} 423 na janela de fechamento do RH (segunda a partir das 12h)
      */
     async updateTimeRecord(payload, actor) {
+        assertOutsidePayrollClosing(this.clock());
         return this.repository.updateTimeRecord(payload, actor);
     }
 
@@ -184,8 +191,11 @@ class GippUseCases {
      * @param {string[]|string} codWorkSchedules
      * @returns {Promise<{approved: string[], skipped: Array<{cod_work_schedule: string, status: ?number, reason: string}>}>}
      * @throws {AppError} 400 se a lista vier vazia
+     * @throws {AppError} 423 na janela de fechamento do RH (segunda a partir das 12h)
      */
     async approveWorkSchedules(codWorkSchedules, actor = null) {
+        assertOutsidePayrollClosing(this.clock());
+
         const scheduleList = Array.isArray(codWorkSchedules)
             ? codWorkSchedules
             : String(codWorkSchedules).split(',');
