@@ -29,6 +29,7 @@ const chatController = require('./controllers/chat.controller');
 const filesController = require('./controllers/files.controller');
 const gtppTaskController = require('./controllers/gtpp-task.controller');
 const gtppTaskOverviewController = require('./controllers/gtpp-task-overview.controller');
+const gtppTaskDossierController = require('./controllers/gtpp-task-dossier.controller');
 const gtppItemController = require('./controllers/gtpp-task-item.controller');
 const gtppResponseController = require('./controllers/gtpp-task-item-response.controller');
 const gtppTaskUserController = require('./controllers/gtpp-task-user.controller');
@@ -67,7 +68,7 @@ const upload = require('../../middlewares/upload.middleware');
 const { canAll, canAny } = require('../../middlewares/permission.middleware');
 const { asyncHandler } = require('../../middlewares/async-handler.middleware');
 const { loginLimiter, loginIpLimiter, changePasswordLimiter } = require('../../middlewares/rate-limit.middleware');
-const { validate } = require('../../middlewares/validate.middleware');
+const { validate, validateSchema } = require('../../middlewares/validate.middleware');
 const { loginSchema, changePasswordSchema } = require('../../schemas/auth.schema');
 const {
     postCompensationSchema,
@@ -125,6 +126,7 @@ const {
     setPermissionsSchema,
     grantApplicationSchema
 } = require('../../schemas/access.schema');
+const { awards, percentage, inventory_configs, inventory } = require('../../schemas/mgpp.schems');
 
 // ─── Rotas Públicas ───────────────────────────────────────────────────────────
 
@@ -1071,6 +1073,17 @@ router.get('/gtpp/tasks/:taskId/historic',
     authMiddleware,
     canAny(['GTPP_USE']),
     asyncHandler(gtppTaskController.getTaskHistoric));
+
+/**
+ * @route GET /gtpp/tasks/:id/dossier
+ * @description Gera o PDF "Dossiê da tarefa" (resumo, pontos de atenção,
+ * checklist com evidências, linha do tempo, índice de anexos e chat).
+ * @access Requer `GTPP_USE` e ser criador/participante da tarefa, ou `GTPP_MANAGE`
+ */
+router.get('/gtpp/tasks/:id/dossier',
+    authMiddleware,
+    canAny(['GTPP_USE']),
+    asyncHandler(gtppTaskDossierController.downloadTaskDossier));
 
 /**
  * @route GET /gtpp/tasks/:id
@@ -2472,6 +2485,7 @@ router.get('/targets/awards',
 router.post('/targets/awards',
     authMiddleware,
     canAll(['MG_AWARDS_CREATE']),
+    validate(awards),
     asyncHandler(mgppAwardsController.create)
 );
 
@@ -2483,6 +2497,7 @@ router.post('/targets/awards',
 router.put('/targets/awards/:id',
     authMiddleware,
     canAll(['MG_AWARDS_UPDATE']),
+    validate(awards),
     asyncHandler(mgppAwardsController.update)
 );
 
@@ -2504,6 +2519,7 @@ router.get('/targets/percentages',
 router.post('/targets/percentages',
     authMiddleware,
     canAll(['MG_PERCENTAGE_CREATE']),
+    validate(percentage),
     asyncHandler(mgppPercentageController.create)
 );
 /**
@@ -2514,6 +2530,7 @@ router.post('/targets/percentages',
 router.put('/targets/percentages/:id',
     authMiddleware,
     canAll(['MG_PERCENTAGE_UPDATE']),
+    validate(percentage),
     asyncHandler(mgppPercentageController.update)
 );
 
@@ -2543,6 +2560,7 @@ router.get('/targets/inventory-configs/pendings',
 router.post('/targets/inventory-configs',
     authMiddleware,
     canAll(['MG_INVENTORY_CONFIG_CREATE']),
+    validate(inventory_configs),
     asyncHandler(mgppInventoryConfigsController.create)
 );
 
@@ -2554,6 +2572,7 @@ router.post('/targets/inventory-configs',
 router.put('/targets/inventory-configs/:id',
     authMiddleware,
     canAll(['MG_INVENTORY_CONFIG_UPDATE']),
+    validate(inventory_configs),
     asyncHandler(mgppInventoryConfigsController.update)
 );
 
@@ -2576,19 +2595,33 @@ router.get('/targets/inventory',
 router.post('/targets/inventory',
     authMiddleware,
     canAll(['MG_INVENTORY_CREATE']),
+    validate(inventory),
     asyncHandler(mgppInventoryController.create)
 );
 
 /**
- * @route PUT /targets/inventory-
+ * @route PUT /targets/inventory
  * @description Atualiza de inventarios registrados no banco (mg_inventory)
  * @access MG_INVENTORY_UPDATE
  */
 router.put('/targets/inventory/:id',
     authMiddleware,
     canAll(['MG_INVENTORY_UPDATE']),
+    validate(inventory),
     asyncHandler(mgppInventoryController.update)
 );
+/**
+ * @route GET /targets/consinco/cetegories
+ * @description Atualiza de inventarios registrados no banco (mg_inventory)
+ * @access MG_INVENTORY_UPDATE
+ */
+router.get('/targets/consinco/cetegories',
+    authMiddleware,
+    canAll(['MG_INVENTORY_UPDATE']),
+    asyncHandler(mgppInventoryController.listCategory)
+);
+
+
 
 
 // ─── GAPP — Tabelas de apoio (lookup, para dropdowns/filtros) ─────────────────

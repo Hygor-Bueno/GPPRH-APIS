@@ -19,3 +19,17 @@ describe('assertAnyOwnerOrAdmin', () => {
         expect(() => assertAnyOwnerOrAdmin({ currentUserId: 99, ownerIds: [1], permissions: ['GTPP_USE'] })).toThrow(AppError);
     });
 });
+
+describe('assertAnyOwnerOrAdmin — mensagem e code customizados', () => {
+    it('should carry the given message and code on the 403', () => {
+        try {
+            assertAnyOwnerOrAdmin({ currentUserId: 99, ownerIds: [1], permissions: [], message: 'Sem acesso.', code: 'X_FORBIDDEN' });
+            throw new Error('não lançou');
+        } catch (err) {
+            expect(err).toBeInstanceOf(AppError);
+            expect(err.statusCode).toBe(403);
+            expect(err.message).toBe('Sem acesso.');
+            expect(err.code).toBe('X_FORBIDDEN');
+        }
+    });
+});

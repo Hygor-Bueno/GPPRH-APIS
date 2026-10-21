@@ -21,5 +21,9 @@ async function update(req, res) {
     return respond.ok(res, result);
 }
 
-module.exports = { list, create, update }
+async function listCategory(req, res) {
+    const result = await useCases.getCostCenterCetegory(req.query, req.user);
+    return respond.ok(res, result);
+}
 
+module.exports = { list, create, update, listCategory }

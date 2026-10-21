@@ -1,7 +1,8 @@
 const INVENTORY_FILTER_CLAUSES = {
     branch_code: 'inv.branch_code = ?',
     costcenter_code: 'inv.costcenter_code = ?',
-    status_inventory: 'inv.status_inventory = ?'
+    status_inventory: 'inv.status_inventory = ?',
+    has_audit: 'inv.has_audit = ?'
 };
 
 function buildInventoryFilters(filters = {}) {
@@ -49,8 +50,9 @@ function sqlInsertInventory() {
                 costcenter_code,
                 branch_code,
                 status_inventory,
-                has_audit
-            ) VALUES (?, ?, ?, ?, ?, ?)`
+                has_audit,
+                quantity_performed
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)`
 }
 
 function buildInsertInventory(data) {
@@ -60,7 +62,8 @@ function buildInsertInventory(data) {
         data.costcenter_code ?? null,
         data.branch_code ?? null,
         data.status_inventory ?? null,
-        data.has_audit ?? null
+        data.has_audit ?? null,
+        data.quantity_performed ?? null
     ]
 }
 
@@ -92,6 +95,7 @@ function buildUpdateInventory(data, id) {
 function sqlCountInventoryRegistered() {
     return `SELECT COUNT(*) as total FROM global.mg_inventories`
 }
+
 function sqlValidateInventoryStatus(id) {
     return `SELECT status_inventory FROM global.mg_inventories WHERE id_inventory = ${id}`
 }
@@ -99,5 +103,5 @@ function sqlValidateInventoryStatus(id) {
 module.exports = {
     sqlListInventory, sqlInsertInventory, sqlUpdateInventory,
     buildInsertInventory, buildUpdateInventory, sqlValidateInventoryStatus,
-    sqlGetConfigs, sqlGetNumberReleasesForMonth, sqlCountInventoryRegistered
+    sqlGetConfigs, sqlGetNumberReleasesForMonth, sqlCountInventoryRegistered,
 }
