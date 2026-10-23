@@ -59,7 +59,7 @@ const mgppAwardsController = require('./controllers/mgpp-awards.controller');
 const mgppPercentageController = require('./controllers/mgpp-percentage.controller');
 const mgppInventoryConfigsController = require('./controllers/mgpp-inventory-configs.controller');
 const mgppInventoryController = require('./controllers/mgpp-inventory.controller');
-const adUserController = require('./controllers/activeadusers.controllers');
+const activeDirectoryUsersController = require('./controllers/ActiveDirectoryUsers.controller');
 const mieppRoutes = require('./miepp.routes');
 const cpppRoutes = require('./cppp.routes');
 const reppRoutes = require('./repp.routes');
@@ -2771,6 +2771,6 @@ router.use('/cppp', cpppRoutes);
 router.use('/spaces', reppRoutes);
 
 
-router.get('/usersad', asyncHandler(adUserController.listActiveADUsers))
+router.get('/active-directory-users', asyncHandler(activeDirectoryUsersController.listActiveDirectoryUsers))
 
 module.exports = router;

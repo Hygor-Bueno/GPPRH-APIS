@@ -1,17 +1,17 @@
 const ldap = require('ldapjs');
 const adConfig = require('../../config/ad');
 
-class LDAPListUsers {
+class LDAPUserService {
     constructor() {
         this.url = adConfig.url;
         this.domain = adConfig.domain;
-        this.username = '';
-        this.password = '';
+        this.username = adConfig.username;
+        this.password = adConfig.password;
         this.searchBase = adConfig.baseDN;
         this.bindDN = `${this.domain}\\${this.username}`;
     }
 
-    listUsersActiveOnAd() {
+    listActiveDirectoryUsers() {
         return new Promise((resolve, reject) => {
             const client = ldap.createClient({ url: this.url });
 
@@ -29,7 +29,7 @@ class LDAPListUsers {
                 const opts = {
                     filter: '(&(objectCategory=person)(objectClass=user)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))',
                     scope: 'sub',
-                    attributes: ['dn', 'cn', 'samaccountname', 'mail', 'displayname'],
+                    attributes: ['dn', 'cn', 'samaccountname', 'mail', 'displayname', 'objectguid', 'useraccountcontrol'],
                     paged: true
                 };
 
@@ -44,15 +44,14 @@ class LDAPListUsers {
 
                     res.on('searchEntry', (entry) => {
                         const data = entry.pojo;
-
                         const mapUser = {
-                            dn: data.objectName,
-                            cn: data.attributes.find(a => a.type === 'cn')?.values[0] || null,
-                            username: data.attributes.find(a => a.type === 'sAMAccountName' || a.type === 'samaccountname')?.values[0] || null,
+                            name: data.attributes.find(a => a.type.toLowerCase() === 'displayname')?.values[0] || null,
+                            guid: entry.attributes.find(a => a.type.toLowerCase() === 'objectguid')?.buffers?.[0].toString('hex') || null,
+                            status: data.attributes.find(a => a.type.toLowerCase() === 'useraccountcontrol')?.values[0] || null,
+                            login: data.attributes.find(a => a.type.toLowerCase() === 'samaccountname')?.values[0] || null,
                             mail: data.attributes.find(a => a.type === 'mail')?.values[0] || null,
-                            displayName: data.attributes.find(a => a.type === 'displayName' || a.type === 'displayname')?.values[0] || null,
+                            dn: data.objectName,
                         };
-
                         users.push(mapUser);
                     });
 
@@ -71,4 +70,4 @@ class LDAPListUsers {
     }
 }
 
-module.exports = LDAPListUsers;
+module.exports = LDAPUserService;
