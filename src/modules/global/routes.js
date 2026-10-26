@@ -2770,7 +2770,11 @@ router.use('/cppp', cpppRoutes);
  */
 router.use('/spaces', reppRoutes);
 
-
+/**
+ * @route GET /active-directory-users
+ * @description Rota de consulta lista os usuários ativos registrados no Active Directory 
+ * @access Autenticado
+ */
 router.get('/active-directory-users',
     authMiddleware,
     asyncHandler(activeDirectoryUsersController.listActiveDirectoryUsers)
