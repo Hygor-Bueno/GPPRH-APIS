@@ -9,7 +9,7 @@ const { computeAutoTransition } = require('../../../domain/gtpp/task/task-auto-t
 const { assertTaskEditable } = require('../../../domain/gtpp/task/task-editability.rules');
 const { assertAnyOwnerOrAdmin } = require('../../../domain/gtpp/task/task-ownership.guard');
 
-const EV_ITEM  = 2; // item alterado (check, criação, remoção, etc.)
+const EV_ITEM = 2; // item alterado (check, criação, remoção, etc.)
 const EV_STATE = 6; // estado da tarefa alterado (disparado pelo motor de auto-transição)
 
 class GtppTaskItemUseCases {
@@ -28,7 +28,7 @@ class GtppTaskItemUseCases {
 
     /** @private */
     _broadcastItemEvent(taskId, userId, extra) {
-        this.eventPublisher.broadcastEvent(taskId, userId, EV_ITEM, extra).catch(() => {});
+        this.eventPublisher.broadcastEvent(taskId, userId, EV_ITEM, extra).catch(() => { });
     }
 
     /**
@@ -51,7 +51,7 @@ class GtppTaskItemUseCases {
             await this.taskGuardRepository.applyStateTransition(taskId, transition.newStateId, transition.historyDescription);
             this.eventPublisher
                 .broadcastEvent(taskId, userId, EV_STATE, { action: 'updated', state_id: transition.newStateId, auto: true })
-                .catch(() => {});
+                .catch(() => { });
         } catch (err) {
             console.error('[gtpp:autoToggleAnalyzing] Failed to auto-toggle state:', err.message);
         }
@@ -96,7 +96,7 @@ class GtppTaskItemUseCases {
         const yesNoValue = yesNo !== undefined ? Number(yesNo) : -1;
 
         const parsedInitial = initialDate ? parseDate(initialDate, 'initial_date') : null;
-        const parsedFinal   = finalDate   ? parseDate(finalDate,   'final_date')   : null;
+        const parsedFinal = finalDate ? parseDate(finalDate, 'final_date') : null;
         if (parsedInitial || parsedFinal) {
             const taskDates = await this.repository.findTaskDates(taskId);
             validateItemDates(parsedInitial, parsedFinal, taskDates ?? {});
@@ -136,7 +136,8 @@ class GtppTaskItemUseCases {
     /** @throws {AppError} 404/400 */
     async updateItemYesNo(taskId, itemId, yesNo, userId) {
         await this._assertEditable(taskId);
-        const { affectedRows } = await this.repository.updateYesNo(taskId, itemId, yesNo);
+        const isCheck = yesNo > 0 ? 1 : 0;
+        const { affectedRows } = await this.repository.updateYesNo(taskId, isCheck, itemId, yesNo);
         if (affectedRows === 0) throw new AppError('Item não encontrado.', 404);
         await this._autoToggleAnalyzing(taskId, userId);
         this._broadcastItemEvent(taskId, userId, { action: 'yes_no', id: itemId, yes_no: yesNo });
@@ -227,7 +228,7 @@ class GtppTaskItemUseCases {
         await this._assertEditableAndItemOrTaskOwnerOrAdmin(taskId, itemId, currentUser);
 
         const parsedInitial = initialDate ? parseDate(initialDate, 'initial_date') : null;
-        const parsedFinal   = finalDate   ? parseDate(finalDate,   'final_date')   : null;
+        const parsedFinal = finalDate ? parseDate(finalDate, 'final_date') : null;
         if (parsedInitial || parsedFinal) {
             const taskDates = await this.repository.findTaskDates(taskId);
             validateItemDates(parsedInitial, parsedFinal, taskDates ?? {});

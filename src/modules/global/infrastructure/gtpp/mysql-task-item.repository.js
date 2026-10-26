@@ -124,8 +124,8 @@ class MysqlTaskItemRepository extends TaskItemRepositoryPort {
         return { affectedRows: result.affectedRows };
     }
 
-    async updateYesNo(taskId, itemId, yesNo) {
-        const [result] = await this._query(SQL_UPDATE_ITEM_YES_NO, [yesNo, itemId, taskId]);
+    async updateYesNo(taskId, isCheck, itemId, yesNo) {
+        const [result] = await this._query(SQL_UPDATE_ITEM_YES_NO, [yesNo,isCheck, itemId, taskId]);
         return { affectedRows: result.affectedRows };
     }
 

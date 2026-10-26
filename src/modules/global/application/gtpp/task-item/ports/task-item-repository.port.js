@@ -47,7 +47,7 @@ class TaskItemRepositoryPort {
     updateCheck(taskId, itemId, value) { throw new Error('Not implemented'); }
 
     /** @param {number} taskId @param {number} itemId @param {-1|0|1|2} yesNo @returns {Promise<{affectedRows:number}>} */
-    updateYesNo(taskId, itemId, yesNo) { throw new Error('Not implemented'); }
+    updateYesNo(taskId,isCheck, itemId, yesNo) { throw new Error('Not implemented'); }
 
     /** @param {number} taskId @param {number} itemId @param {string} description @returns {Promise<{affectedRows:number}>} */
     updateDescription(taskId, itemId, description) { throw new Error('Not implemented'); }
