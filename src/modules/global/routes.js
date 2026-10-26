@@ -2771,6 +2771,9 @@ router.use('/cppp', cpppRoutes);
 router.use('/spaces', reppRoutes);
 
 
-router.get('/active-directory-users', asyncHandler(activeDirectoryUsersController.listActiveDirectoryUsers))
+router.get('/active-directory-users',
+    authMiddleware,
+    asyncHandler(activeDirectoryUsersController.listActiveDirectoryUsers)
+)
 
 module.exports = router;
