@@ -41,6 +41,8 @@ const {
     sqlGetUserApplications,
     sqlInsertUserApplication,
     sqlDeleteUserApplication,
+    sqlFindExistingRoleIds,
+    sqlFindExistingApplicationIds,
 } = require('../../repositories/mysql/access.queries');
 
 class MysqlAccessRepository extends AccessRepositoryPort {
@@ -105,6 +107,52 @@ class MysqlAccessRepository extends AccessRepositoryPort {
             data.ad_status, data.administrator, data.table_protheus, createdBy, createdBy,
         ]);
         return { insertId: rows.insertId };
+    }
+
+    /**
+     * Cria o usuário e já dá papéis e aplicações, numa transação só: se um
+     * vínculo falhar, o usuário também não fica. `ER_DUP_ENTRY` (login em
+     * uso) propaga intacto, como no `insertUser`.
+     */
+    async insertUserWithAccess(data, createdBy, roleIds, applicationIds) {
+        const conn = await poolGlobal.getConnection();
+        try {
+            await conn.beginTransaction();
+            const [result] = await conn.execute(sqlInsertUser(), [
+                data.user, data.password, data.name, data.registration, data.branch_code,
+                data.ad_status, data.administrator, data.table_protheus, createdBy, createdBy,
+            ]);
+            const userId = result.insertId;
+            for (const roleId of roleIds) {
+                await conn.execute(sqlInsertUserRole(), [userId, roleId]);
+            }
+            for (const applicationId of applicationIds) {
+                await conn.execute(sqlInsertUserApplication(), [applicationId, userId]);
+            }
+            await conn.commit();
+            return { insertId: userId };
+        } catch (error) {
+            await conn.rollback();
+            if (error.code === 'ER_DUP_ENTRY') throw error;
+            throw new AppError('Erro na transação', 500, {
+                code: error.code || 'MYSQL_ERROR',
+                details: error,
+            });
+        } finally {
+            conn.release();
+        }
+    }
+
+    async findExistingRoleIds(ids) {
+        if (!ids.length) return [];
+        const rows = await this._execute(sqlFindExistingRoleIds(ids.length), ids);
+        return rows.map(r => Number(r.id));
+    }
+
+    async findExistingApplicationIds(ids) {
+        if (!ids.length) return [];
+        const rows = await this._execute(sqlFindExistingApplicationIds(ids.length), ids);
+        return rows.map(r => Number(r.id));
     }
 
     async updateUser(payload, updatedBy) {

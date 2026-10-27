@@ -6,6 +6,7 @@
 const bcrypt = require('bcryptjs');
 const { AppError } = require('../../../../errors/app.error');
 const { PATCH_USER_FIELDS } = require('../../repositories/mysql/access.queries');
+const { AccessErrorCode } = require('../../domain/access/access-request.enums');
 
 /** Custo do hash bcrypt para senhas de usuário. */
 const BCRYPT_ROUNDS = 10;
@@ -25,7 +26,7 @@ class AccessUseCases {
     /** @throws {AppError} 404 */
     async getUserById(id) {
         const user = await this.repository.findUserById(id);
-        if (!user) throw new AppError('Usuário não encontrado', 404);
+        if (!user) throw new AppError('Usuário não encontrado', 404, { code: AccessErrorCode.UserNotFound });
         return user;
     }
 
@@ -34,29 +35,65 @@ class AccessUseCases {
      * usa o padrão `'1234'` (destinado a usuários que autenticam via AD).
      */
     async createUser(payload, createdBy) {
-        const rawPassword = payload.password || '1234';
-        const hashedPassword = await bcrypt.hash(rawPassword, BCRYPT_ROUNDS);
+        return this.insertPreparedUser(await this.prepareNewUser(payload), createdBy);
+    }
 
+    /**
+     * Normaliza o payload de criação e já hasheia a senha — é este objeto que
+     * fica gravado num pedido de criação pendente, nunca a senha em claro.
+     */
+    async prepareNewUser(payload) {
+        const rawPassword = payload.password || '1234';
+        return {
+            user: payload.user,
+            password: await bcrypt.hash(rawPassword, BCRYPT_ROUNDS),
+            name: payload.name ?? null,
+            registration: payload.registration ?? null,
+            branch_code: payload.branch_code ?? null,
+            ad_status: payload.ad_status ?? 'pending',
+            administrator: payload.administrator ?? 0,
+            table_protheus: payload.table_protheus ?? null,
+        };
+    }
+
+    /**
+     * @param {object} data - saída de `prepareNewUser` (senha já hasheada).
+     * @param {number} createdBy
+     * @param {{roleIds?: number[], applicationIds?: number[]}} [access] - papéis e
+     *   aplicações já na criação, na mesma transação do usuário.
+     */
+    async insertPreparedUser(data, createdBy, { roleIds = [], applicationIds = [] } = {}) {
         let insertId;
         try {
-            ({ insertId } = await this.repository.insertUser({
-                user: payload.user,
-                password: hashedPassword,
-                name: payload.name ?? null,
-                registration: payload.registration ?? null,
-                branch_code: payload.branch_code ?? null,
-                ad_status: payload.ad_status ?? 'pending',
-                administrator: payload.administrator ?? 0,
-                table_protheus: payload.table_protheus ?? null,
-            }, createdBy));
+            ({ insertId } = roleIds.length || applicationIds.length
+                ? await this.repository.insertUserWithAccess(data, createdBy, roleIds, applicationIds)
+                : await this.repository.insertUser(data, createdBy));
         } catch (error) {
             if (error.code === 'ER_DUP_ENTRY') {
-                throw new AppError(`Username '${payload.user}' já está em uso.`, 409);
+                throw new AppError(`Username '${data.user}' já está em uso.`, 409);
             }
             throw error;
         }
 
         return this.getUserById(insertId);
+    }
+
+    /** @throws {AppError} 400 `ACCESS_UNKNOWN_ROLE` citando os ids que não existem */
+    async assertRolesExist(roleIds) {
+        const found = new Set(await this.repository.findExistingRoleIds(roleIds));
+        const missing = roleIds.filter(id => !found.has(id));
+        if (missing.length) {
+            throw new AppError(`Papel inexistente: ${missing.join(', ')}.`, 400, { code: AccessErrorCode.UnknownRole });
+        }
+    }
+
+    /** @throws {AppError} 400 `ACCESS_UNKNOWN_APPLICATION` citando os ids que não existem */
+    async assertApplicationsExist(applicationIds) {
+        const found = new Set(await this.repository.findExistingApplicationIds(applicationIds));
+        const missing = applicationIds.filter(id => !found.has(id));
+        if (missing.length) {
+            throw new AppError(`Aplicação inexistente: ${missing.join(', ')}.`, 400, { code: AccessErrorCode.UnknownApplication });
+        }
     }
 
     /** Atualiza completamente um usuário (PUT). Não altera senha nem campos de AD. */
@@ -79,6 +116,15 @@ class AccessUseCases {
      * @throws {AppError} 400 se nenhum campo válido for enviado
      */
     async patchUser(id, fields, updatedBy) {
+        return this.applyUserPatch(id, await this.prepareUserPatch(fields), updatedBy);
+    }
+
+    /**
+     * Filtra os campos contra a whitelist e hasheia `password` — é este objeto
+     * que fica gravado num pedido de edição pendente.
+     * @throws {AppError} 400 se nenhum campo válido for enviado
+     */
+    async prepareUserPatch(fields) {
         const safeFields = Object.fromEntries(
             Object.entries(fields).filter(([k]) => PATCH_USER_FIELDS[k])
         );
@@ -91,6 +137,11 @@ class AccessUseCases {
             safeFields.password = await bcrypt.hash(safeFields.password, BCRYPT_ROUNDS);
         }
 
+        return safeFields;
+    }
+
+    /** @param {object} safeFields - saída de `prepareUserPatch` (senha já hasheada). */
+    async applyUserPatch(id, safeFields, updatedBy) {
         const fieldNames = Object.keys(safeFields);
         const fieldValues = Object.values(safeFields);
 
@@ -114,7 +165,7 @@ class AccessUseCases {
     /** @throws {AppError} 404 */
     async getRoleById(id) {
         const role = await this.repository.findRoleById(id);
-        if (!role) throw new AppError('Papel não encontrado', 404);
+        if (!role) throw new AppError('Papel não encontrado', 404, { code: AccessErrorCode.RoleNotFound });
         return role;
     }
 
@@ -187,10 +238,16 @@ class AccessUseCases {
         }
     }
 
+    /** @throws {AppError} 404 */
+    async getPermissionById(id) {
+        const permission = await this.repository.findPermissionById(id);
+        if (!permission) throw new AppError('Permissão não encontrada', 404, { code: AccessErrorCode.PermissionNotFound });
+        return permission;
+    }
+
     /** @throws {AppError} 404 / 409 se o novo código já existir */
     async updatePermission(payload) {
-        const existing = await this.repository.findPermissionById(payload.id);
-        if (!existing) throw new AppError('Permissão não encontrada', 404);
+        await this.getPermissionById(payload.id);
 
         try {
             return await this.repository.updatePermission({
@@ -208,8 +265,7 @@ class AccessUseCases {
 
     /** @throws {AppError} 404 / 409 se estiver em uso por algum papel */
     async deletePermission(id) {
-        const existing = await this.repository.findPermissionById(id);
-        if (!existing) throw new AppError('Permissão não encontrada', 404);
+        await this.getPermissionById(id);
 
         const total = await this.repository.countRolesByPermission(id);
         if (total > 0) {

@@ -18,6 +18,19 @@ class AccessRepositoryPort {
      */
     insertUser(data, createdBy) { throw new Error('Not implemented'); }
 
+    /**
+     * Cria o usuário com papéis e aplicações numa transação só.
+     * @param {object} data @param {number} createdBy @param {number[]} roleIds @param {number[]} applicationIds
+     * @returns {Promise<{insertId:number}>}
+     */
+    insertUserWithAccess(data, createdBy, roleIds, applicationIds) { throw new Error('Not implemented'); }
+
+    /** Dos ids informados, os que existem em `_roles`. @param {number[]} ids @returns {Promise<number[]>} */
+    findExistingRoleIds(ids) { throw new Error('Not implemented'); }
+
+    /** Dos ids informados, os que existem em `_application`. @param {number[]} ids @returns {Promise<number[]>} */
+    findExistingApplicationIds(ids) { throw new Error('Not implemented'); }
+
     /** @param {object} payload @param {number} updatedBy */
     updateUser(payload, updatedBy) { throw new Error('Not implemented'); }
 

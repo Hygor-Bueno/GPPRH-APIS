@@ -81,6 +81,45 @@ describe('AccessUseCases', () => {
         });
     });
 
+    describe('insertPreparedUser', () => {
+        it('without roles/applications uses the plain insert', async () => {
+            const repository = makeFakeRepository({ insertUserWithAccess: jest.fn() });
+            const useCases = makeUseCases({ repository });
+            await useCases.insertPreparedUser({ user: 'novo' }, 68);
+            expect(repository.insertUser).toHaveBeenCalled();
+            expect(repository.insertUserWithAccess).not.toHaveBeenCalled();
+        });
+
+        it('with roles/applications uses the single transaction', async () => {
+            const repository = makeFakeRepository({ insertUserWithAccess: jest.fn().mockResolvedValue({ insertId: 5 }) });
+            const useCases = makeUseCases({ repository });
+            await useCases.insertPreparedUser({ user: 'novo' }, 68, { roleIds: [2], applicationIds: [1] });
+            expect(repository.insertUserWithAccess).toHaveBeenCalledWith({ user: 'novo' }, 68, [2], [1]);
+            expect(repository.insertUser).not.toHaveBeenCalled();
+        });
+
+        it('maps ER_DUP_ENTRY from the transaction to a 409', async () => {
+            const dupError = Object.assign(new Error('Duplicate entry'), { code: 'ER_DUP_ENTRY' });
+            const repository = makeFakeRepository({ insertUserWithAccess: jest.fn().mockRejectedValue(dupError) });
+            const useCases = makeUseCases({ repository });
+            await expect(useCases.insertPreparedUser({ user: 'fulano' }, 68, { roleIds: [2] }))
+                .rejects.toMatchObject({ statusCode: 409 });
+        });
+    });
+
+    describe('assertRolesExist / assertApplicationsExist', () => {
+        it('names the missing ids with a specific code', async () => {
+            const repository = makeFakeRepository({
+                findExistingRoleIds: jest.fn().mockResolvedValue([2]),
+                findExistingApplicationIds: jest.fn().mockResolvedValue([]),
+            });
+            const useCases = makeUseCases({ repository });
+            await expect(useCases.assertRolesExist([2, 999])).rejects.toMatchObject({ code: 'ACCESS_UNKNOWN_ROLE', message: expect.stringContaining('999') });
+            await expect(useCases.assertApplicationsExist([7])).rejects.toMatchObject({ code: 'ACCESS_UNKNOWN_APPLICATION' });
+            await expect(useCases.assertRolesExist([2])).resolves.toBeUndefined();
+        });
+    });
+
     describe('patchUser', () => {
         it('should throw 400 when no recognized fields are provided', async () => {
             const useCases = makeUseCases();

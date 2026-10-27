@@ -200,6 +200,36 @@ para uma query só com campos apagados depois.
 Detalhes: [`docs/repp.md`](docs/repp.md). DDL: `GIPP-SQL/re-reserva-espacos-deploy.sql`,
 `GIPP-SQL/re-notificacoes-deploy.sql` e `GIPP-SQL/re-lembrete-deploy.sql`.
 
+### ⚠️ Gestão de Acessos (`/access/*`) — fila de aprovação
+
+Quem tem `ACCESS_MANAGE` e não é `SYSTEM_OWNER` não grava direto: criar
+usuário, dar/tirar papel ou aplicação, mexer nas permissões de um papel,
+renomear código de permissão, mudar `administrator` ou ativar usuário viram
+pedido `pending` em `_access_requests` (resposta **202**). Só um `SYSTEM_OWNER`
+aprova/recusa (`/access/requests/:id/approve|reject`), nunca o próprio pedido;
+o `SYSTEM_OWNER` aplica na hora. Bloquear/desativar e editar nome/filial/senha
+continuam diretos — exceto na conta de um `SYSTEM_OWNER`, que só outro dono
+edita, desativa ou tem a senha trocada/resetada (403 `ACCESS_TARGET_IS_OWNER`;
+no reset, via middleware `guardOwnerAccount` na rota).
+
+- Rota nova que conceda acesso entra em `AccessRequestUseCases`, não chama o
+  `AccessUseCases` direto do controller.
+- O pedido guarda o **hash** da senha, nunca o texto; `toPublicRequest` tira o
+  campo da resposta.
+- Aprovar tira de `pending` com `UPDATE ... WHERE status = 'pending'` antes de
+  aplicar (dois donos não aplicam duas vezes); se aplicar falhar, volta para
+  `pending`.
+- `POST /access/users` aceita `role_ids` e `application_ids`: o dono cria tudo
+  numa transação (`insertUserWithAccess`); o gestor gera UM pedido
+  `create_user` com as listas no `payload`. Sem isso o gestor não conseguiria
+  pedir papel para um usuário que ainda não existe.
+- Sino do dono = `GET /access/requests/summary` (estado, sem "lido") + evento
+  `access:request` no WebSocket. O publisher nunca manda lista vazia: sem
+  `toUserIds` o `eventBus` faz broadcast. Prompt do front:
+  `docs/access-aprovacao-frontend-prompt.md`.
+
+DDL: `GIPP-SQL/access-requests-deploy.sql`.
+
 ## Permissões EPP
 | Código | Escopo |
 |---|---|

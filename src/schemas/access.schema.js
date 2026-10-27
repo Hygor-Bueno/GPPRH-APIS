@@ -55,6 +55,16 @@ const postUserSchema = {
         type:      'string',
         required:  false,
         maxLength: 45
+    },
+    // Papéis e aplicações já na criação. O conteúdo (inteiros positivos, ids
+    // existentes) é conferido no `AccessRequestUseCases.createUser`.
+    role_ids: {
+        type:     'array',
+        required: false
+    },
+    application_ids: {
+        type:     'array',
+        required: false
     }
 };
 
@@ -260,7 +270,22 @@ const grantApplicationSchema = {
     }
 };
 
+// ─── Pedidos de alteração ──────────────────────────────────────────────────────
+
+/**
+ * Schema para recusar um pedido (PATCH /access/requests/:id/reject).
+ */
+const rejectRequestSchema = {
+    note: {
+        type:      'string',
+        required:  false,
+        maxLength: 255
+    }
+};
+
 module.exports = {
+    // Pedidos de alteração
+    rejectRequestSchema,
     // Usuários
     postUserSchema,
     putUserSchema,

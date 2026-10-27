@@ -318,6 +318,21 @@ function sqlDeleteUserApplication() {
     return `DELETE FROM _application_access WHERE user_id = ? AND application_id = ?`;
 }
 
+// ─── Conferência de ids ────────────────────────────────────────────────────────
+
+/** `?, ?, ?` para `IN (...)` com `execute()`, que não expande lista. */
+const placeholders = (count) => Array(count).fill('?').join(', ');
+
+/** Parâmetros: [...role_ids] */
+function sqlFindExistingRoleIds(count) {
+    return `SELECT id FROM _roles WHERE id IN (${placeholders(count)})`;
+}
+
+/** Parâmetros: [...application_ids] */
+function sqlFindExistingApplicationIds(count) {
+    return `SELECT id FROM _application WHERE id IN (${placeholders(count)})`;
+}
+
 module.exports = {
     // Usuários
     PATCH_USER_FIELDS,
@@ -356,5 +371,8 @@ module.exports = {
     sqlGetApplications,
     sqlGetUserApplications,
     sqlInsertUserApplication,
-    sqlDeleteUserApplication
+    sqlDeleteUserApplication,
+    // Conferência de ids
+    sqlFindExistingRoleIds,
+    sqlFindExistingApplicationIds
 };
