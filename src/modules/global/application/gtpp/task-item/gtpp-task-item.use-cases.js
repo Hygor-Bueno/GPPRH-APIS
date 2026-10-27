@@ -202,20 +202,16 @@ class GtppTaskItemUseCases {
     }
 
     /** @throws {AppError} 404 item inexistente / 400 direção inválida ou tarefa bloqueada */
-    async updateItemPosition(taskId, itemId, direction, userId) {
+    async updateItemPosition(taskId, itemId, userId, items) {
         await this._assertEditable(taskId);
 
         const item = await this.repository.findItemById(taskId, itemId);
         if (!item) throw new AppError('Item não encontrado.', 404);
 
-        const adjacent = await this.repository.findAdjacentItem(taskId, item.order, direction);
-        if (!adjacent) throw new AppError('Não é possível mover o item nesta direção.', 400);
-
-        await this.repository.updateOrder(itemId, adjacent.order);
-        await this.repository.updateOrder(adjacent.id, item.order);
+        await this.repository.updateOrder(items)
 
         // O evento usa 'updated' (não 'position') — mantém o mesmo rótulo genérico do controller original
-        this._broadcastItemEvent(taskId, userId, { action: 'updated', id: itemId, direction });
+        this._broadcastItemEvent(taskId, userId, { action: 'updated', id: itemId });
     }
 
     /**

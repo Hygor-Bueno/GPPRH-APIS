@@ -124,11 +124,7 @@ async function updateTaskItem(req, res) {
         }
 
         case 'position': {
-            const dir = req.body.direction;
-            if (!['up', 'down'].includes(dir)) {
-                throw new AppError('Direção inválida. Use "up" ou "down".', 400);
-            }
-            await useCases.updateItemPosition(taskId, itemId, dir, req.user.id);
+            await useCases.updateItemPosition(taskId, itemId, req.user.id, req.body.items);
             break;
         }
 

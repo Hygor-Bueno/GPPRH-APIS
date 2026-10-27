@@ -165,8 +165,8 @@ class MysqlTaskItemRepository extends TaskItemRepositoryPort {
         return row ?? null;
     }
 
-    async updateOrder(itemId, order) {
-        await this._query(SQL_UPDATE_ITEM_ORDER, [order, itemId]);
+    async updateOrder(items) {
+        await this._query(SQL_UPDATE_ITEM_ORDER(items));
     }
 }
 

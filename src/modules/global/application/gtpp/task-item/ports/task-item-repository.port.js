@@ -71,7 +71,7 @@ class TaskItemRepositoryPort {
     findAdjacentItem(taskId, order, direction) { throw new Error('Not implemented'); }
 
     /** @param {number} itemId @param {number} order */
-    updateOrder(itemId, order) { throw new Error('Not implemented'); }
+    updateOrder(items) { throw new Error('Not implemented'); }
 }
 
 module.exports = { TaskItemRepositoryPort };

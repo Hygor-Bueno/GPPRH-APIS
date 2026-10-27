@@ -71,7 +71,7 @@ const SQL_GET_ITEM_FILE_BLOB = `SELECT file FROM gt_task_item WHERE id = ? AND t
 const SQL_UPDATE_ITEM_NOTE   = `UPDATE gt_task_item SET note = ? WHERE id = ? AND task_id = ?`;
 const SQL_UPDATE_ITEM_STATUS = `UPDATE gt_task_item SET status = ? WHERE id = ? AND task_id = ?`;
 const SQL_SOFT_DELETE_ITEM   = `UPDATE gt_task_item SET status = 0 WHERE id = ? AND task_id = ?`;
-const SQL_UPDATE_ITEM_ORDER  = `UPDATE gt_task_item SET \`order\` = ? WHERE id = ?`;
+// const SQL_UPDATE_ITEM_ORDER  = `UPDATE gt_task_item SET \`order\` = ? WHERE id = ?`;
 
 /** Item anterior para troca de posição (subir). */
 const SQL_GET_ITEM_PREV = `
@@ -86,6 +86,26 @@ const SQL_GET_ITEM_NEXT = `
   WHERE task_id = ? AND status = 1 AND \`order\` > ?
   ORDER BY \`order\` ASC LIMIT 1
 `;
+
+function SQL_UPDATE_ITEM_ORDER(list) {
+  const listIds = list.map(item => item.id);
+
+  let when = "";
+
+  list.forEach(item => {
+    when += `WHEN ${item.id} THEN ${item.order} `;
+  });
+
+  const sql = `
+    UPDATE global.gt_task_item AS i
+    SET i.order = CASE i.id
+      ${when}
+    END
+    WHERE i.id IN (${listIds.join(", ")});
+  `;
+
+  return sql;
+}
 
 module.exports = {
     SQL_GET_TASK_ITEM_BY_ID,
