@@ -164,6 +164,7 @@ const SQL_DELETE_TASK = `DELETE FROM gt_task WHERE id = ?`;
 
 /** Estende o prazo final da tarefa em N dias a partir de hoje. Parâmetros: [days, task_id] */
 const SQL_EXTEND_TASK_FINAL_DATE = `UPDATE gt_task SET final_date = DATE_ADD(CURDATE(), INTERVAL ? DAY) WHERE id = ?`;
+const SQL_UPDATE_TASK_FINAL_DATE = `UPDATE gt_task SET final_date = ? WHERE id = ?`
 
 /** Lista o histórico de uma tarefa em ordem decrescente. */
 const SQL_GET_TASK_HISTORIC = `
@@ -281,4 +282,5 @@ module.exports = {
     SQL_GET_TASK_ITEMS,
     SQL_GET_TASK_DETAIL_USERS,
     SQL_GET_TASK_CSDS,
+    SQL_UPDATE_TASK_FINAL_DATE
 };

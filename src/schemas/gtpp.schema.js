@@ -44,6 +44,10 @@ const putTaskStateSchema = {
     days:        { type: 'number', min: 0 },
 };
 
+const putTaskDate = {
+    date: { type: 'string', required: true }
+}
+
 const putTaskTitleSchema = {
     description: { type: 'string', required: true, minLength: 1, maxLength: TITLE_MAX },
 };
@@ -131,4 +135,5 @@ module.exports = {
     postThemeSchema,
     putThemeSchema,
     disqualifyQuerySchema,
+    putTaskDate
 };

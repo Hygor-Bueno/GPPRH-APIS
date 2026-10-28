@@ -23,6 +23,7 @@ const {
     SQL_GET_TASK_ITEMS,
     SQL_GET_TASK_DETAIL_USERS,
     SQL_GET_TASK_CSDS,
+    SQL_UPDATE_TASK_FINAL_DATE,
 } = require('../../repositories/mysql/gtpp-task.queries');
 const {
     SQL_AUTO_UPDATE_TASK_STATE,
@@ -164,6 +165,10 @@ class MysqlTaskRepository extends TaskRepositoryPort {
 
     async extendFinalDate(taskId, days) {
         await this._query(SQL_EXTEND_TASK_FINAL_DATE, [days, taskId]);
+    }
+
+    async updateTaskDate(taskId, date){
+        await this._query(SQL_UPDATE_TASK_FINAL_DATE, [date, taskId]);
     }
 
     async insertHistoric(taskId, newStateId, description) {

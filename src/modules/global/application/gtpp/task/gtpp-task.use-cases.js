@@ -177,6 +177,15 @@ class GtppTaskUseCases {
         const { affectedRows } = await this.repository.deleteTask(taskId);
         if (affectedRows === 0) throw new AppError('Tarefa não encontrada.', 404);
     }
+
+    async updateTaskDate(taskId, currentUser, date){
+
+        await this.repository.updateTaskDate(taskId, date)
+
+         this.eventPublisher
+            .broadcastEvent(taskId, currentUser.id, { action: 'updated' })
+            .catch(() => {});
+    }
 }
 
 module.exports = { GtppTaskUseCases };

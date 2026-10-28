@@ -43,6 +43,9 @@ class TaskRepositoryPort {
     /** @param {number} taskId @param {number} days */
     extendFinalDate(taskId, days) { throw new Error('Not implemented'); }
 
+    /** @param {number} taskId @param {string} date */
+    updateTaskDate(taskId, date) { throw new Error('Not implemented'); }
+
     /** @param {number} taskId @param {number} newStateId @param {string} description */
     insertHistoric(taskId, newStateId, description) { throw new Error('Not implemented'); }
 

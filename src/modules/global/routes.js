@@ -113,6 +113,7 @@ const {
     postTaskMessageSchema,
     postThemeSchema, putThemeSchema,
     disqualifyQuerySchema,
+    putTaskDate,
 } = require('../../schemas/gtpp.schema');
 const {
     postUserSchema,
@@ -1203,6 +1204,17 @@ router.put('/gtpp/tasks/:id/state',
     canAny(['GTPP_USE']),
     validate(putTaskStateSchema),
     asyncHandler(gtppTaskController.updateTaskState));
+
+/**
+* @route PUT /gtpp/tasks/:id/date
+* @description Atualiza a data do projeto
+* @access Requer `GTPP_USE` (apenas criador ou GTPP_MANAGE)
+*/
+router.put('/gtpp/tasks/:id/date',
+    authMiddleware,
+    canAny(['GTPP_USE']),
+    validate(putTaskDate),
+    asyncHandler(gtppTaskController.updateTaksDate));
 
 /**
  * @route PUT /gtpp/tasks/:id/title

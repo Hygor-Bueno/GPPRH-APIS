@@ -127,6 +127,11 @@ async function updateTaskState(req, res) {
     return respond.message(res, 'Estado atualizado com sucesso.');
 }
 
+async function updateTaksDate(req, res){
+    await useCases.updateTaskDate(req.params.id, req.user, req.body.date);
+    return respond.message(res, 'Data atualizada com sucesso')
+}
+
 /**
  * PUT /gtpp/tasks/:id/title
  * Atualiza o título de uma tarefa.
@@ -223,4 +228,5 @@ module.exports = {
     updateTaskDescription,
     updateTaskTheme,
     deleteTask,
+    updateTaksDate
 };
