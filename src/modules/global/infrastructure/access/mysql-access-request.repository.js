@@ -17,13 +17,16 @@ const {
     sqlCountRequests,
     sqlGetRequestById,
     sqlInsertRequest,
+    sqlDeleteRequest,
     sqlClaimRequest,
     sqlReleaseRequest,
-    sqlSetRequestTargetUser,
+    sqlSetRequestTargets,
+    sqlSetRevertResult,
     sqlFindUserIdByUsername,
-    sqlFindPendingCreateUser,
     sqlCountPendingByType,
-    sqlFindApproverIds,
+    sqlFindReviewerIds,
+    sqlFindRoleIdsWithPermission,
+    sqlFindPermissionIdByCode,
 } = require('../../repositories/mysql/access-request.queries');
 
 class MysqlAccessRequestRepository extends AccessRequestRepositoryPort {
@@ -60,15 +63,25 @@ class MysqlAccessRequestRepository extends AccessRequestRepositoryPort {
     }
 
     async insertRequest(data) {
+        const reviewedBy = data.reviewedBy ?? null;
         const result = await this._query(sqlInsertRequest(), [
             data.type,
             data.targetUserId ?? null,
             data.targetRoleId ?? null,
             data.targetPermissionId ?? null,
             JSON.stringify(data.payload ?? {}),
+            data.previousState == null ? null : JSON.stringify(data.previousState),
+            data.status,
             data.requestedBy,
+            reviewedBy,
+            reviewedBy,
+            data.reviewNote ?? null,
         ]);
         return result.insertId;
+    }
+
+    async deleteRequest(id) {
+        await this._query(sqlDeleteRequest(), [id]);
     }
 
     async claimRequest(id, status, reviewedBy, note) {
@@ -80,17 +93,21 @@ class MysqlAccessRequestRepository extends AccessRequestRepositoryPort {
         await this._query(sqlReleaseRequest(), [id]);
     }
 
-    async setTargetUser(id, userId) {
-        await this._query(sqlSetRequestTargetUser(), [userId, id]);
+    async setTargets(id, { targetUserId, targetRoleId, targetPermissionId } = {}) {
+        await this._query(sqlSetRequestTargets(), [
+            targetUserId ?? null,
+            targetRoleId ?? null,
+            targetPermissionId ?? null,
+            id,
+        ]);
+    }
+
+    async setRevertResult(id, result) {
+        await this._query(sqlSetRevertResult(), [JSON.stringify(result), id]);
     }
 
     async usernameExists(username) {
         const rows = await this._query(sqlFindUserIdByUsername(), [username]);
-        return rows.length > 0;
-    }
-
-    async hasPendingCreateUser(username) {
-        const rows = await this._query(sqlFindPendingCreateUser(), [username]);
         return rows.length > 0;
     }
 
@@ -99,9 +116,19 @@ class MysqlAccessRequestRepository extends AccessRequestRepositoryPort {
         return Object.fromEntries(rows.map(r => [r.type, Number(r.total)]));
     }
 
-    async findApproverIds() {
-        const rows = await this._query(sqlFindApproverIds());
+    async findReviewerIds() {
+        const rows = await this._query(sqlFindReviewerIds());
         return rows.map(r => Number(r.id));
+    }
+
+    async findRoleIdsWithPermission(code) {
+        const rows = await this._query(sqlFindRoleIdsWithPermission(), [code]);
+        return rows.map(r => Number(r.id));
+    }
+
+    async findPermissionIdByCode(code) {
+        const rows = await this._query(sqlFindPermissionIdByCode(), [code]);
+        return rows[0] ? Number(rows[0].id) : null;
     }
 }
 

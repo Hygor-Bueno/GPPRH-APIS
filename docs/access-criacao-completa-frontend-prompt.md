@@ -1,3 +1,5 @@
+> ⚠️ **Substituído em 28/10/2026** por [`access-revisao-frontend-prompt.md`](access-revisao-frontend-prompt.md): a fila de aprovação virou registro com revisão (sem 202, sem cancelar). Mantido como histórico do que o front implementou.
+
 # Prompt para o agente de frontend — Gestão de Acessos: criar usuário já com papéis e aplicações
 
 > Copie tudo abaixo da linha para o agente do frontend. É a continuação de

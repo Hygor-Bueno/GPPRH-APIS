@@ -1,19 +1,20 @@
 /**
- * @fileoverview Casos de uso — fila de aprovação da Gestão de Acessos.
+ * @fileoverview Casos de uso — registro e revisão das alterações da Gestão de
+ * Acessos.
  *
- * Toda rota de escrita que concede acesso passa por aqui em vez de chamar o
- * `AccessUseCases` direto. Para cada uma:
+ * Toda rota de escrita de `/access/*` passa por aqui em vez de chamar o
+ * `AccessUseCases` direto. Cada alteração:
  *
- * - quem pede é `SYSTEM_OWNER` → aplica na hora (`{ pending: false, data }`);
- * - qualquer outro → grava um pedido `pending` (`{ pending: true, request }`)
- *   e nada muda até um `SYSTEM_OWNER` aprovar.
+ * 1. passa pelas travas (`SYSTEM_OWNER` intocável, `ACCESS_APPROVE` só pelo
+ *    dono, próprio cadastro, conta de dono — `domain/access/access-request.rules.js`);
+ * 2. tira a foto do que vai mudar (`previous_state`);
+ * 3. grava o registro e só então aplica — não existe alteração sem registro.
+ *    Se aplicar falhar, o registro é apagado;
+ * 4. de dono do sistema nasce `approved`; dos demais, `pending` — aplicada,
+ *    aguardando quem tem `ACCESS_APPROVE`.
  *
- * A mudança é aplicada por `_apply`, o MESMO caminho nos dois casos — aprovar
- * um pedido dá exatamente o resultado que o dono teria tido fazendo à mão.
- * Quem fica como autor (`created_by`/`updated_by`) é quem pediu; quem aprovou
- * fica em `_access_requests.reviewed_by`.
- *
- * Regras de quem entra na fila: `domain/access/access-request.rules.js`.
+ * Revisar: aprovar só fecha o registro; recusar DESFAZ a alteração pela foto
+ * (`_revert`), sem pisar no que alguém mudou depois.
  *
  * @module modules/global/application/access/access-request.use-cases
  */
@@ -27,21 +28,29 @@ const {
     values,
 } = require('../../domain/access/access-request.enums');
 const {
-    isApprover,
+    OWNER_PERMISSION,
+    REVIEW_PERMISSION,
+    isOwner,
     assertCanManageUser,
-    userChangeGrantsAccess,
+    assertNotOwnRole,
+    assertRolesNotProtected,
+    assertNoOwnerPermission,
+    assertRolesNotReviewer,
+    assertNoReviewPermission,
     normalizeIds,
     assertReviewable,
-    assertCancelable,
+    listRevert,
+    fieldRevert,
     toPublicRequest,
+    parseJson,
 } = require('../../domain/access/access-request.rules');
 const { normalizePagination, paginated } = require('../../domain/shared/pagination.rules');
 
-/** Quantos pedidos pendentes o `summary` traz para o dropdown do sino. */
+/** Quantas alterações pendentes o `summary` traz para o dropdown do sino. */
 const SUMMARY_LATEST = 5;
 
-/** Campos que `PUT /access/users/:id` grava (`AccessUseCases.updateUser`). */
-const PUT_USER_FIELDS = ['name', 'registration', 'branch_code', 'ad_status', 'administrator', 'table_protheus'];
+/** Nota do registro de alteração feita por dono do sistema. */
+const OWNER_NOTE = 'Feita por dono do sistema.';
 
 class AccessRequestUseCases {
     /**
@@ -57,14 +66,13 @@ class AccessRequestUseCases {
         this.events = eventPublisher;
     }
 
-    // ─── Entrada das rotas de escrita ───────────────────────────────────────
+    // ─── Usuários ───────────────────────────────────────────────────────────
 
     /**
      * Cria o usuário já com papéis (`role_ids`) e aplicações
-     * (`application_ids`), ambos opcionais. Para quem não é dono, é UM pedido
-     * com tudo dentro — aprovar aplica tudo junto, numa transação.
+     * (`application_ids`), ambos opcionais, numa transação só.
      *
-     * @throws {AppError} 400 (lista ou id inválido) / 409 (login em uso ou já pedido)
+     * @throws {AppError} 400 (lista ou id inválido) / 403 (papel de dono) / 409 (login em uso)
      */
     async createUser(payload, actor) {
         const role_ids = normalizeIds(payload.role_ids ?? [], { allowEmpty: true });
@@ -73,117 +81,248 @@ class AccessRequestUseCases {
         if (await this.repository.usernameExists(payload.user)) {
             throw new AppError(`Username '${payload.user}' já está em uso.`, 409, { code: AccessErrorCode.UsernameTaken });
         }
-        if (await this.repository.hasPendingCreateUser(payload.user)) {
-            throw new AppError(`Já existe um pedido pendente para criar '${payload.user}'.`, 409, { code: AccessErrorCode.RequestDuplicate });
-        }
-        // Conferido antes de gerar o pedido: o dono não deve aprovar algo que
-        // vai falhar. Na aprovação, a FK ainda segura um papel apagado no meio.
+        await this._assertRolesGrantable(role_ids, actor);
         await this.access.assertRolesExist(role_ids);
         await this.access.assertApplicationsExist(application_ids);
 
         const data = await this.access.prepareNewUser(payload);
-        return this._submit({ type: Type.CREATE_USER, payload: { ...data, role_ids, application_ids } }, actor);
+        return this._record({
+            type: Type.CREATE_USER,
+            payload: { ...data, role_ids, application_ids },
+            apply: () => this.access.insertPreparedUser(data, actor.id, {
+                roleIds: role_ids,
+                applicationIds: application_ids,
+            }),
+            createdTargets: user => ({ targetUserId: user.id }),
+        }, actor);
     }
 
-    /** PUT: só vai para a fila se mexer em `administrator` ou ativar o usuário. */
+    /** PUT: grava todos os campos do PUT, com os padrões dele. */
     async updateUser(payload, actor) {
-        const current = await this.access.getUserById(payload.id);
-        assertCanManageUser(current, actor);
-        const id = payload.id;
-        // Só o que o PUT grava: um campo extra no body (ex.: `password`) não
-        // pode acabar guardado no pedido.
-        const fields = Object.fromEntries(
-            PUT_USER_FIELDS.filter(k => k in payload).map(k => [k, payload[k]])
-        );
-        if (!userChangeGrantsAccess(current, fields)) {
-            return { pending: false, data: await this.access.updateUser(payload, actor.id) };
-        }
-        return this._submit({ type: Type.UPDATE_USER, targetUserId: id, payload: fields }, actor);
+        const current = await this._manageableUser(payload.id, actor);
+        const fields = this.access.prepareUserUpdate(payload);
+        return this._record({
+            type: Type.UPDATE_USER,
+            targetUserId: current.id,
+            payload: fields,
+            previous: pick(current, Object.keys(fields)),
+            apply: () => this.access.updateUser({ ...fields, id: current.id }, actor.id),
+        }, actor);
     }
 
-    /** PATCH: idem ao PUT; o resto (nome, filial, senha, bloqueio) vale na hora. */
+    /** PATCH: só os campos enviados. A senha vai em hash e não tem "antes". */
     async patchUser(id, fields, actor) {
-        const current = await this.access.getUserById(id);
-        assertCanManageUser(current, actor);
+        const current = await this._manageableUser(id, actor);
         const safeFields = await this.access.prepareUserPatch(fields);
-        if (!userChangeGrantsAccess(current, safeFields)) {
-            return { pending: false, data: await this.access.applyUserPatch(id, safeFields, actor.id) };
-        }
-        return this._submit({ type: Type.PATCH_USER, targetUserId: id, payload: safeFields }, actor);
+        const { password, ...visible } = safeFields;
+        return this._record({
+            type: Type.PATCH_USER,
+            targetUserId: current.id,
+            payload: safeFields,
+            previous: pick(current, Object.keys(visible)),
+            apply: () => this.access.applyUserPatch(current.id, safeFields, actor.id),
+        }, actor);
     }
 
-    /** Desativar não passa pela fila, mas conta de dono só outro dono desativa. */
     async deactivateUser(id, actor) {
-        await this.assertCanManageUserById(id, actor);
-        return this.access.deactivateUser(id, actor.id);
+        const current = await this._manageableUser(id, actor);
+        return this._record({
+            type: Type.DEACTIVATE_USER,
+            targetUserId: current.id,
+            payload: { ad_status: 'delete' },
+            previous: { ad_status: current.ad_status },
+            apply: () => this.access.deactivateUser(current.id, actor.id),
+        }, actor);
     }
 
     /**
-     * Mesma trava, para rotas fora deste caso de uso (reset de senha, no
-     * `auth.controller`, aplicado como middleware na rota).
+     * Mesmas travas, para a rota de reset de senha, que mora no
+     * `auth.controller` (aplicada como middleware na rota).
      * @throws {AppError} 404 / 403
      */
     async assertCanManageUserById(id, actor) {
-        assertCanManageUser(await this.access.getUserById(id), actor);
+        await this._manageableUser(id, actor);
+    }
+
+    /**
+     * Registra um reset de senha já feito pelo `auth.controller`. A senha
+     * temporária não é guardada, e um reset não tem como ser desfeito.
+     */
+    async recordPasswordReset(userId, actor) {
+        return this._record({
+            type: Type.RESET_PASSWORD,
+            targetUserId: userId,
+            apply: async () => null,
+        }, actor);
     }
 
     async assignRolesToUser(userId, roleIds, actor) {
-        await this.access.getUserById(userId);
+        const user = await this._manageableUser(userId, actor);
         const role_ids = normalizeIds(roleIds);
-        return this._submit({ type: Type.ASSIGN_USER_ROLES, targetUserId: userId, payload: { role_ids } }, actor);
+        await this._assertRolesGrantable(role_ids, actor);
+        await this.access.assertRolesExist(role_ids);
+        return this._record({
+            type: Type.ASSIGN_USER_ROLES,
+            targetUserId: user.id,
+            payload: { role_ids },
+            previous: { role_ids: await this._userRoleIds(user.id) },
+            apply: () => this.access.assignRolesToUser(user.id, role_ids),
+        }, actor);
     }
 
     async removeRoleFromUser(userId, roleId, actor) {
-        await this.access.getUserById(userId);
+        const user = await this._manageableUser(userId, actor);
         await this.access.getRoleById(roleId);
-        return this._submit({ type: Type.REMOVE_USER_ROLE, targetUserId: userId, targetRoleId: roleId, payload: {} }, actor);
+        await this._assertRolesGrantable([roleId], actor);
+        return this._record({
+            type: Type.REMOVE_USER_ROLE,
+            targetUserId: user.id,
+            targetRoleId: roleId,
+            previous: { had: (await this._userRoleIds(user.id)).includes(Number(roleId)) },
+            apply: () => this.access.removeRoleFromUser(user.id, roleId),
+        }, actor);
     }
 
     async grantApplicationAccess(userId, applicationId, actor) {
-        await this.access.getUserById(userId);
+        const user = await this._manageableUser(userId, actor);
         const [application_id] = normalizeIds([applicationId]);
-        return this._submit({ type: Type.GRANT_USER_APPLICATION, targetUserId: userId, payload: { application_id } }, actor);
+        return this._record({
+            type: Type.GRANT_USER_APPLICATION,
+            targetUserId: user.id,
+            payload: { application_id },
+            previous: { had: (await this._userApplicationIds(user.id)).includes(application_id) },
+            apply: () => this.access.grantApplicationAccess(user.id, application_id),
+        }, actor);
     }
 
     async revokeApplicationAccess(userId, applicationId, actor) {
-        await this.access.getUserById(userId);
+        const user = await this._manageableUser(userId, actor);
         const [application_id] = normalizeIds([applicationId]);
-        return this._submit({ type: Type.REVOKE_USER_APPLICATION, targetUserId: userId, payload: { application_id } }, actor);
+        return this._record({
+            type: Type.REVOKE_USER_APPLICATION,
+            targetUserId: user.id,
+            payload: { application_id },
+            previous: { had: (await this._userApplicationIds(user.id)).includes(application_id) },
+            apply: () => this.access.revokeApplicationAccess(user.id, application_id),
+        }, actor);
+    }
+
+    // ─── Papéis ─────────────────────────────────────────────────────────────
+
+    async createRole(payload, actor) {
+        const data = { name: payload.name.toUpperCase(), description: payload.description ?? null };
+        return this._record({
+            type: Type.CREATE_ROLE,
+            payload: data,
+            apply: () => this.access.createRole(data),
+            createdTargets: role => ({ targetRoleId: role.id }),
+        }, actor);
+    }
+
+    async updateRole(payload, actor) {
+        const role = await this._editableRole(payload.id, actor);
+        const data = { name: payload.name.toUpperCase(), description: payload.description ?? null };
+        return this._record({
+            type: Type.UPDATE_ROLE,
+            targetRoleId: role.id,
+            payload: data,
+            previous: { name: role.name, description: role.description ?? null },
+            apply: () => this.access.updateRole({ ...data, id: role.id }),
+        }, actor);
+    }
+
+    /** A exclusão leva as permissões do papel junto (cascata): a foto guarda as duas coisas. */
+    async deleteRole(id, actor) {
+        const role = await this._editableRole(id, actor);
+        return this._record({
+            type: Type.DELETE_ROLE,
+            targetRoleId: role.id,
+            previous: {
+                name: role.name,
+                description: role.description ?? null,
+                permission_ids: await this._rolePermissionIds(role.id),
+            },
+            apply: () => this.access.deleteRole(role.id),
+        }, actor);
     }
 
     async assignPermissionsToRole(roleId, permissionIds, actor) {
-        await this.access.getRoleById(roleId);
+        const role = await this._editableRole(roleId, actor);
         const permission_ids = normalizeIds(permissionIds);
-        return this._submit({ type: Type.ASSIGN_ROLE_PERMISSIONS, targetRoleId: roleId, payload: { permission_ids } }, actor);
+        await this._assertPermissionsGrantable(permission_ids, actor);
+        return this._record({
+            type: Type.ASSIGN_ROLE_PERMISSIONS,
+            targetRoleId: role.id,
+            payload: { permission_ids },
+            previous: { permission_ids: await this._rolePermissionIds(role.id) },
+            apply: () => this.access.assignPermissionsToRole(role.id, permission_ids),
+        }, actor);
     }
 
     async setRolePermissions(roleId, permissionIds, actor) {
-        await this.access.getRoleById(roleId);
+        const role = await this._editableRole(roleId, actor);
         const permission_ids = normalizeIds(permissionIds, { allowEmpty: true });
-        return this._submit({ type: Type.SET_ROLE_PERMISSIONS, targetRoleId: roleId, payload: { permission_ids } }, actor);
+        await this._assertPermissionsGrantable(permission_ids, actor);
+        return this._record({
+            type: Type.SET_ROLE_PERMISSIONS,
+            targetRoleId: role.id,
+            payload: { permission_ids },
+            previous: { permission_ids: await this._rolePermissionIds(role.id) },
+            apply: () => this.access.setRolePermissions(role.id, permission_ids),
+        }, actor);
     }
 
     async removePermissionFromRole(roleId, permissionId, actor) {
-        await this.access.getRoleById(roleId);
+        const role = await this._editableRole(roleId, actor);
         await this.access.getPermissionById(permissionId);
-        return this._submit({
-            type: Type.REMOVE_ROLE_PERMISSION, targetRoleId: roleId, targetPermissionId: permissionId, payload: {},
+        return this._record({
+            type: Type.REMOVE_ROLE_PERMISSION,
+            targetRoleId: role.id,
+            targetPermissionId: permissionId,
+            previous: { had: (await this._rolePermissionIds(role.id)).includes(Number(permissionId)) },
+            apply: () => this.access.removePermissionFromRole(role.id, permissionId),
         }, actor);
     }
 
+    // ─── Permissões ─────────────────────────────────────────────────────────
+
+    async createPermission(payload, actor) {
+        const data = { code: payload.code.toUpperCase(), description: payload.description ?? null };
+        return this._record({
+            type: Type.CREATE_PERMISSION,
+            payload: data,
+            apply: () => this.access.createPermission(data),
+            createdTargets: permission => ({ targetPermissionId: permission.id }),
+        }, actor);
+    }
+
+    /** Renomear o código de uma permissão muda o acesso de todo papel que a tem. */
     async updatePermission(payload, actor) {
-        await this.access.getPermissionById(payload.id);
-        return this._submit({
+        const permission = await this._editablePermission(payload.id, actor);
+        const data = { code: payload.code.toUpperCase(), description: payload.description ?? null };
+        return this._record({
             type: Type.UPDATE_PERMISSION,
-            targetPermissionId: payload.id,
-            payload: { code: payload.code, description: payload.description ?? null },
+            targetPermissionId: permission.id,
+            payload: data,
+            previous: { code: permission.code, description: permission.description ?? null },
+            apply: () => this.access.updatePermission({ ...data, id: permission.id }),
         }, actor);
     }
 
-    // ─── Fila ───────────────────────────────────────────────────────────────
+    async deletePermission(id, actor) {
+        const permission = await this._editablePermission(id, actor);
+        return this._record({
+            type: Type.DELETE_PERMISSION,
+            targetPermissionId: permission.id,
+            previous: { code: permission.code, description: permission.description ?? null },
+            apply: () => this.access.deletePermission(permission.id),
+        }, actor);
+    }
+
+    // ─── Registro e revisão ─────────────────────────────────────────────────
 
     /**
-     * Lista pedidos. `status` padrão `pending`; `status=all` traz todos.
+     * Lista registros. `status` padrão `pending`; `status=all` traz todos.
      * @throws {AppError} 400 para status/tipo desconhecido
      */
     async list(query = {}) {
@@ -214,58 +353,49 @@ class AccessRequestUseCases {
     }
 
     /**
-     * Aprova e aplica. O pedido sai de `pending` ANTES de aplicar (dois donos
-     * aprovando juntos não aplicam duas vezes); se a aplicação falhar (ex.: o
-     * login foi criado por outro caminho nesse meio-tempo), volta para
-     * `pending` e o erro sobe — o dono vê o motivo e pode recusar.
-     *
-     * @throws {AppError} 404 / 403 (próprio pedido) / 409 (já analisado)
+     * Mantém a alteração: só fecha o registro.
+     * @throws {AppError} 404 / 403 (própria alteração ou próprio cadastro) / 409 (já revisada)
      */
-    async approve(id, reviewer) {
+    async approve(id, reviewer, note) {
         const request = await this._findOrFail(id);
         assertReviewable(request, reviewer);
-        await this._claim(id, AccessRequestStatus.APPROVED, reviewer.id, null);
+        await this._claim(id, AccessRequestStatus.APPROVED, reviewer.id, note ?? null);
+        const reviewed = await this.getById(id);
+        await this._notify(AccessRequestAction.APPROVED, reviewed);
+        return reviewed;
+    }
+
+    /**
+     * Recusa e DESFAZ a alteração. O registro sai de `pending` antes (dois
+     * revisores juntos não desfazem duas vezes); se desfazer der erro de
+     * banco, volta para `pending` e o erro sobe. O que não deu para desfazer
+     * (alguém mudou de novo depois, senha resetada…) fica em `revert_result`.
+     *
+     * @throws {AppError} 404 / 403 / 409
+     */
+    async reject(id, reviewer, note) {
+        const request = await this._findOrFail(id);
+        assertReviewable(request, reviewer);
+        await this._claim(id, AccessRequestStatus.REJECTED, reviewer.id, note ?? null);
 
         let result;
         try {
-            result = await this._apply(request, request.requested_by);
+            result = await this._revert(request, reviewer.id);
         } catch (error) {
             await this.repository.releaseRequest(id);
             throw error;
         }
 
-        if (request.type === Type.CREATE_USER) {
-            await this.repository.setTargetUser(id, result.id);
-        }
-        const reviewed = await this.getById(id);
-        await this._notify(AccessRequestAction.APPROVED, reviewed);
-        return { request: reviewed, result };
-    }
-
-    /** @throws {AppError} 404 / 403 (próprio pedido) / 409 (já analisado) */
-    async reject(id, reviewer, note) {
-        const request = await this._findOrFail(id);
-        assertReviewable(request, reviewer);
-        await this._claim(id, AccessRequestStatus.REJECTED, reviewer.id, note ?? null);
+        await this.repository.setRevertResult(id, result);
         const reviewed = await this.getById(id);
         await this._notify(AccessRequestAction.REJECTED, reviewed);
         return reviewed;
     }
 
-    /** Quem pediu desiste. @throws {AppError} 404 / 403 / 409 */
-    async cancel(id, actor) {
-        const request = await this._findOrFail(id);
-        assertCancelable(request, actor);
-        await this._claim(id, AccessRequestStatus.CANCELED, actor.id, null);
-        const canceled = await this.getById(id);
-        await this._notify(AccessRequestAction.CANCELED, canceled);
-        return canceled;
-    }
-
     /**
-     * Sino do dono do sistema: quantos pedidos esperam análise e os mais
-     * recentes. É estado, não aviso guardado — quando QUALQUER dono analisa,
-     * o pedido sai do contador de todos.
+     * Sino de quem revisa: quantas alterações esperam revisão e as mais
+     * recentes. É estado, não aviso guardado — quando QUALQUER revisor
+     * analisa, o registro sai do contador de todos.
      */
     async summary() {
         const byType = await this.repository.countPendingByType();
@@ -282,83 +412,270 @@ class AccessRequestUseCases {
 
     // ─── Internos ───────────────────────────────────────────────────────────
 
-    /** @private Dono aplica na hora; os demais geram pedido. */
-    async _submit(change, actor) {
-        if (isApprover(actor)) {
-            return { pending: false, data: await this._apply(change, actor.id) };
+    /**
+     * @private Grava o registro, aplica e devolve o resultado da alteração.
+     * `createdTargets(resultado)` dá o id do que foi criado, que só existe
+     * depois de aplicar.
+     */
+    async _record({ type, targetUserId = null, targetRoleId = null, targetPermissionId = null,
+        payload = {}, previous = null, apply, createdTargets = null }, actor) {
+        const byOwner = isOwner(actor);
+        const requestId = await this.repository.insertRequest({
+            type,
+            targetUserId,
+            targetRoleId,
+            targetPermissionId,
+            payload,
+            previousState: previous,
+            status: byOwner ? AccessRequestStatus.APPROVED : AccessRequestStatus.PENDING,
+            requestedBy: actor.id,
+            reviewedBy: byOwner ? actor.id : null,
+            reviewNote: byOwner ? OWNER_NOTE : null,
+        });
+
+        let data;
+        try {
+            data = await apply();
+        } catch (error) {
+            await this._discard(requestId);
+            throw error;
         }
-        const requestId = await this.repository.insertRequest({ ...change, requestedBy: actor.id });
-        const request = await this.getById(requestId);
-        await this._notify(AccessRequestAction.REQUESTED, request);
-        return { pending: true, request };
+
+        if (createdTargets) await this.repository.setTargets(requestId, createdTargets(data));
+        if (!byOwner) await this._notify(AccessRequestAction.REQUESTED, await this.getById(requestId));
+        return data;
+    }
+
+    /** @private Registro de alteração que não aconteceu. Nunca lança: o erro que importa é o da alteração. */
+    async _discard(requestId) {
+        try {
+            await this.repository.deleteRequest(requestId);
+        } catch (error) {
+            console.error(`[access:request] Falha ao apagar o registro ${requestId} de alteração que falhou:`, error.message);
+        }
     }
 
     /**
-     * @private Aviso em tempo real. Todo dono recebe (o contador dele muda);
-     * quem pediu recebe também a resposta (aprovado/recusado). Nunca lança: o
-     * pedido já está gravado, e o sino se refaz pelo `summary`.
+     * @private Desfaz a alteração pela foto do registro. Cada passo que
+     * esbarra num 4xx (o usuário/papel não existe mais, nome já reusado…)
+     * vira um item de `skipped` em vez de parar tudo; erro de banco sobe.
+     *
+     * @returns {Promise<{complete: boolean, undone: string[], skipped: string[]}>}
+     */
+    async _revert(request, reviewerId) {
+        const payload = parseJson(request.payload) || {};
+        const previous = parseJson(request.previous_state) || {};
+        const userId = request.target_user_id;
+        const roleId = request.target_role_id;
+        const permissionId = request.target_permission_id;
+        const undone = [];
+        const skipped = [];
+
+        /** 4xx vira `skipped` e devolve `undefined`; erro de banco sobe. */
+        const attempt = async (label, fn) => {
+            try {
+                return { ok: true, value: await fn() };
+            } catch (error) {
+                if (!(error instanceof AppError) || error.statusCode >= 500) throw error;
+                skipped.push(`${label}: ${error.message}`);
+                return { ok: false };
+            }
+        };
+        const step = async (label, fn) => {
+            if ((await attempt(label, fn)).ok) undone.push(label);
+        };
+        /** Campos: só volta o que ainda está como a alteração deixou. */
+        const restoreFields = async (label, load, applied, restore) => {
+            const { ok, value: current } = await attempt(label, load);
+            if (!ok) return;
+            const { restore: fields, skipped: changedSince } = fieldRevert(previous, applied, current);
+            for (const key of changedSince) skipped.push(`${key}: foi alterado de novo depois; ficou como está.`);
+            if (Object.keys(fields).length) {
+                await step(`${Object.keys(fields).join(', ')} restaurado(s)`, () => restore(fields, current));
+            }
+        };
+
+        switch (request.type) {
+            case Type.CREATE_USER: {
+                if (!userId) { skipped.push('O usuário criado não existe mais.'); break; }
+                await step('usuário desativado', () => this.access.deactivateUser(userId, reviewerId));
+                for (const id of payload.role_ids ?? []) {
+                    await step(`papel ${id} retirado`, () => this.access.removeRoleFromUser(userId, id));
+                }
+                for (const id of payload.application_ids ?? []) {
+                    await step(`aplicação ${id} revogada`, () => this.access.revokeApplicationAccess(userId, id));
+                }
+                break;
+            }
+            case Type.UPDATE_USER:
+            case Type.PATCH_USER:
+            case Type.DEACTIVATE_USER: {
+                const { password, ...applied } = payload;
+                await restoreFields('usuário', () => this.access.getUserById(userId), applied,
+                    fields => this.access.applyUserPatch(userId, fields, reviewerId));
+                if (password !== undefined) skipped.push('senha: a anterior não é guardada; resete a senha se preciso.');
+                break;
+            }
+            case Type.RESET_PASSWORD:
+                skipped.push('Reset de senha não tem como ser desfeito: resete de novo ou bloqueie o usuário.');
+                break;
+            case Type.ASSIGN_USER_ROLES: {
+                const { remove } = listRevert(previous.role_ids ?? [], [...(previous.role_ids ?? []), ...(payload.role_ids ?? [])]);
+                for (const id of remove) {
+                    await step(`papel ${id} retirado`, () => this.access.removeRoleFromUser(userId, id));
+                }
+                break;
+            }
+            case Type.REMOVE_USER_ROLE:
+                if (previous.had) await step(`papel ${roleId} devolvido`, () => this.access.assignRolesToUser(userId, [roleId]));
+                break;
+            case Type.GRANT_USER_APPLICATION:
+                if (!previous.had) {
+                    await step(`aplicação ${payload.application_id} revogada`,
+                        () => this.access.revokeApplicationAccess(userId, payload.application_id));
+                }
+                break;
+            case Type.REVOKE_USER_APPLICATION:
+                if (previous.had) {
+                    await step(`aplicação ${payload.application_id} devolvida`,
+                        () => this.access.grantApplicationAccess(userId, payload.application_id));
+                }
+                break;
+            case Type.CREATE_ROLE:
+                await step('papel excluído', () => this.access.deleteRole(roleId));
+                break;
+            case Type.UPDATE_ROLE:
+                await restoreFields('papel', () => this.access.getRoleById(roleId), payload,
+                    (fields, role) => this.access.updateRole({
+                        id: roleId, name: role.name, description: role.description, ...fields,
+                    }));
+                break;
+            case Type.DELETE_ROLE:
+                await step('papel recriado com as permissões', () => this.access.restoreRole(
+                    { id: roleId, name: previous.name, description: previous.description },
+                    previous.permission_ids ?? [],
+                ));
+                break;
+            case Type.ASSIGN_ROLE_PERMISSIONS:
+            case Type.SET_ROLE_PERMISSIONS: {
+                const after = request.type === Type.SET_ROLE_PERMISSIONS
+                    ? payload.permission_ids ?? []
+                    : [...(previous.permission_ids ?? []), ...(payload.permission_ids ?? [])];
+                const { remove, add } = listRevert(previous.permission_ids ?? [], after);
+                for (const id of remove) {
+                    await step(`permissão ${id} retirada`, () => this.access.removePermissionFromRole(roleId, id));
+                }
+                if (add.length) {
+                    await step(`permissões ${add.join(', ')} devolvidas`, () => this.access.assignPermissionsToRole(roleId, add));
+                }
+                break;
+            }
+            case Type.REMOVE_ROLE_PERMISSION:
+                if (previous.had) {
+                    await step(`permissão ${permissionId} devolvida`,
+                        () => this.access.assignPermissionsToRole(roleId, [permissionId]));
+                }
+                break;
+            case Type.CREATE_PERMISSION:
+                await step('permissão excluída', () => this.access.deletePermission(permissionId));
+                break;
+            case Type.UPDATE_PERMISSION:
+                await restoreFields('permissão', () => this.access.getPermissionById(permissionId), payload,
+                    (fields, permission) => this.access.updatePermission({
+                        id: permissionId, code: permission.code, description: permission.description, ...fields,
+                    }));
+                break;
+            case Type.DELETE_PERMISSION:
+                await step('permissão recriada', () => this.access.restorePermission(
+                    { id: permissionId, code: previous.code, description: previous.description },
+                ));
+                break;
+            default:
+                throw new AppError(`Tipo de registro desconhecido: ${request.type}.`, 400, { code: AccessErrorCode.InvalidRequestType });
+        }
+
+        return { complete: skipped.length === 0, undone, skipped };
+    }
+
+    /**
+     * @private Aviso em tempo real. Todo revisor recebe (o contador dele
+     * muda); o autor recebe também a revisão. Nunca lança: o registro já
+     * está gravado, e o sino se refaz pelo `summary`.
      */
     async _notify(action, request) {
         if (!this.events) return;
         try {
-            const recipients = [...await this.repository.findApproverIds()];
-            if (action === AccessRequestAction.APPROVED || action === AccessRequestAction.REJECTED) {
-                recipients.push(Number(request.requested_by));
-            }
+            const recipients = [...await this.repository.findReviewerIds()];
+            if (action !== AccessRequestAction.REQUESTED) recipients.push(Number(request.requested_by));
             await this.events.publish(recipients, { action, request });
         } catch (error) {
             console.error(`[access:request] Falha ao avisar (${action}, id=${request?.id}):`, error.message);
         }
     }
 
-    /**
-     * @private Aplica a mudança descrita por um pedido (ou por um `change` de
-     * `_submit`, que tem o mesmo formato em camelCase).
-     */
-    async _apply(change, authorId) {
-        const payload = parsePayload(change.payload);
-        const userId = change.targetUserId ?? change.target_user_id;
-        const roleId = change.targetRoleId ?? change.target_role_id;
-        const permissionId = change.targetPermissionId ?? change.target_permission_id;
+    /** @private Usuário que `actor` pode alterar. @throws {AppError} 404 / 403 */
+    async _manageableUser(id, actor) {
+        const user = await this.access.getUserById(id);
+        assertCanManageUser(user, actor);
+        return user;
+    }
 
-        switch (change.type) {
-            case Type.CREATE_USER: {
-                // Pedidos anteriores a 27/10/2026 não têm as listas.
-                const { role_ids = [], application_ids = [], ...userData } = payload;
-                return this.access.insertPreparedUser(userData, authorId, {
-                    roleIds: role_ids,
-                    applicationIds: application_ids,
-                });
-            }
-            case Type.UPDATE_USER:
-                return this.access.updateUser({ ...payload, id: userId }, authorId);
-            case Type.PATCH_USER:
-                return this.access.applyUserPatch(userId, payload, authorId);
-            case Type.ASSIGN_USER_ROLES:
-                return this.access.assignRolesToUser(userId, payload.role_ids);
-            case Type.REMOVE_USER_ROLE:
-                return this.access.removeRoleFromUser(userId, roleId);
-            case Type.GRANT_USER_APPLICATION:
-                return this.access.grantApplicationAccess(userId, payload.application_id);
-            case Type.REVOKE_USER_APPLICATION:
-                return this.access.revokeApplicationAccess(userId, payload.application_id);
-            case Type.ASSIGN_ROLE_PERMISSIONS:
-                return this.access.assignPermissionsToRole(roleId, payload.permission_ids);
-            case Type.SET_ROLE_PERMISSIONS:
-                return this.access.setRolePermissions(roleId, payload.permission_ids);
-            case Type.REMOVE_ROLE_PERMISSION:
-                return this.access.removePermissionFromRole(roleId, permissionId);
-            case Type.UPDATE_PERMISSION:
-                return this.access.updatePermission({ ...payload, id: permissionId });
-            default:
-                throw new AppError(`Tipo de pedido desconhecido: ${change.type}.`, 400, { code: AccessErrorCode.InvalidRequestType });
+    /**
+     * @private Papéis que `actor` pode dar, tirar ou editar: nunca o de dono;
+     * o de revisor, só se for dono. @throws {AppError} 403
+     */
+    async _assertRolesGrantable(roleIds, actor) {
+        assertRolesNotProtected(roleIds, await this.repository.findRoleIdsWithPermission(OWNER_PERMISSION));
+        if (!isOwner(actor)) {
+            assertRolesNotReviewer(roleIds, await this.repository.findRoleIdsWithPermission(REVIEW_PERMISSION), actor);
         }
+    }
+
+    /** @private Mesma regra, para permissões. @throws {AppError} 403 */
+    async _assertPermissionsGrantable(permissionIds, actor) {
+        assertNoOwnerPermission(permissionIds, await this.repository.findPermissionIdByCode(OWNER_PERMISSION));
+        if (!isOwner(actor)) {
+            assertNoReviewPermission(permissionIds, await this.repository.findPermissionIdByCode(REVIEW_PERMISSION), actor);
+        }
+    }
+
+    /**
+     * @private Papel que `actor` pode alterar: não é de dono, não é de
+     * revisor (fora o dono) e não é dele. @throws {AppError} 404 / 403
+     */
+    async _editableRole(id, actor) {
+        const role = await this.access.getRoleById(id);
+        await this._assertRolesGrantable([role.id], actor);
+        assertNotOwnRole(role.id, await this._userRoleIds(actor.id), actor);
+        return role;
+    }
+
+    /** @private Nunca `SYSTEM_OWNER`; `ACCESS_APPROVE` só o dono. @throws {AppError} 404 / 403 */
+    async _editablePermission(id, actor) {
+        const permission = await this.access.getPermissionById(id);
+        await this._assertPermissionsGrantable([permission.id], actor);
+        return permission;
+    }
+
+    /** @private */
+    async _userRoleIds(userId) {
+        return (await this.access.getUserRoles(userId)).map(r => Number(r.id));
+    }
+
+    /** @private */
+    async _userApplicationIds(userId) {
+        return (await this.access.getUserApplications(userId)).map(a => Number(a.id));
+    }
+
+    /** @private */
+    async _rolePermissionIds(roleId) {
+        return (await this.access.getRolePermissions(roleId)).map(p => Number(p.id));
     }
 
     /** @private */
     async _findOrFail(id) {
         const request = await this.repository.findRequestById(id);
-        if (!request) throw new AppError('Pedido não encontrado.', 404, { code: AccessErrorCode.RequestNotFound });
+        if (!request) throw new AppError('Registro não encontrado.', 404, { code: AccessErrorCode.RequestNotFound });
         return request;
     }
 
@@ -366,14 +683,14 @@ class AccessRequestUseCases {
     async _claim(id, status, by, note) {
         const claimed = await this.repository.claimRequest(id, status, by, note);
         if (!claimed) {
-            throw new AppError('Este pedido já foi analisado.', 409, { code: AccessErrorCode.RequestNotPending });
+            throw new AppError('Esta alteração já foi revisada.', 409, { code: AccessErrorCode.RequestNotPending });
         }
     }
 }
 
-/** JSON do MySQL vem objeto (MySQL 8) ou texto (MariaDB). */
-function parsePayload(payload) {
-    return typeof payload === 'string' ? JSON.parse(payload) : (payload || {});
+/** Só as chaves pedidas, com `undefined` virando `null` (vai para JSON). */
+function pick(source, keys) {
+    return Object.fromEntries(keys.map(k => [k, source[k] ?? null]));
 }
 
 function positiveIntOrNull(value) {

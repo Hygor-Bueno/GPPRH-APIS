@@ -200,35 +200,48 @@ para uma query só com campos apagados depois.
 Detalhes: [`docs/repp.md`](docs/repp.md). DDL: `GIPP-SQL/re-reserva-espacos-deploy.sql`,
 `GIPP-SQL/re-notificacoes-deploy.sql` e `GIPP-SQL/re-lembrete-deploy.sql`.
 
-### ⚠️ Gestão de Acessos (`/access/*`) — fila de aprovação
+### ⚠️ Gestão de Acessos (`/access/*`) — registro de alterações com revisão
 
-Quem tem `ACCESS_MANAGE` e não é `SYSTEM_OWNER` não grava direto: criar
-usuário, dar/tirar papel ou aplicação, mexer nas permissões de um papel,
-renomear código de permissão, mudar `administrator` ou ativar usuário viram
-pedido `pending` em `_access_requests` (resposta **202**). Só um `SYSTEM_OWNER`
-aprova/recusa (`/access/requests/:id/approve|reject`), nunca o próprio pedido;
-o `SYSTEM_OWNER` aplica na hora. Bloquear/desativar e editar nome/filial/senha
-continuam diretos — exceto na conta de um `SYSTEM_OWNER`, que só outro dono
-edita, desativa ou tem a senha trocada/resetada (403 `ACCESS_TARGET_IS_OWNER`;
-no reset, via middleware `guardOwnerAccount` na rota).
+Desde 28/10/2026 **toda** escrita em `/access/*` vale na hora e grava uma
+linha em `_access_requests` com a foto do que havia antes (`previous_state`).
+De `ACCESS_MANAGE` a linha nasce `pending` (= aplicada, aguardando revisão);
+de `SYSTEM_OWNER`, `approved`. Quem tem `ACCESS_APPROVE` (papel
+`ACCESS_APPROVER_TI`) revisa em `/access/requests/:id/approve|reject`:
+aprovar só fecha; **recusar desfaz** pela foto e grava em `revert_result` o que
+voltou e o que não deu (`skipped`). Ninguém revisa a própria alteração, nem
+(fora os donos) uma alteração no próprio cadastro.
 
-- Rota nova que conceda acesso entra em `AccessRequestUseCases`, não chama o
+Travas (403), antes de qualquer registro:
+- `SYSTEM_OWNER` e papel que o tem não aparecem nas listas nem são dados,
+  tirados ou editados pela API — **só pelo banco**, até para os donos
+  (`ACCESS_OWNER_PROTECTED`).
+- Ninguém além dos donos altera o próprio cadastro nem um papel que tem
+  (`ACCESS_SELF_EDIT`).
+- Só dono dá, tira ou edita `ACCESS_APPROVE` — a permissão ou papel que a
+  tem (`ACCESS_REVIEWER_PROTECTED`). Senão um gestor faria um colega revisor
+  e os dois aprovariam um ao outro.
+- Conta de dono só outro dono altera (`ACCESS_TARGET_IS_OWNER`). No reset de
+  senha, que mora no `auth.controller`, as travas e o registro são middlewares
+  na rota (`guardOwnerAccount`, `recordPasswordReset`).
+
+- Rota nova de escrita em `/access/*` entra em `AccessRequestUseCases` via
+  `_record` (foto + `apply`) e ganha um `case` em `_revert`; não chama o
   `AccessUseCases` direto do controller.
-- O pedido guarda o **hash** da senha, nunca o texto; `toPublicRequest` tira o
-  campo da resposta.
-- Aprovar tira de `pending` com `UPDATE ... WHERE status = 'pending'` antes de
-  aplicar (dois donos não aplicam duas vezes); se aplicar falhar, volta para
-  `pending`.
-- `POST /access/users` aceita `role_ids` e `application_ids`: o dono cria tudo
-  numa transação (`insertUserWithAccess`); o gestor gera UM pedido
-  `create_user` com as listas no `payload`. Sem isso o gestor não conseguiria
-  pedir papel para um usuário que ainda não existe.
-- Sino do dono = `GET /access/requests/summary` (estado, sem "lido") + evento
-  `access:request` no WebSocket. O publisher nunca manda lista vazia: sem
-  `toUserIds` o `eventBus` faz broadcast. Prompt do front:
-  `docs/access-aprovacao-frontend-prompt.md`.
+- O registro é gravado ANTES de aplicar; se aplicar falhar, é apagado. Não
+  existe alteração sem registro.
+- Desfazer não pisa em quem mudou depois: lista (papéis, aplicações,
+  permissões) tira só o que a alteração pôs e devolve só o que ela tirou;
+  campo só volta se ainda está como a alteração deixou (`listRevert`,
+  `fieldRevert`). Reset de senha e senha trocada não voltam.
+- O registro guarda o **hash** da senha, nunca o texto; `toPublicRequest` tira
+  o campo da resposta.
+- Sino de quem revisa = `GET /access/requests/summary` (estado, sem "lido") +
+  evento `access:request` no WebSocket. O publisher nunca manda lista vazia:
+  sem `toUserIds` o `eventBus` faz broadcast. Prompt do front:
+  `docs/access-revisao-frontend-prompt.md`.
 
-DDL: `GIPP-SQL/access-requests-deploy.sql`.
+DDL: `GIPP-SQL/access-requests-deploy.sql`, depois
+`GIPP-SQL/access-revisao-deploy.sql`.
 
 ## Permissões EPP
 | Código | Escopo |

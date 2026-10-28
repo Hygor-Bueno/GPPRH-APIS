@@ -143,6 +143,21 @@ function sqlDeactivateUser() {
 
 // ─── Papéis (Roles) ────────────────────────────────────────────────────────────
 
+/**
+ * `SYSTEM_OWNER` não aparece nas listas da API nem é atribuído por ela — só
+ * pelo banco. Papel que tem a permissão some do catálogo de papéis.
+ */
+const OWNER_PERMISSION_CODE = 'SYSTEM_OWNER';
+
+const NOT_OWNER_ROLE = `
+    NOT EXISTS (
+        SELECT 1
+        FROM _role_permissions orp
+        JOIN _permissions      op ON op.id = orp.permission_id
+        WHERE orp.role_id = r.id AND op.code = '${OWNER_PERMISSION_CODE}'
+    )
+`;
+
 function sqlGetRoles() {
     return `
         SELECT
@@ -153,6 +168,7 @@ function sqlGetRoles() {
         FROM _roles r
         LEFT JOIN _role_permissions rp ON rp.role_id  = r.id
         LEFT JOIN _permissions      p  ON p.id        = rp.permission_id
+        WHERE ${NOT_OWNER_ROLE}
         GROUP BY r.id
         ORDER BY r.name
     `;
@@ -179,6 +195,11 @@ function sqlInsertRole() {
     return `INSERT INTO _roles (name, description) VALUES (?, ?)`;
 }
 
+/** Desfazer a exclusão de um papel: volta com o mesmo id. Parâmetros: [id, name, description] */
+function sqlInsertRoleWithId() {
+    return `INSERT INTO _roles (id, name, description) VALUES (?, ?, ?)`;
+}
+
 /** Parâmetros: [name, description, id] */
 function sqlUpdateRole() {
     return `UPDATE _roles SET name = ?, description = ? WHERE id = ?`;
@@ -197,7 +218,7 @@ function sqlCountUsersByRole() {
 // ─── Permissões ────────────────────────────────────────────────────────────────
 
 function sqlGetPermissions() {
-    return `SELECT id, code, description FROM _permissions ORDER BY code`;
+    return `SELECT id, code, description FROM _permissions WHERE code <> '${OWNER_PERMISSION_CODE}' ORDER BY code`;
 }
 
 /** Parâmetros: [id] */
@@ -208,6 +229,11 @@ function sqlGetPermissionById() {
 /** Parâmetros: [code, description] */
 function sqlInsertPermission() {
     return `INSERT INTO _permissions (code, description) VALUES (?, ?)`;
+}
+
+/** Desfazer a exclusão de uma permissão: volta com o mesmo id. Parâmetros: [id, code, description] */
+function sqlInsertPermissionWithId() {
+    return `INSERT INTO _permissions (id, code, description) VALUES (?, ?, ?)`;
 }
 
 /** Parâmetros: [code, description, id] */
@@ -347,6 +373,7 @@ module.exports = {
     sqlGetRoles,
     sqlGetRoleById,
     sqlInsertRole,
+    sqlInsertRoleWithId,
     sqlUpdateRole,
     sqlDeleteRole,
     sqlCountUsersByRole,
@@ -354,6 +381,7 @@ module.exports = {
     sqlGetPermissions,
     sqlGetPermissionById,
     sqlInsertPermission,
+    sqlInsertPermissionWithId,
     sqlUpdatePermission,
     sqlDeletePermission,
     sqlCountRolesByPermission,

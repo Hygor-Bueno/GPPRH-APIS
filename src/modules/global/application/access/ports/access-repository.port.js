@@ -59,6 +59,9 @@ class AccessRepositoryPort {
      */
     updateRole(data) { throw new Error('Not implemented'); }
 
+    /** Desfazer exclusão: recria com o mesmo id. ER_DUP_ENTRY propaga. @param {{id:number, name:string, description:?string}} data */
+    insertRoleWithId(data) { throw new Error('Not implemented'); }
+
     /** @param {number} roleId @returns {Promise<number>} */
     countUsersByRole(roleId) { throw new Error('Not implemented'); }
 
@@ -87,6 +90,9 @@ class AccessRepositoryPort {
 
     /** @param {number} permissionId @returns {Promise<number>} */
     countRolesByPermission(permissionId) { throw new Error('Not implemented'); }
+
+    /** Desfazer exclusão: recria com o mesmo id. ER_DUP_ENTRY propaga. @param {{id:number, code:string, description:?string}} data */
+    insertPermissionWithId(data) { throw new Error('Not implemented'); }
 
     /** @param {number} id */
     deletePermission(id) { throw new Error('Not implemented'); }

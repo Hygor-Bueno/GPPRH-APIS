@@ -21,12 +21,14 @@ const {
     sqlGetRoles,
     sqlGetRoleById,
     sqlInsertRole,
+    sqlInsertRoleWithId,
     sqlUpdateRole,
     sqlDeleteRole,
     sqlCountUsersByRole,
     sqlGetPermissions,
     sqlGetPermissionById,
     sqlInsertPermission,
+    sqlInsertPermissionWithId,
     sqlUpdatePermission,
     sqlDeletePermission,
     sqlCountRolesByPermission,
@@ -186,6 +188,10 @@ class MysqlAccessRepository extends AccessRepositoryPort {
         return { insertId: rows.insertId };
     }
 
+    async insertRoleWithId(data) {
+        await this._execute(sqlInsertRoleWithId(), [data.id, data.name, data.description]);
+    }
+
     async updateRole(data) {
         await this._execute(sqlUpdateRole(), [data.name, data.description, data.id]);
     }
@@ -213,6 +219,10 @@ class MysqlAccessRepository extends AccessRepositoryPort {
     async insertPermission(data) {
         const rows = await this._execute(sqlInsertPermission(), [data.code, data.description]);
         return this.findPermissionById(rows.insertId);
+    }
+
+    async insertPermissionWithId(data) {
+        await this._execute(sqlInsertPermissionWithId(), [data.id, data.code, data.description]);
     }
 
     async updatePermission(data) {

@@ -127,7 +127,7 @@ const {
     assignPermissionsSchema,
     setPermissionsSchema,
     grantApplicationSchema,
-    rejectRequestSchema
+    reviewNoteSchema
 } = require('../../schemas/access.schema');
 const { awards, percentage, inventory_configs, inventory } = require('../../schemas/mgpp.schems');
 
@@ -606,13 +606,18 @@ router.delete('/payee/:id',
 
 // ─── Gestão de Acessos — Usuários ─────────────────────────────────────────────
 //
-// ⚠️ Fila de aprovação: as rotas marcadas com "→ fila" só aplicam na hora para
-// quem tem `SYSTEM_OWNER`. Para os demais, respondem 202 com um pedido
-// `pending` em `_access_requests`, que um dono do sistema aprova ou recusa em
-// `/access/requests`. Regras: `domain/access/access-request.rules.js`.
+// ⚠️ Registro de alterações: toda escrita abaixo vale na hora e grava uma linha
+// em `_access_requests` com a foto do antes. De quem não é `SYSTEM_OWNER`, a
+// linha fica `pending` até alguém com `ACCESS_APPROVE` revisar em
+// `/access/requests` — aprovar mantém, recusar desfaz.
+// Regras: `domain/access/access-request.rules.js`.
 //
-// Conta de `SYSTEM_OWNER` (editar, trocar senha, resetar, desativar) só outro
-// `SYSTEM_OWNER` mexe — 403 `ACCESS_TARGET_IS_OWNER`.
+// Travas (403): `SYSTEM_OWNER` e papel que o tem não aparecem nem são
+// atribuídos pela API — só pelo banco (`ACCESS_OWNER_PROTECTED`); ninguém
+// além dos donos altera o próprio cadastro nem um papel que tem
+// (`ACCESS_SELF_EDIT`); só dono dá, tira ou edita `ACCESS_APPROVE` ou papel que
+// a tem (`ACCESS_REVIEWER_PROTECTED`); conta de dono só outro dono altera
+// (`ACCESS_TARGET_IS_OWNER`).
 
 /**
  * @route GET /access/users
@@ -636,9 +641,9 @@ router.get('/access/users/:id',
 
 /**
  * @route POST /access/users
- * @description Cria um novo usuário com senha hasheada. → fila
+ * @description Cria um novo usuário com senha hasheada.
  * Aceita `role_ids` e `application_ids` (opcionais) para criar já com papéis e
- * aplicações, numa transação só — e, na fila, num pedido só.
+ * aplicações, numa transação só — e num registro só.
  * @access Requer `ACCESS_MANAGE`
  */
 router.post('/access/users',
@@ -650,7 +655,6 @@ router.post('/access/users',
 /**
  * @route PUT /access/users/:id
  * @description Atualiza completamente um usuário (sem alterar senha ou campos de AD).
- * → fila só se mudar `administrator` ou passar `ad_status` para `active`.
  * @access Requer `ACCESS_MANAGE`
  */
 router.put('/access/users/:id',
@@ -662,7 +666,6 @@ router.put('/access/users/:id',
 /**
  * @route PATCH /access/users/:id
  * @description Atualiza parcialmente um usuário. Campos inválidos são ignorados.
- * → fila só se mudar `administrator` ou passar `ad_status` para `active`.
  * @access Requer `ACCESS_MANAGE`
  */
 router.patch('/access/users/:id',
@@ -699,6 +702,7 @@ router.post('/access/users/:id/reset-password',
     authMiddleware,
     canAny(['ACCESS_MANAGE']),
     accessController.guardOwnerAccount,
+    accessController.recordPasswordReset,
     asyncHandler(authController.resetUserPassword));
 
 // ─── Gestão de Acessos — Vínculos Usuário ↔ Papel ─────────────────────────────
@@ -716,7 +720,7 @@ router.get('/access/users/:id/roles',
 /**
  * @route POST /access/users/:id/roles
  * @description Associa um ou mais papéis ao usuário. Body: `{ role_ids: number[] }`.
- * Papéis já vinculados são silenciosamente ignorados. → fila
+ * Papéis já vinculados são silenciosamente ignorados.
  * @access Requer `ACCESS_MANAGE`
  */
 router.post('/access/users/:id/roles',
@@ -727,7 +731,7 @@ router.post('/access/users/:id/roles',
 
 /**
  * @route DELETE /access/users/:id/roles/:roleId
- * @description Desassocia um papel de um usuário. → fila
+ * @description Desassocia um papel de um usuário.
  * @access Requer `ACCESS_MANAGE`
  */
 router.delete('/access/users/:id/roles/:roleId',
@@ -749,7 +753,7 @@ router.get('/access/users/:id/applications',
 
 /**
  * @route POST /access/users/:id/applications
- * @description Concede acesso de um usuário a uma aplicação. Body: `{ application_id: number }`. → fila
+ * @description Concede acesso de um usuário a uma aplicação. Body: `{ application_id: number }`.
  * @access Requer `ACCESS_MANAGE`
  */
 router.post('/access/users/:id/applications',
@@ -760,7 +764,7 @@ router.post('/access/users/:id/applications',
 
 /**
  * @route DELETE /access/users/:id/applications/:appId
- * @description Revoga o acesso de um usuário a uma aplicação. → fila
+ * @description Revoga o acesso de um usuário a uma aplicação.
  * @access Requer `ACCESS_MANAGE`
  */
 router.delete('/access/users/:id/applications/:appId',
@@ -837,7 +841,7 @@ router.get('/access/roles/:id/permissions',
 /**
  * @route POST /access/roles/:id/permissions
  * @description Associa uma ou mais permissões a um papel. Body: `{ permission_ids: number[] }`.
- * Permissões já vinculadas são silenciosamente ignoradas. → fila
+ * Permissões já vinculadas são silenciosamente ignoradas.
  * @access Requer `ACCESS_MANAGE`
  */
 router.post('/access/roles/:id/permissions',
@@ -849,7 +853,7 @@ router.post('/access/roles/:id/permissions',
 /**
  * @route PUT /access/roles/:id/permissions
  * @description Substitui completamente as permissões de um papel (operação atômica).
- * Body: `{ permission_ids: number[] }`. → fila
+ * Body: `{ permission_ids: number[] }`.
  * @access Requer `ACCESS_MANAGE`
  */
 router.put('/access/roles/:id/permissions',
@@ -860,7 +864,7 @@ router.put('/access/roles/:id/permissions',
 
 /**
  * @route DELETE /access/roles/:id/permissions/:permissionId
- * @description Desassocia uma permissão de um papel. → fila
+ * @description Desassocia uma permissão de um papel.
  * @access Requer `ACCESS_MANAGE`
  */
 router.delete('/access/roles/:id/permissions/:permissionId',
@@ -893,8 +897,7 @@ router.post('/access/permissions',
 
 /**
  * @route PUT /access/permissions/:id
- * @description Atualiza código e descrição de uma permissão. → fila (renomear
- * código é escalada de privilégio sem tocar em vínculo).
+ * @description Atualiza código e descrição de uma permissão.
  * @access Requer `ACCESS_MANAGE`
  */
 router.put('/access/permissions/:id',
@@ -925,13 +928,14 @@ router.get('/access/applications',
     canAny(['ACCESS_VIEW', 'ACCESS_MANAGE']),
     asyncHandler(accessController.getApplications));
 
-// ─── Gestão de Acessos — Pedidos de alteração (fila de aprovação) ─────────────
+// ─── Gestão de Acessos — Registro de alterações (revisão) ────────────────────
 
 /**
  * @route GET /access/requests
- * @description Lista pedidos. `status`: pending (padrão), approved, rejected,
- * canceled ou `all`; também `type`, `requested_by`, `target_user_id`, `page`, `limit`.
- * O hash de senha de um pedido nunca sai — só `sets_password: true`.
+ * @description Lista registros. `status`: pending (padrão — aplicada, aguardando
+ * revisão), approved, rejected (desfeita), canceled (só antigos) ou `all`;
+ * também `type`, `requested_by`, `target_user_id`, `page`, `limit`.
+ * O hash de senha nunca sai — só `sets_password: true`.
  * @access Requer `ACCESS_VIEW` ou `ACCESS_MANAGE`
  */
 router.get('/access/requests',
@@ -941,15 +945,15 @@ router.get('/access/requests',
 
 /**
  * @route GET /access/requests/summary
- * @description Sino do dono: `{ pending_total, pending_by_type, latest }`.
- * É estado, não aviso guardado — some de todos quando qualquer dono analisa.
+ * @description Sino de quem revisa: `{ pending_total, pending_by_type, latest }`.
+ * É estado, não aviso guardado — some de todos quando qualquer revisor analisa.
  * Em tempo real: evento `access:request` no WebSocket. Declarada antes de
  * `/access/requests/:id`.
- * @access Requer `SYSTEM_OWNER`
+ * @access Requer `ACCESS_APPROVE`
  */
 router.get('/access/requests/summary',
     authMiddleware,
-    canAny(['SYSTEM_OWNER']),
+    canAny(['ACCESS_APPROVE']),
     asyncHandler(accessController.getRequestsSummary));
 
 /**
@@ -963,34 +967,28 @@ router.get('/access/requests/:id',
 
 /**
  * @route PATCH /access/requests/:id/approve
- * @description Aprova e aplica a alteração. 409 se já analisado; 403 no próprio pedido.
- * @access Requer `SYSTEM_OWNER`
+ * @description Mantém a alteração (só fecha o registro). Body opcional: `{ note }`.
+ * 409 se já revisada; 403 na própria alteração ou no próprio cadastro.
+ * @access Requer `ACCESS_APPROVE`
  */
 router.patch('/access/requests/:id/approve',
     authMiddleware,
-    canAny(['SYSTEM_OWNER']),
+    canAny(['ACCESS_APPROVE']),
+    validate(reviewNoteSchema),
     asyncHandler(accessController.approveRequest));
 
 /**
  * @route PATCH /access/requests/:id/reject
- * @description Recusa o pedido. Body opcional: `{ note }`.
- * @access Requer `SYSTEM_OWNER`
+ * @description Recusa e DESFAZ a alteração. Body opcional: `{ note }`. O que não
+ * deu para desfazer (alterado de novo depois, senha resetada…) vem em
+ * `revert_result.skipped`.
+ * @access Requer `ACCESS_APPROVE`
  */
 router.patch('/access/requests/:id/reject',
     authMiddleware,
-    canAny(['SYSTEM_OWNER']),
-    validate(rejectRequestSchema),
+    canAny(['ACCESS_APPROVE']),
+    validate(reviewNoteSchema),
     asyncHandler(accessController.rejectRequest));
-
-/**
- * @route PATCH /access/requests/:id/cancel
- * @description Quem pediu desiste do pedido ainda pendente.
- * @access Requer `ACCESS_MANAGE` (e ser quem pediu)
- */
-router.patch('/access/requests/:id/cancel',
-    authMiddleware,
-    canAny(['ACCESS_MANAGE']),
-    asyncHandler(accessController.cancelRequest));
 
 // ─── Arquivos (_files) ────────────────────────────────────────────────────────
 

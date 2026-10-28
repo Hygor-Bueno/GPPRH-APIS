@@ -98,16 +98,23 @@ class AccessUseCases {
 
     /** Atualiza completamente um usuário (PUT). Não altera senha nem campos de AD. */
     async updateUser(payload, updatedBy) {
-        await this.repository.updateUser({
+        await this.repository.updateUser({ ...this.prepareUserUpdate(payload), id: payload.id }, updatedBy);
+        return this.getUserById(payload.id);
+    }
+
+    /**
+     * Os campos que o PUT grava, com os padrões dele (campo ausente vira
+     * `null`/`'pending'`/`0`) — é o que o registro de alteração guarda.
+     */
+    prepareUserUpdate(payload) {
+        return {
             name: payload.name ?? null,
             registration: payload.registration ?? null,
             branch_code: payload.branch_code ?? null,
             ad_status: payload.ad_status ?? 'pending',
             administrator: payload.administrator ?? 0,
             table_protheus: payload.table_protheus ?? null,
-            id: payload.id,
-        }, updatedBy);
-        return this.getUserById(payload.id);
+        };
     }
 
     /**
@@ -204,6 +211,24 @@ class AccessUseCases {
         return this.getRoleById(payload.id);
     }
 
+    /**
+     * Desfaz a exclusão de um papel: volta com o mesmo id e as mesmas
+     * permissões (a exclusão levou `_role_permissions` junto, em cascata).
+     * @throws {AppError} 409 se o id ou o nome já foram usados de novo
+     */
+    async restoreRole({ id, name, description }, permissionIds = []) {
+        try {
+            await this.repository.insertRoleWithId({ id, name, description: description ?? null });
+        } catch (error) {
+            if (error.code === 'ER_DUP_ENTRY') {
+                throw new AppError(`Papel '${name}' (id ${id}) já existe de novo.`, 409);
+            }
+            throw error;
+        }
+        if (permissionIds.length) await this.repository.insertRolePermissions(id, permissionIds);
+        return this.getRoleById(id);
+    }
+
     /** @throws {AppError} 404 / 409 se houver usuários com este papel */
     async deleteRole(id) {
         await this.getRoleById(id);
@@ -261,6 +286,22 @@ class AccessUseCases {
             }
             throw error;
         }
+    }
+
+    /**
+     * Desfaz a exclusão de uma permissão: volta com o mesmo id.
+     * @throws {AppError} 409 se o id ou o código já foram usados de novo
+     */
+    async restorePermission({ id, code, description }) {
+        try {
+            await this.repository.insertPermissionWithId({ id, code, description: description ?? null });
+        } catch (error) {
+            if (error.code === 'ER_DUP_ENTRY') {
+                throw new AppError(`Permissão '${code}' (id ${id}) já existe de novo.`, 409);
+            }
+            throw error;
+        }
+        return this.getPermissionById(id);
     }
 
     /** @throws {AppError} 404 / 409 se estiver em uso por algum papel */

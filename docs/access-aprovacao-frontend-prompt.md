@@ -1,3 +1,5 @@
+> ⚠️ **Substituído em 28/10/2026** por [`access-revisao-frontend-prompt.md`](access-revisao-frontend-prompt.md): a fila de aprovação virou registro com revisão (sem 202, sem cancelar). Mantido como histórico do que o front implementou.
+
 # Prompt para o agente de frontend — Gestão de Acessos: aprovação de pedidos e sino
 
 > Copie tudo abaixo da linha para o agente do frontend. A tela de Gestão de

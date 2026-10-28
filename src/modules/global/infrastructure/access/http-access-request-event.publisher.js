@@ -8,7 +8,7 @@
  * ⚠️ Lista vazia NÃO é enviada: sem `toUserId(s)` o `eventBus` faz broadcast
  * para todos os conectados.
  *
- * Nada é gravado quando o dono está offline: o sino dele é o contador de
+ * Nada é gravado quando o revisor está offline: o sino dele é o contador de
  * pendentes (`GET /access/requests/summary`), lido ao logar.
  *
  * @module modules/global/infrastructure/access/http-access-request-event.publisher

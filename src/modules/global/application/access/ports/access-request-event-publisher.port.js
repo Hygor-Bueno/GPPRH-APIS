@@ -1,5 +1,5 @@
 /**
- * @fileoverview Porta — aviso em tempo real da fila de aprovação
+ * @fileoverview Porta — aviso em tempo real do registro de alterações
  * (`access:request` no WebSocket).
  * @module modules/global/application/access/ports/access-request-event-publisher.port
  */

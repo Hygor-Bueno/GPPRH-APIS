@@ -1,6 +1,6 @@
 /**
- * @fileoverview Queries SQL puras — fila de aprovação da Gestão de Acessos
- * (`_access_requests`, banco `global`).
+ * @fileoverview Queries SQL puras — registro de alterações da Gestão de
+ * Acessos (`_access_requests`, banco `global`).
  *
  * @module modules/global/repositories/mysql/access-request.queries
  */
@@ -19,6 +19,8 @@ const REQUEST_COLUMNS = `
     ar.target_permission_id,
     tp.code                                      AS target_permission_code,
     ar.payload,
+    ar.previous_state,
+    ar.revert_result,
     ar.requested_by,
     UPPER(TRIM(rq.name))                         AS requested_by_name,
     ${localDateTime('ar.requested_at')},
@@ -66,17 +68,29 @@ function sqlGetRequestById() {
     return `SELECT ${REQUEST_COLUMNS} ${REQUEST_JOINS} WHERE ar.id = ?`;
 }
 
-/** Parâmetros: [type, target_user_id, target_role_id, target_permission_id, payload(JSON), requested_by] */
+/**
+ * Alteração de dono do sistema nasce `approved` (revisada por ele mesmo, na
+ * hora); as demais nascem `pending`, sem revisor.
+ * Parâmetros: [type, target_user_id, target_role_id, target_permission_id,
+ * payload(JSON), previous_state(JSON|null), status, requested_by, reviewed_by,
+ * reviewed_by, review_note]
+ */
 function sqlInsertRequest() {
     return `
         INSERT INTO _access_requests
-            (type, target_user_id, target_role_id, target_permission_id, payload, requested_by)
-        VALUES (?, ?, ?, ?, ?, ?)
+            (type, target_user_id, target_role_id, target_permission_id, payload, previous_state,
+             status, requested_by, reviewed_by, reviewed_at, review_note)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, IF(? IS NULL, NULL, NOW()), ?)
     `;
 }
 
+/** A alteração falhou ao ser aplicada: o registro não descreve nada. Parâmetros: [id] */
+function sqlDeleteRequest() {
+    return `DELETE FROM _access_requests WHERE id = ?`;
+}
+
 /**
- * Tira o pedido de `pending` numa única instrução: com dois donos clicando ao
+ * Tira o registro de `pending` numa única instrução: com dois revisores clicando ao
  * mesmo tempo, só um recebe `affectedRows = 1`.
  * Parâmetros: [status, reviewed_by, review_note, id]
  */
@@ -88,7 +102,7 @@ function sqlClaimRequest() {
     `;
 }
 
-/** Devolve para `pending` quando a aplicação da mudança falhou. Parâmetros: [id] */
+/** Devolve para `pending` quando desfazer a alteração falhou. Parâmetros: [id] */
 function sqlReleaseRequest() {
     return `
         UPDATE _access_requests
@@ -97,9 +111,24 @@ function sqlReleaseRequest() {
     `;
 }
 
-/** Usuário criado por um pedido aprovado. Parâmetros: [target_user_id, id] */
-function sqlSetRequestTargetUser() {
-    return `UPDATE _access_requests SET target_user_id = ? WHERE id = ?`;
+/**
+ * O que a alteração criou (usuário, papel, permissão) só tem id depois de
+ * aplicada. `null` mantém o que já estava.
+ * Parâmetros: [target_user_id, target_role_id, target_permission_id, id]
+ */
+function sqlSetRequestTargets() {
+    return `
+        UPDATE _access_requests
+        SET target_user_id       = COALESCE(?, target_user_id),
+            target_role_id       = COALESCE(?, target_role_id),
+            target_permission_id = COALESCE(?, target_permission_id)
+        WHERE id = ?
+    `;
+}
+
+/** O que desfazer a alteração conseguiu (e o que não). Parâmetros: [revert_result(JSON), id] */
+function sqlSetRevertResult() {
+    return `UPDATE _access_requests SET revert_result = ? WHERE id = ?`;
 }
 
 /** Parâmetros: [username] */
@@ -107,18 +136,7 @@ function sqlFindUserIdByUsername() {
     return `SELECT id FROM _user WHERE user = ? LIMIT 1`;
 }
 
-/** Já existe pedido de criação pendente para este login? Parâmetros: [username] */
-function sqlFindPendingCreateUser() {
-    return `
-        SELECT id FROM _access_requests
-        WHERE type = 'create_user'
-          AND status = 'pending'
-          AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.user')) = ?
-        LIMIT 1
-    `;
-}
-
-/** Pendentes por tipo — contador do sino do dono. Sem parâmetros. */
+/** Pendentes por tipo — contador do sino de quem revisa. Sem parâmetros. */
 function sqlCountPendingByType() {
     return `
         SELECT type, COUNT(*) AS total
@@ -129,31 +147,52 @@ function sqlCountPendingByType() {
 }
 
 /**
- * Quem recebe o aviso de pedido novo: usuários ativos com `SYSTEM_OWNER`
- * (por qualquer papel). Sem parâmetros.
+ * Quem recebe o aviso de alteração nova: usuários ativos com `SYSTEM_OWNER`
+ * ou `ACCESS_APPROVE` (por qualquer papel). Sem parâmetros.
  */
-function sqlFindApproverIds() {
+function sqlFindReviewerIds() {
     return `
         SELECT DISTINCT u.id
         FROM _user u
         JOIN _user_roles       ur ON ur.user_id = u.id
         JOIN _role_permissions rp ON rp.role_id = ur.role_id
         JOIN _permissions      p  ON p.id       = rp.permission_id
-        WHERE p.code = 'SYSTEM_OWNER'
+        WHERE p.code IN ('SYSTEM_OWNER', 'ACCESS_APPROVE')
           AND u.ad_status = 'active'
     `;
 }
 
+/**
+ * Papéis que têm a permissão — `SYSTEM_OWNER` (intocáveis pela API) ou
+ * `ACCESS_APPROVE` (só dono dá ou tira). Parâmetros: [code]
+ */
+function sqlFindRoleIdsWithPermission() {
+    return `
+        SELECT DISTINCT rp.role_id AS id
+        FROM _role_permissions rp
+        JOIN _permissions      p ON p.id = rp.permission_id
+        WHERE p.code = ?
+    `;
+}
+
+/** Parâmetros: [code] */
+function sqlFindPermissionIdByCode() {
+    return `SELECT id FROM _permissions WHERE code = ? LIMIT 1`;
+}
+
 module.exports = {
     sqlCountPendingByType,
-    sqlFindApproverIds,
+    sqlFindReviewerIds,
+    sqlFindRoleIdsWithPermission,
+    sqlFindPermissionIdByCode,
     sqlListRequests,
     sqlCountRequests,
     sqlGetRequestById,
     sqlInsertRequest,
+    sqlDeleteRequest,
     sqlClaimRequest,
     sqlReleaseRequest,
-    sqlSetRequestTargetUser,
+    sqlSetRequestTargets,
+    sqlSetRevertResult,
     sqlFindUserIdByUsername,
-    sqlFindPendingCreateUser,
 };

@@ -226,6 +226,40 @@ describe('AccessUseCases', () => {
         });
     });
 
+    describe('restoreRole / restorePermission (desfazer exclusão)', () => {
+        it('restoreRole recria com o mesmo id e devolve as permissões', async () => {
+            const repository = makeFakeRepository({ insertRoleWithId: jest.fn().mockResolvedValue() });
+            const useCases = makeUseCases({ repository });
+            await useCases.restoreRole({ id: 3, name: 'X', description: undefined }, [4, 5]);
+            expect(repository.insertRoleWithId).toHaveBeenCalledWith({ id: 3, name: 'X', description: null });
+            expect(repository.insertRolePermissions).toHaveBeenCalledWith(3, [4, 5]);
+        });
+
+        it('restoreRole com id ou nome já reusado → 409, sem mexer em permissões', async () => {
+            const dupError = Object.assign(new Error('Duplicate entry'), { code: 'ER_DUP_ENTRY' });
+            const repository = makeFakeRepository({ insertRoleWithId: jest.fn().mockRejectedValue(dupError) });
+            const useCases = makeUseCases({ repository });
+            await expect(useCases.restoreRole({ id: 3, name: 'X' }, [4])).rejects.toMatchObject({ statusCode: 409 });
+            expect(repository.insertRolePermissions).not.toHaveBeenCalled();
+        });
+
+        it('restorePermission com código já reusado → 409', async () => {
+            const dupError = Object.assign(new Error('Duplicate entry'), { code: 'ER_DUP_ENTRY' });
+            const repository = makeFakeRepository({ insertPermissionWithId: jest.fn().mockRejectedValue(dupError) });
+            const useCases = makeUseCases({ repository });
+            await expect(useCases.restorePermission({ id: 4, code: 'X_USE' })).rejects.toMatchObject({ statusCode: 409 });
+        });
+    });
+
+    describe('prepareUserUpdate', () => {
+        it('aplica os padrões do PUT aos campos ausentes', () => {
+            expect(makeUseCases().prepareUserUpdate({ name: 'X' })).toEqual({
+                name: 'X', registration: null, branch_code: null,
+                ad_status: 'pending', administrator: 0, table_protheus: null,
+            });
+        });
+    });
+
     describe('application access', () => {
         it('grantApplicationAccess should throw 404 for a missing user', async () => {
             const repository = makeFakeRepository({ findUserById: jest.fn().mockResolvedValue(null) });

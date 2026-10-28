@@ -270,12 +270,12 @@ const grantApplicationSchema = {
     }
 };
 
-// ─── Pedidos de alteração ──────────────────────────────────────────────────────
+// ─── Registro de alterações (revisão) ──────────────────────────────────────────
 
 /**
- * Schema para recusar um pedido (PATCH /access/requests/:id/reject).
+ * Nota da revisão (PATCH /access/requests/:id/approve e /reject).
  */
-const rejectRequestSchema = {
+const reviewNoteSchema = {
     note: {
         type:      'string',
         required:  false,
@@ -284,8 +284,8 @@ const rejectRequestSchema = {
 };
 
 module.exports = {
-    // Pedidos de alteração
-    rejectRequestSchema,
+    // Registro de alterações
+    reviewNoteSchema,
     // Usuários
     postUserSchema,
     putUserSchema,

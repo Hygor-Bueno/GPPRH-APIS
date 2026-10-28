@@ -1,24 +1,26 @@
 /**
- * @fileoverview Regras da fila de aprovação da Gestão de Acessos. Puro.
+ * @fileoverview Regras do registro de alterações da Gestão de Acessos. Puro.
  *
- * Quem tem `ACCESS_MANAGE` continua podendo pedir tudo, mas criar usuário e
- * mexer no que dá acesso (papéis, aplicações, permissões de papel, código de
- * permissão, `administrator`, ativação) vira uma linha em `_access_requests`
- * que só vale depois que um dono do sistema (`SYSTEM_OWNER`) aprova.
+ * Desde 28/10/2026 toda escrita em `/access/*` vale na hora e deixa uma linha
+ * em `_access_requests` com a foto do que havia antes (`previous_state`):
  *
- * | Quem pede          | O que acontece                                   |
- * |--------------------|--------------------------------------------------|
- * | `SYSTEM_OWNER`     | aplica na hora — não há a quem pedir             |
- * | qualquer outro     | fica `pending` até um `SYSTEM_OWNER` aprovar     |
+ * | Quem altera        | Registro                                          |
+ * |--------------------|---------------------------------------------------|
+ * | `SYSTEM_OWNER`     | `approved` na hora — não há a quem prestar contas |
+ * | `ACCESS_MANAGE`    | `pending` até alguém com `ACCESS_APPROVE` revisar |
  *
- * O que só TIRA acesso sem mexer em papel/aplicação (bloquear, desativar)
- * continua valendo na hora: bloquear quem saiu da empresa não pode esperar.
- * Exceção: a conta de um dono só é editada, desativada ou tem a senha trocada
- * por outro dono (`assertCanManageUser`).
+ * Revisar: aprovar só fecha o registro; recusar DESFAZ a alteração a partir
+ * da foto (ver `access-request.use-cases.js#_revert`).
  *
- * Por que `PUT /access/permissions/:id` está na fila: renomear o código de uma
- * permissão que a pessoa já tem para o de uma mais forte (depois de renomear a
- * original) é escalada de privilégio sem tocar em vínculo nenhum.
+ * Travas que valem antes de qualquer registro:
+ * - `SYSTEM_OWNER` não aparece nem é atribuído pela API — só pelo banco. Um
+ *   papel que tem `SYSTEM_OWNER` é intocável por aqui, até para os donos.
+ * - Ninguém além dos donos altera o próprio cadastro, nem as permissões de um
+ *   papel que tem.
+ * - Só dono dá ou tira `ACCESS_APPROVE` (a permissão, ou papel que a tem).
+ *   Senão quem tem `ACCESS_MANAGE` faria um colega revisor e os dois
+ *   aprovariam as alterações um do outro.
+ * - A conta de um dono só é alterada por outro dono.
  *
  * @module modules/global/domain/access/access-request.rules
  */
@@ -27,60 +29,137 @@ const { AppError } = require('../../../../errors/app.error');
 const { AccessRequestStatus, AccessErrorCode } = require('./access-request.enums');
 
 /** A mesma permissão do bypass do `canAny`. */
-const APPROVER_PERMISSION = 'SYSTEM_OWNER';
+const OWNER_PERMISSION = 'SYSTEM_OWNER';
 
-/** @param {{permissions?: string[]}} user @returns {boolean} */
-function isApprover(user) {
-    return (user?.permissions || []).includes(APPROVER_PERMISSION);
+/** Quem revisa as alterações de quem tem `ACCESS_MANAGE`. */
+const REVIEW_PERMISSION = 'ACCESS_APPROVE';
+
+/** @param {{permissions?: string|string[]}} user - `getUserById` traz CSV. */
+function permissionsOf(user) {
+    return Array.isArray(user?.permissions)
+        ? user.permissions
+        : String(user?.permissions || '').split(',');
+}
+
+/** @param {{permissions?: string|string[]}} user @returns {boolean} */
+function isOwner(user) {
+    return permissionsOf(user).includes(OWNER_PERMISSION);
+}
+
+/** @param {{permissions?: string|string[]}} user @returns {boolean} */
+function isReviewer(user) {
+    return isOwner(user) || permissionsOf(user).includes(REVIEW_PERMISSION);
 }
 
 /**
- * Conta de dono do sistema só é mexida por outro dono: trocar senha, resetar,
- * editar ou desativar. Sem isso, quem tem `ACCESS_MANAGE` resetaria a senha de
- * um dono, entraria como ele e aprovaria os próprios pedidos.
+ * Pode alterar este usuário?
+ * - a conta de um dono só outro dono altera — senão quem tem `ACCESS_MANAGE`
+ *   resetaria a senha de um dono e entraria como ele;
+ * - o próprio cadastro só o dono altera.
  *
- * @param {{permissions?: string|string[]}} target - `getUserById` traz CSV.
- * @param {{permissions?: string[]}} actor
+ * @param {{id: number, permissions?: string|string[]}} target
+ * @param {{id: number, permissions?: string[]}} actor
  * @throws {AppError} 403
  */
 function assertCanManageUser(target, actor) {
-    const targetPermissions = Array.isArray(target?.permissions)
-        ? target.permissions
-        : String(target?.permissions || '').split(',');
-    if (targetPermissions.includes(APPROVER_PERMISSION) && !isApprover(actor)) {
+    if (isOwner(actor)) return;
+    if (isOwner(target)) {
         throw new AppError('Só um dono do sistema pode alterar a conta de outro dono do sistema.', 403, {
             code: AccessErrorCode.TargetIsOwner,
+        });
+    }
+    if (Number(target.id) === Number(actor.id)) {
+        throw new AppError('Você não pode alterar o próprio cadastro.', 403, { code: AccessErrorCode.SelfEdit });
+    }
+}
+
+/**
+ * Mudar as permissões de um papel que a pessoa tem é mudar o próprio acesso.
+ *
+ * @param {number} roleId
+ * @param {number[]} actorRoleIds
+ * @param {{permissions?: string[]}} actor
+ * @throws {AppError} 403
+ */
+function assertNotOwnRole(roleId, actorRoleIds, actor) {
+    if (isOwner(actor)) return;
+    if (actorRoleIds.map(Number).includes(Number(roleId))) {
+        throw new AppError('Você não pode alterar um papel que você tem.', 403, { code: AccessErrorCode.SelfEdit });
+    }
+}
+
+/**
+ * Papel com `SYSTEM_OWNER` não é dado, tirado nem editado pela API — vale
+ * para todos, donos inclusive.
+ *
+ * @param {number[]} roleIds
+ * @param {number[]} protectedRoleIds
+ * @throws {AppError} 403
+ */
+function assertRolesNotProtected(roleIds, protectedRoleIds) {
+    const blocked = roleIds.filter(id => protectedRoleIds.includes(Number(id)));
+    if (blocked.length) {
+        throw new AppError('Papel de dono do sistema só pode ser alterado direto no banco.', 403, {
+            code: AccessErrorCode.OwnerProtected,
         });
     }
 }
 
 /**
- * Diz se uma edição de usuário (PUT/PATCH) concede acesso e, portanto, vai
- * para a fila. Só compara o que veio em `changes`.
+ * A permissão `SYSTEM_OWNER` não entra em papel, não é renomeada nem
+ * excluída pela API.
  *
- * - `administrator`: qualquer mudança.
- * - `ad_status`: só a que passa a ser `active` — bloquear vale na hora.
- *
- * @param {{administrator?: number, ad_status?: string}} current - usuário como está.
- * @param {object} changes
- * @returns {boolean}
+ * @param {number[]} permissionIds
+ * @param {?number} ownerPermissionId
+ * @throws {AppError} 403
  */
-function userChangeGrantsAccess(current, changes) {
-    if ('administrator' in changes
-        && Number(changes.administrator) !== Number(current.administrator)) {
-        return true;
+function assertNoOwnerPermission(permissionIds, ownerPermissionId) {
+    if (ownerPermissionId && permissionIds.map(Number).includes(Number(ownerPermissionId))) {
+        throw new AppError('A permissão de dono do sistema só pode ser atribuída direto no banco.', 403, {
+            code: AccessErrorCode.OwnerProtected,
+        });
     }
-    if ('ad_status' in changes
-        && changes.ad_status === 'active'
-        && current.ad_status !== 'active') {
-        return true;
+}
+
+/**
+ * Quem revisa é escolhido pelos donos: fora eles, ninguém dá, tira nem edita
+ * papel que tem `ACCESS_APPROVE`.
+ *
+ * @param {number[]} roleIds
+ * @param {number[]} reviewerRoleIds
+ * @param {{permissions?: string[]}} actor
+ * @throws {AppError} 403
+ */
+function assertRolesNotReviewer(roleIds, reviewerRoleIds, actor) {
+    if (isOwner(actor)) return;
+    if (roleIds.some(id => reviewerRoleIds.includes(Number(id)))) {
+        throw new AppError('Só um dono do sistema dá, tira ou altera papel de revisor de acessos.', 403, {
+            code: AccessErrorCode.ReviewerProtected,
+        });
     }
-    return false;
+}
+
+/**
+ * Idem para a permissão: fora os donos, ninguém põe `ACCESS_APPROVE` num
+ * papel, nem a renomeia ou exclui.
+ *
+ * @param {number[]} permissionIds
+ * @param {?number} reviewPermissionId
+ * @param {{permissions?: string[]}} actor
+ * @throws {AppError} 403
+ */
+function assertNoReviewPermission(permissionIds, reviewPermissionId, actor) {
+    if (isOwner(actor)) return;
+    if (reviewPermissionId && permissionIds.map(Number).includes(Number(reviewPermissionId))) {
+        throw new AppError('Só um dono do sistema dá, tira ou altera a permissão de revisor de acessos.', 403, {
+            code: AccessErrorCode.ReviewerProtected,
+        });
+    }
 }
 
 /**
  * Lista de ids vinda do body (`role_ids`, `permission_ids`): inteiros
- * positivos, sem repetição. Vai gravada no pedido, então lixo é recusado aqui.
+ * positivos, sem repetição. Vai gravada no registro, então lixo é recusado aqui.
  *
  * @param {*} list
  * @param {{allowEmpty?: boolean}} [options] - `PUT .../permissions` aceita
@@ -103,36 +182,68 @@ function normalizeIds(list, { allowEmpty = false } = {}) {
 }
 
 /**
- * Aprovar ou recusar: o pedido precisa estar pendente e quem revisa não pode
- * ser quem pediu.
+ * Revisar: o registro precisa estar pendente, quem revisa não pode ser quem
+ * alterou, nem (fora os donos) a pessoa alterada.
  *
- * @param {{status: string, requested_by: number}} request
- * @param {{id: number}} reviewer
+ * @param {{status: string, requested_by: number, target_user_id: ?number}} request
+ * @param {{id: number, permissions?: string[]}} reviewer
  * @throws {AppError} 409 / 403
  */
 function assertReviewable(request, reviewer) {
     if (request.status !== AccessRequestStatus.PENDING) {
-        throw new AppError('Este pedido já foi analisado.', 409, { code: AccessErrorCode.RequestNotPending });
+        throw new AppError('Esta alteração já foi revisada.', 409, { code: AccessErrorCode.RequestNotPending });
     }
     if (Number(request.requested_by) === Number(reviewer.id)) {
-        throw new AppError('Você não pode analisar o próprio pedido.', 403, { code: AccessErrorCode.SelfReview });
+        throw new AppError('Você não pode revisar a própria alteração.', 403, { code: AccessErrorCode.SelfReview });
+    }
+    if (!isOwner(reviewer) && Number(request.target_user_id) === Number(reviewer.id)) {
+        throw new AppError('Você não pode revisar uma alteração no seu próprio cadastro.', 403, {
+            code: AccessErrorCode.SelfTarget,
+        });
     }
 }
 
 /**
- * Cancelar: só quem pediu, e só enquanto pendente.
+ * Desfazer um vínculo em lista (papéis, aplicações, permissões) sem pisar no
+ * que outra pessoa mudou depois: tira só o que a alteração acrescentou e põe
+ * de volta só o que ela tirou.
  *
- * @param {{status: string, requested_by: number}} request
- * @param {{id: number}} actor
- * @throws {AppError} 409 / 403
+ * @param {number[]} before - como estava antes da alteração
+ * @param {number[]} after  - como a alteração deixou
+ * @returns {{remove: number[], add: number[]}}
  */
-function assertCancelable(request, actor) {
-    if (request.status !== AccessRequestStatus.PENDING) {
-        throw new AppError('Este pedido já foi analisado.', 409, { code: AccessErrorCode.RequestNotPending });
+function listRevert(before, after) {
+    const was = new Set(before.map(Number));
+    const is = new Set(after.map(Number));
+    return {
+        remove: [...is].filter(id => !was.has(id)),
+        add: [...was].filter(id => !is.has(id)),
+    };
+}
+
+/**
+ * Desfazer campos (nome, filial, código…): só volta o campo que ainda está
+ * como a alteração deixou. Se alguém mudou de novo depois, fica como está e
+ * entra em `skipped`.
+ *
+ * @param {object} before  - valores antes da alteração
+ * @param {object} applied - valores que a alteração gravou
+ * @param {object} current - valores agora
+ * @returns {{restore: object, skipped: string[]}}
+ */
+function fieldRevert(before, applied, current) {
+    const restore = {};
+    const skipped = [];
+    for (const key of Object.keys(before)) {
+        if (sameValue(current[key], applied[key])) restore[key] = before[key];
+        else skipped.push(key);
     }
-    if (Number(request.requested_by) !== Number(actor.id)) {
-        throw new AppError('Só quem fez o pedido pode cancelá-lo.', 403, { code: AccessErrorCode.NotRequester });
-    }
+    return { restore, skipped };
+}
+
+/** `0` × `'0'`, `null` × `undefined`: o banco e o body não falam o mesmo tipo. */
+function sameValue(a, b) {
+    return String(a ?? '') === String(b ?? '');
 }
 
 /**
@@ -143,23 +254,36 @@ function assertCancelable(request, actor) {
  * @returns {object}
  */
 function toPublicRequest(row) {
-    let payload = row.payload;
-    if (typeof payload === 'string') payload = JSON.parse(payload);
-    const { password, ...safePayload } = payload || {};
+    const { password, ...safePayload } = parseJson(row.payload) || {};
     return {
         ...row,
         payload: safePayload,
+        previous_state: parseJson(row.previous_state),
+        revert_result: parseJson(row.revert_result),
         sets_password: password !== undefined,
     };
 }
 
+/** JSON do MySQL vem objeto (MySQL 8) ou texto (MariaDB). */
+function parseJson(value) {
+    return typeof value === 'string' ? JSON.parse(value) : (value ?? null);
+}
+
 module.exports = {
-    APPROVER_PERMISSION,
-    isApprover,
+    OWNER_PERMISSION,
+    REVIEW_PERMISSION,
+    isOwner,
+    isReviewer,
     assertCanManageUser,
-    userChangeGrantsAccess,
+    assertNotOwnRole,
+    assertRolesNotProtected,
+    assertNoOwnerPermission,
+    assertRolesNotReviewer,
+    assertNoReviewPermission,
     normalizeIds,
     assertReviewable,
-    assertCancelable,
+    listRevert,
+    fieldRevert,
     toPublicRequest,
+    parseJson,
 };

@@ -2,8 +2,9 @@
  * @fileoverview Controller de Gestão de Acessos.
  *
  * Camada de entrada HTTP para gerenciamento de usuários, papéis (roles),
- * permissões e acessos a aplicações. Cada função delega ao `AccessUseCases`
- * e retorna a resposta adequada.
+ * permissões e acessos a aplicações. Leitura vai direto ao `AccessUseCases`;
+ * toda escrita passa pelo `AccessRequestUseCases`, que grava o registro da
+ * alteração (revisado depois por quem tem `ACCESS_APPROVE`).
  *
  * @module modules/global/controllers/access.controller
  */
@@ -21,20 +22,6 @@ const requests = new AccessRequestUseCases({
     accessUseCases: useCases,
     eventPublisher: new HttpAccessRequestEventPublisher(),
 });
-
-const PENDING_MESSAGE = 'Pedido registrado. A alteração só vale depois que um dono do sistema aprovar.';
-
-/**
- * Resposta das rotas que passam pela fila de aprovação: aplicada (dono do
- * sistema, ou edição que não concede acesso) responde como sempre respondeu;
- * pendente responde 202 com o pedido criado.
- */
-function respondOutcome(res, outcome, onApplied = respond.ok) {
-    if (outcome.pending) {
-        return respond.accepted(res, { pending: true, request: outcome.request }, PENDING_MESSAGE);
-    }
-    return onApplied(res, outcome.data);
-}
 
 // ─── Usuários ──────────────────────────────────────────────────────────────────
 
@@ -69,13 +56,12 @@ async function getUserById(req, res) {
 
 /**
  * Cria um novo usuário. O campo `created_by` é preenchido automaticamente
- * com o ID do usuário autenticado (de quem pediu, se passar pela fila).
- * Fora o dono do sistema, vira pedido pendente (202).
+ * com o ID do usuário autenticado.
  * @route POST /access/users
  */
 async function postUser(req, res) {
-    const outcome = await requests.createUser(req.body, req.user);
-    return respondOutcome(res, outcome, respond.created);
+    const data = await requests.createUser(req.body, req.user);
+    return respond.created(res, data);
 }
 
 /**
@@ -83,11 +69,11 @@ async function postUser(req, res) {
  * @route PUT /access/users/:id
  */
 async function putUser(req, res) {
-    const outcome = await requests.updateUser(
+    const data = await requests.updateUser(
         { ...req.body, id: Number(req.params.id) },
         req.user
     );
-    return respondOutcome(res, outcome);
+    return respond.ok(res, data);
 }
 
 /**
@@ -98,12 +84,12 @@ async function putUser(req, res) {
  * @route PATCH /access/users/:id
  */
 async function patchUser(req, res) {
-    const outcome = await requests.patchUser(
+    const data = await requests.patchUser(
         Number(req.params.id),
         req.body,
         req.user
     );
-    return respondOutcome(res, outcome);
+    return respond.ok(res, data);
 }
 
 /**
@@ -116,9 +102,10 @@ async function deleteUser(req, res) {
 }
 
 /**
- * Middleware: conta de dono do sistema só é mexida por outro dono. Usado na
- * rota de reset de senha, que mora no `auth.controller` — as demais rotas de
- * usuário fazem a mesma checagem dentro do `AccessRequestUseCases`.
+ * Middleware: conta de dono do sistema só é mexida por outro dono, e o próprio
+ * cadastro só pelo dono. Usado na rota de reset de senha, que mora no
+ * `auth.controller` — as demais rotas de usuário fazem a mesma checagem dentro
+ * do `AccessRequestUseCases`.
  */
 async function guardOwnerAccount(req, res, next) {
     const id = Number(req.params.id);
@@ -130,6 +117,21 @@ async function guardOwnerAccount(req, res, next) {
     } catch (error) {
         return next(error);
     }
+}
+
+/**
+ * Middleware: registra o reset de senha quando o `auth.controller` responde
+ * com sucesso. O registro não guarda a senha temporária.
+ */
+function recordPasswordReset(req, res, next) {
+    const id = Number(req.params.id);
+    res.on('finish', () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) return;
+        requests.recordPasswordReset(id, req.user).catch(error => {
+            console.error(`[access:request] Falha ao registrar o reset de senha do usuário ${id}:`, error.message);
+        });
+    });
+    return next();
 }
 
 // ─── Papéis (Roles) ────────────────────────────────────────────────────────────
@@ -157,7 +159,7 @@ async function getRoleById(req, res) {
  * @route POST /access/roles
  */
 async function postRole(req, res) {
-    const data = await useCases.createRole(req.body);
+    const data = await requests.createRole(req.body, req.user);
     return respond.created(res, data);
 }
 
@@ -166,7 +168,7 @@ async function postRole(req, res) {
  * @route PUT /access/roles/:id
  */
 async function putRole(req, res) {
-    const data = await useCases.updateRole({ ...req.body, id: Number(req.params.id) });
+    const data = await requests.updateRole({ ...req.body, id: Number(req.params.id) }, req.user);
     return respond.ok(res, data);
 }
 
@@ -175,7 +177,7 @@ async function putRole(req, res) {
  * @route DELETE /access/roles/:id
  */
 async function deleteRole(req, res) {
-    const data = await useCases.deleteRole(Number(req.params.id));
+    const data = await requests.deleteRole(Number(req.params.id), req.user);
     return respond.ok(res, data);
 }
 
@@ -195,7 +197,7 @@ async function getPermissions(req, res) {
  * @route POST /access/permissions
  */
 async function postPermission(req, res) {
-    const data = await useCases.createPermission(req.body);
+    const data = await requests.createPermission(req.body, req.user);
     return respond.created(res, data);
 }
 
@@ -204,8 +206,8 @@ async function postPermission(req, res) {
  * @route PUT /access/permissions/:id
  */
 async function putPermission(req, res) {
-    const outcome = await requests.updatePermission({ ...req.body, id: Number(req.params.id) }, req.user);
-    return respondOutcome(res, outcome);
+    const data = await requests.updatePermission({ ...req.body, id: Number(req.params.id) }, req.user);
+    return respond.ok(res, data);
 }
 
 /**
@@ -213,7 +215,7 @@ async function putPermission(req, res) {
  * @route DELETE /access/permissions/:id
  */
 async function deletePermission(req, res) {
-    const data = await useCases.deletePermission(Number(req.params.id));
+    const data = await requests.deletePermission(Number(req.params.id), req.user);
     return respond.ok(res, data);
 }
 
@@ -233,12 +235,12 @@ async function getUserRoles(req, res) {
  * @route POST /access/users/:id/roles
  */
 async function assignRolesToUser(req, res) {
-    const outcome = await requests.assignRolesToUser(
+    const data = await requests.assignRolesToUser(
         Number(req.params.id),
         req.body.role_ids,
         req.user
     );
-    return respondOutcome(res, outcome);
+    return respond.ok(res, data);
 }
 
 /**
@@ -246,12 +248,12 @@ async function assignRolesToUser(req, res) {
  * @route DELETE /access/users/:id/roles/:roleId
  */
 async function removeRoleFromUser(req, res) {
-    const outcome = await requests.removeRoleFromUser(
+    const data = await requests.removeRoleFromUser(
         Number(req.params.id),
         Number(req.params.roleId),
         req.user
     );
-    return respondOutcome(res, outcome);
+    return respond.ok(res, data);
 }
 
 // ─── Vínculos Papel ↔ Permissão ────────────────────────────────────────────────
@@ -270,12 +272,12 @@ async function getRolePermissions(req, res) {
  * @route POST /access/roles/:id/permissions
  */
 async function assignPermissionsToRole(req, res) {
-    const outcome = await requests.assignPermissionsToRole(
+    const data = await requests.assignPermissionsToRole(
         Number(req.params.id),
         req.body.permission_ids,
         req.user
     );
-    return respondOutcome(res, outcome);
+    return respond.ok(res, data);
 }
 
 /**
@@ -283,12 +285,12 @@ async function assignPermissionsToRole(req, res) {
  * @route PUT /access/roles/:id/permissions
  */
 async function setRolePermissions(req, res) {
-    const outcome = await requests.setRolePermissions(
+    const data = await requests.setRolePermissions(
         Number(req.params.id),
         req.body.permission_ids,
         req.user
     );
-    return respondOutcome(res, outcome);
+    return respond.ok(res, data);
 }
 
 /**
@@ -296,12 +298,12 @@ async function setRolePermissions(req, res) {
  * @route DELETE /access/roles/:id/permissions/:permissionId
  */
 async function removePermissionFromRole(req, res) {
-    const outcome = await requests.removePermissionFromRole(
+    const data = await requests.removePermissionFromRole(
         Number(req.params.id),
         Number(req.params.permissionId),
         req.user
     );
-    return respondOutcome(res, outcome);
+    return respond.ok(res, data);
 }
 
 // ─── Aplicações ────────────────────────────────────────────────────────────────
@@ -329,12 +331,12 @@ async function getUserApplications(req, res) {
  * @route POST /access/users/:id/applications
  */
 async function grantApplicationAccess(req, res) {
-    const outcome = await requests.grantApplicationAccess(
+    const data = await requests.grantApplicationAccess(
         Number(req.params.id),
         req.body.application_id,
         req.user
     );
-    return respondOutcome(res, outcome);
+    return respond.ok(res, data);
 }
 
 /**
@@ -342,18 +344,18 @@ async function grantApplicationAccess(req, res) {
  * @route DELETE /access/users/:id/applications/:appId
  */
 async function revokeApplicationAccess(req, res) {
-    const outcome = await requests.revokeApplicationAccess(
+    const data = await requests.revokeApplicationAccess(
         Number(req.params.id),
         Number(req.params.appId),
         req.user
     );
-    return respondOutcome(res, outcome);
+    return respond.ok(res, data);
 }
 
-// ─── Pedidos de alteração (fila de aprovação) ──────────────────────────────────
+// ─── Registro de alterações (revisão) ──────────────────────────────────────────
 
 /**
- * Lista pedidos. Query: `status` (pending — padrão —, approved, rejected,
+ * Lista registros. Query: `status` (pending — padrão —, approved, rejected,
  * canceled ou `all`), `type`, `requested_by`, `target_user_id`, `page`, `limit`.
  * @route GET /access/requests
  */
@@ -363,7 +365,7 @@ async function getRequests(req, res) {
 }
 
 /**
- * Sino do dono do sistema: total de pendentes, por tipo, e os 5 mais recentes.
+ * Sino de quem revisa: total de pendentes, por tipo, e os 5 mais recentes.
  * @route GET /access/requests/summary
  */
 async function getRequestsSummary(req, res) {
@@ -378,29 +380,21 @@ async function getRequestById(req, res) {
 }
 
 /**
- * Aprova e aplica a alteração pedida.
+ * Mantém a alteração (só fecha o registro). Body opcional: `{ note }`.
  * @route PATCH /access/requests/:id/approve
  */
 async function approveRequest(req, res) {
-    const data = await requests.approve(Number(req.params.id), req.user);
+    const data = await requests.approve(Number(req.params.id), req.user, req.body?.note);
     return respond.ok(res, data);
 }
 
 /**
- * Recusa o pedido. Body opcional: `{ note }`.
+ * Recusa e desfaz a alteração. Body opcional: `{ note }`. O que não deu para
+ * desfazer vem em `revert_result.skipped`.
  * @route PATCH /access/requests/:id/reject
  */
 async function rejectRequest(req, res) {
     const data = await requests.reject(Number(req.params.id), req.user, req.body?.note);
-    return respond.ok(res, data);
-}
-
-/**
- * Quem pediu desiste do pedido ainda pendente.
- * @route PATCH /access/requests/:id/cancel
- */
-async function cancelRequest(req, res) {
-    const data = await requests.cancel(Number(req.params.id), req.user);
     return respond.ok(res, data);
 }
 
@@ -413,6 +407,7 @@ module.exports = {
     patchUser,
     deleteUser,
     guardOwnerAccount,
+    recordPasswordReset,
     // Papéis
     getRoles,
     getRoleById,
@@ -438,11 +433,10 @@ module.exports = {
     getUserApplications,
     grantApplicationAccess,
     revokeApplicationAccess,
-    // Pedidos de alteração
+    // Registro de alterações
     getRequests,
     getRequestsSummary,
     getRequestById,
     approveRequest,
-    rejectRequest,
-    cancelRequest
+    rejectRequest
 };
