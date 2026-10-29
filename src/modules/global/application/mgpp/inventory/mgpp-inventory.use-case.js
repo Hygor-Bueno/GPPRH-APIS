@@ -14,8 +14,9 @@ class MgppInventoryUseCase {
     async _validateData(data, isUpdate) {
         const dateNow = new Date().toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', });
 
-        const config = await this.repository.getConfigs(data.id_inventory_config);
-        const numberReleases = await this.repository.getNumberReleasesForMonth(dateNow, data.id_inventory_config);
+        const config = await this.repository.getConfigs(data.branch_code, data.costcenter_code);
+        console.log(config)
+        const numberReleases = await this.repository.getNumberReleasesForMonth(dateNow, data.branch_code, data.costcenter_code);
 
         if (numberReleases >= config.quantity_for_month && !isUpdate) {
             throw new AppError('Numero de lançamentos de inventarios do mês ja foi atingido.', 400);

@@ -15,7 +15,7 @@ const percentage = {
 const inventory = {
     branch_code: { type: 'text' },
     costcenter_code: { type: 'text' },
-    id_inventory_config: { type: 'number' },
+    expected_quantity: { type: 'number' },
     status_inventory: { type: 'number' },
     quantity_performed: { type: 'number' },
     has_audit: { type: 'number' },

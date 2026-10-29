@@ -6,7 +6,7 @@ class MgppInventoryRepositoryPorts {
     /**
      * @param {number} id
      */
-    getConfigs(id) { throw new Error('Not implemented'); }
+    getConfigs(branch_code, costcenter_code) { throw new Error('Not implemented'); }
     /**
      * @param {number} id
      */
@@ -15,7 +15,7 @@ class MgppInventoryRepositoryPorts {
      * @param {string} date
      * @param {number} id
      */
-    getNumberReleasesForMonth(date, id) { throw new Error('Not implemented'); }
+    getNumberReleasesForMonth(date, branch_code, costcenter_code) { throw new Error('Not implemented'); }
 
     /**
      * @param {object} data

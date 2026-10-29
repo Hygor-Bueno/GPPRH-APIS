@@ -1,8 +1,8 @@
 const INVENTORY_FILTER_CLAUSES = {
-    branch_code: 'inv.branch_code = ?',
-    costcenter_code: 'inv.costcenter_code = ?',
-    status_inventory: 'inv.status_inventory = ?',
-    has_audit: 'inv.has_audit = ?'
+    branch_code: 'branch_code = ?',
+    costcenter_code: 'costcenter_code = ?',
+    status_inventory: 'status_inventory = ?',
+    has_audit: 'has_audit = ?'
 };
 
 function buildInventoryFilters(filters = {}) {
@@ -16,8 +16,8 @@ function buildInventoryFilters(filters = {}) {
         }
     }
 
-    if (filters.date_start) { conditions.push('DATE(inv.created_at) >= ?'); params.push(filters.date_start); }
-    if (filters.date_end) { conditions.push('DATE(inv.created_at) <= ?'); params.push(filters.date_end); }
+    if (filters.date_start) { conditions.push('DATE(created_at) >= ?'); params.push(filters.date_start); }
+    if (filters.date_end) { conditions.push('DATE(created_at) <= ?'); params.push(filters.date_end); }
 
     return { where: conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '', params };
 }
@@ -27,26 +27,25 @@ function sqlListInventory(filters = {}) {
     const limit = Number(filters.limit) || 20;
     const page = Number(filters.page) || 1;
     const offset = (page - 1) * limit;
-    const sql = `SELECT inv.*, c.quantity_for_month FROM global.mg_inventories as inv
-                JOIN global.mg_inventory_configs as c ON (inv.id_inventory_config = c.id_inventory_config)
+    const sql = `SELECT * FROM global.mg_inventories
                 ${where}
                 ORDER BY status_inventory LIMIT ? OFFSET ?
     `
     return { sql, params: [...params, limit, offset] };
 }
 
-function sqlGetConfigs(id) {
-    return `SELECT quantity_for_month, branch_code, costcenter_code FROM global.mg_inventory_configs WHERE id_inventory_config = ${id}`
+function sqlGetConfigs(branch, costcenter) {
+    return `SELECT quantity_for_month, branch_code, costcenter_code FROM global.mg_inventory_configs WHERE branch_code = '${branch}' AND costcenter_code = '${costcenter}'`
 }
 
-function sqlGetNumberReleasesForMonth(month, id) {
-    return `SELECT COUNT(*) AS quantity FROM global.mg_inventories WHERE created_at like '%${month}%' AND id_inventory_config = ${id} AND status_inventory != 2`
+function sqlGetNumberReleasesForMonth(month, branch, costcenter) {
+    return `SELECT COUNT(*) AS quantity FROM global.mg_inventories WHERE created_at like '%${month}%' AND branch_code = '${branch}' AND costcenter_code = '${costcenter}' AND status_inventory != 2`
 }
 
 function sqlInsertInventory() {
     return `INSERT INTO global.mg_inventories (
                 id_user_fk,
-                id_inventory_config,
+                expected_quantity,
                 costcenter_code,
                 branch_code,
                 status_inventory,
@@ -58,7 +57,7 @@ function sqlInsertInventory() {
 function buildInsertInventory(data) {
     return [
         data.id_user_fk ?? null,
-        data.id_inventory_config ?? null,
+        data.expected_quantity ?? null,
         data.costcenter_code ?? null,
         data.branch_code ?? null,
         data.status_inventory ?? null,
@@ -70,7 +69,7 @@ function buildInsertInventory(data) {
 function sqlUpdateInventory() {
     return `UPDATE global.mg_inventories SET     
                 id_user_fk = ?,
-                id_inventory_config = ?,
+                expected_quantity = ?,
                 costcenter_code = ?,
                 branch_code = ?,
                 quantity_performed = ?,
@@ -82,7 +81,7 @@ function sqlUpdateInventory() {
 function buildUpdateInventory(data, id) {
     return [
         data.id_user_fk ?? null,
-        data.id_inventory_config ?? null,
+        data.expected_quantity ?? null,
         data.costcenter_code ?? null,
         data.branch_code ?? null,
         data.quantity_performed ?? null,

@@ -31,8 +31,8 @@ class MysqlInventoryRepository {
         return { items: rows, total: total, page: Number(filter.page) || 1, limit: Number(filter.limit) || 20 };
     }
 
-    async getConfigs(id) {
-        const [rows] = await this._query(sqlGetConfigs(id));
+    async getConfigs(branch_code, costcenter_code) {
+        const [rows] = await this._query(sqlGetConfigs(branch_code, costcenter_code));
         return rows[0]
     }
 
@@ -41,8 +41,8 @@ class MysqlInventoryRepository {
         return rows[0].status_inventory
     }
 
-    async getNumberReleasesForMonth(date, id) {
-        const [rows] = await this._query(sqlGetNumberReleasesForMonth(date, id))
+    async getNumberReleasesForMonth(date, branch_code, costcenter_code) {
+        const [rows] = await this._query(sqlGetNumberReleasesForMonth(date, branch_code, costcenter_code))
         return rows[0].quantity
     }
 

@@ -30,10 +30,10 @@ function sqlListInventoryConfigs(filters = {}) {
     return { sql: sql, params: params }
 }
 function sqlListInventoryConfigsPendings() {
-    const currentDate = new Date();
-    const initialDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    const finalDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-    const formatDate = (date) => date.toISOString().split("T")[0];
+    // const currentDate = new Date();
+    // const initialDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    // const finalDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+    // const formatDate = (date) => date.toISOString().split("T")[0];
 
     return `
         SELECT
@@ -41,13 +41,15 @@ function sqlListInventoryConfigsPendings() {
             mg.costcenter_code,
             mg.branch_code,
             mg.quantity_for_month
-        FROM global.mg_inventory_configs AS mg 
-            WHERE id_inventory_config NOT IN (
-                SELECT id_inventory_config 
-                    FROM global.mg_inventories inv
-                WHERE inv.id_inventory_config IS NOT NULL
-                    AND inv.created_at >= '${formatDate(initialDate)}'
-                    AND inv.created_at < '${formatDate(finalDate)}');
+        FROM global.mg_inventory_configs AS mg
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM global.mg_inventories AS inv
+            WHERE inv.branch_code = mg.branch_code
+            AND inv.costcenter_code = mg.costcenter_code
+            AND inv.created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+            AND inv.created_at < DATE_FORMAT( CURDATE() + INTERVAL 1 MONTH, '%Y-%m-01')
+);
     `;
 }
 
