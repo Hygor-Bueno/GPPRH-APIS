@@ -55,6 +55,7 @@ const gappInfractionsController = require('./controllers/gapp-infractions.contro
 const gappMovimentationController = require('./controllers/gapp-movimentation.controller');
 const gappStoreController = require('./controllers/gapp-store.controller');
 const gappSettingsController = require('./controllers/gapp-settings.controller');
+const gappOperatorController = require('./controllers/gapp-operator.controller');
 const mgppAwardsController = require('./controllers/mgpp-awards.controller');
 const mgppPercentageController = require('./controllers/mgpp-percentage.controller');
 const mgppInventoryConfigsController = require('./controllers/mgpp-inventory-configs.controller');
@@ -102,7 +103,9 @@ const {
     validateExpenseTypePayload,
     createStoreSchema, updateStoreSchema, listStoreQuerySchema,
     createNfSchema,
-    updateNfSchema
+    updateNfSchema,
+    createOperatorSchema,
+    updateOperatorSchema
 } = require('../../schemas/gapp.schema');
 const {
     postTaskSchema, putTaskStateSchema, putTaskTitleSchema, putTaskDescriptionSchema, putTaskThemeSchema,
@@ -2560,6 +2563,23 @@ router.put('/gapp/settings/subdepartament/:id',
     asyncHandler(gappSettingsController.updateSubdepartament)
 );
 
+router.get('/gapp/operator',
+    authMiddleware,
+    canAll(['GAPP_VIEW_OPERATOR']),
+    asyncHandler(gappOperatorController.listOperators)
+)
+router.post('/gapp/operator',
+    authMiddleware,
+    canAll(['GAPP_CREATE_OPERATOR']),
+    validate(createOperatorSchema),
+    asyncHandler(gappOperatorController.createOperator)
+)
+router.put('/gapp/operator/:id',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_OPERATOR']),
+    validate([updateOperatorSchema]),
+    asyncHandler(gappOperatorController.updateOperator)
+)
 
 // ─── MGPP ─ Rotas do modulo metas gerentes ─────────────────
 

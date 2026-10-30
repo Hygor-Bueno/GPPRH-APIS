@@ -8,7 +8,7 @@
  */
 
 function sqlSaveActive() {
-    const placeholders = Array(37).fill('?').join(', ');
+    const placeholders = Array(38).fill('?').join(', ');
     return `CALL sp_gapp_save_active_v2(${placeholders}, @p_active_id_out, @p_id_insurance_out)`;
 }
 
@@ -37,7 +37,7 @@ function buildSaveActiveParams(data) {
         data.change_date ?? null,
         data.list_items != null ? JSON.stringify(data.list_items) : null,
         data.used_in ?? null,
-        data.is_vehicle ?? null,
+        data.is_vehicle ?? null, // mantido por compatibilidade; a procedure decide o tipo pela classificação
         data.status_active ?? null,
         data.units_id_fk ?? null,
         data.id_active_class_fk ?? null,
@@ -68,8 +68,20 @@ function buildSaveActiveParams(data) {
         // ===== SEGURO (opcional) =====
         // Objeto vazio ({}) conta como "sem seguro" — senão a procedure
         // recebe um JSON não-nulo e tenta gravar todos os campos como NULL.
-        data.insurance && Object.keys(data.insurance).length > 0 ? JSON.stringify(data.insurance) : null
+        isNonEmptyObject(data.insurance) ? JSON.stringify(data.insurance) : null,
+
+        // ===== SMARTPHONE (opcional) =====
+        // Mesma regra do seguro: objeto vazio ({}) vira NULL, o que faz a
+        // procedure não mexer em gapp_smartphone.
+        isNonEmptyObject(data.smartphone) ? JSON.stringify(data.smartphone) : null
     ];
+}
+
+function isNonEmptyObject(value) {
+    return value != null
+        && typeof value === 'object'
+        && !Array.isArray(value)
+        && Object.keys(value).length > 0;
 }
 
 // ─── Consulta (GET) ─────────────────────────────────────────────────

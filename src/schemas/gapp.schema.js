@@ -94,6 +94,42 @@ const updateInsuranceSchema = {
     id_insurance: { type: 'number', required: true }
 };
 
+// ─── Smartphone (standalone) ────────────────────────────────────────────
+const smartphoneCommonSchema = {
+    imei_1:            { type: 'string', maxLength: 15, required: true },
+    imei_2:            { type: 'string', maxLength: 15 },
+    payment_method:    { type: 'string' },
+    observations:      { type: 'string' },
+    sim_biding_id_fk:  { type: 'number', required: true },
+}
+
+const createSmartphoneSchema = {
+    ...smartphoneCommonSchema,
+    active_id_fk: { type: 'number', required: true }
+}
+
+const updateSmartphoneSchema = {
+    ...smartphoneCommonSchema,
+    smart_id_fk: { type: 'number', required: true }
+}
+
+// ─── SIM (standalone) ──────────────────────────────────────────────────
+
+const simCommonSchema = {
+    number:            { type: 'string', maxLength: 14, required: true },
+    serial_number:     { type: 'string', maxLength: 45 },
+    operator_id_fk:    { type: 'number', required: true },
+}
+
+const createSimSchema = {
+    ...simCommonSchema,
+    active_id_fk:      { type: 'number', required: true }
+}
+
+const updateSimSchema = {
+    ...simCommonSchema,
+    sim_id:            { type: 'number', required: true }
+}
 // ─── Consulta (GET) ─────────────────────────────────────────────────
 
 const listActiveQuerySchema = {
@@ -327,6 +363,25 @@ const finesSchema = {
     infraction_id_fk:       { type: 'number' },
 }
 
+const createSimBidingSchema = {
+    sim_1_id_fk:    { type: 'number' },
+    sim_2_id_fk:    { type: 'number' },
+}
+
+const updateSimBidingSchema = {
+    ...createSimBidingSchema,
+    sim_biding_id:  { type: 'number', required: true}
+}
+
+const createOperatorSchema = {
+    name:   { type: 'string'}
+}
+
+const updateOperatorSchema = {
+    ...createOperatorSchema,
+    operator_id: { type: 'number', required: true}
+}
+
 module.exports = {
     createActiveSchema,
     updateActiveSchema,
@@ -350,5 +405,13 @@ module.exports = {
     updateNfSchema,
     maintenanceSchema,
     fuelSchema,
-    finesSchema
+    finesSchema,
+    createSmartphoneSchema,
+    updateSmartphoneSchema,
+    createSimBidingSchema,
+    updateSimBidingSchema,
+    createOperatorSchema,
+    updateOperatorSchema,
+    createSimSchema,
+    updateSimSchema
 };
