@@ -56,6 +56,7 @@ const gappMovimentationController = require('./controllers/gapp-movimentation.co
 const gappStoreController = require('./controllers/gapp-store.controller');
 const gappSettingsController = require('./controllers/gapp-settings.controller');
 const gappOperatorController = require('./controllers/gapp-operator.controller');
+const gappMaintenanceProcessController = require('./controllers/gapp-maintenance-process.controller');
 const mgppAwardsController = require('./controllers/mgpp-awards.controller');
 const mgppPercentageController = require('./controllers/mgpp-percentage.controller');
 const mgppInventoryConfigsController = require('./controllers/mgpp-inventory-configs.controller');
@@ -2563,6 +2564,8 @@ router.put('/gapp/settings/subdepartament/:id',
     asyncHandler(gappSettingsController.updateSubdepartament)
 );
 
+
+
 router.get('/gapp/operator',
     authMiddleware,
     canAll(['GAPP_VIEW_OPERATOR']),
@@ -2579,6 +2582,40 @@ router.put('/gapp/operator/:id',
     canAll(['GAPP_UPDATE_OPERATOR']),
     validate([updateOperatorSchema]),
     asyncHandler(gappOperatorController.updateOperator)
+)
+
+router.get('/gapp/maintenance-process',
+    authMiddleware,
+    canAll(['GAPP_VIEW_MAINTENANCE_PROCESS']),
+    asyncHandler(gappMaintenanceProcessController.listMaintenanceProcess)
+)
+
+router.get('/gapp/maintenance-process/:id',
+    authMiddleware,
+    canAll(['GAPP_VIEW_MAINTENANCE_PROCESS']),
+    asyncHandler(gappMaintenanceProcessController.listMaintenanceProcessById)
+)
+router.post('/gapp/maintenance-process',
+    authMiddleware,
+    canAll(['GAPP_VIEW_MAINTENANCE_PROCESS']),
+    asyncHandler(gappMaintenanceProcessController.createMaitenanceProcess)
+)
+
+router.put('/gapp/maintenance-process/:id',
+    authMiddleware,
+    canAll(['GAPP_VIEW_MAINTENANCE_PROCESS']),
+    asyncHandler(gappMaintenanceProcessController.updateMaitenanceProcess)
+)
+
+router.post('/gapp/maintenance-process-logs',
+    authMiddleware,
+    canAll(['GAPP_VIEW_MAINTENANCE_PROCESS']),
+    asyncHandler(gappMaintenanceProcessController.createMaitenanceProcessLogs)
+)
+router.put('/gapp/maintenance-process-logs/:id',
+    authMiddleware,
+    canAll(['GAPP_VIEW_MAINTENANCE_PROCESS']),
+    asyncHandler(gappMaintenanceProcessController.updateMaitenanceProcessLogs)
 )
 
 // ─── MGPP ─ Rotas do modulo metas gerentes ─────────────────
