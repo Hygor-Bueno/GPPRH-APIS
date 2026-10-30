@@ -8,7 +8,7 @@
  */
 
 function sqlSaveActive() {
-    const placeholders = Array(38).fill('?').join(', ');
+    const placeholders = Array(39).fill('?').join(', ');
     return `CALL sp_gapp_save_active_v2(${placeholders}, @p_active_id_out, @p_id_insurance_out)`;
 }
 
@@ -73,7 +73,12 @@ function buildSaveActiveParams(data) {
         // ===== SMARTPHONE (opcional) =====
         // Mesma regra do seguro: objeto vazio ({}) vira NULL, o que faz a
         // procedure não mexer em gapp_smartphone.
-        isNonEmptyObject(data.smartphone) ? JSON.stringify(data.smartphone) : null
+        isNonEmptyObject(data.smartphone) ? JSON.stringify(data.smartphone) : null,
+
+        // ===== SIM (opcional) =====
+        // Mesma regra do seguro: objeto vazio ({}) vira NULL, o que faz a
+        // procedure não mexer em gapp_sim.
+        isNonEmptyObject(data.sim) ? JSON.stringify(data.smartphone) : null,
     ];
 }
 
@@ -174,6 +179,15 @@ function sqlGetVehicleByActiveId() {
     return 'SELECT * FROM global.gapp_vehicle WHERE active_id_fk = ?';
 }
 
+function sqlGetSmartphoneById() {
+    return 'SELECT * FROM global.gapp_smartphone WHERE active_id_fk = ?'
+}
+
+
+function sqlGetSimById() {
+    return 'SELECT * FROM global.gapp_sim WHERE active_id_fk = ?'
+}
+
 /**
  * Retorna o `is_vehicle` atual do ativo, restrito ao work_group_fk do
  * usuário — usado no PUT quando o cliente não reenvia esse campo, pra não
@@ -187,5 +201,5 @@ module.exports = {
     sqlSaveActive, sqlSelectActiveIdOut, buildSaveActiveParams,
     sqlListActive, sqlCountActive, sqlGetActiveById,
     sqlGetVehicleByActiveId,
-    sqlGetIsVehicleByActiveId
+    sqlGetIsVehicleByActiveId, sqlGetSmartphoneById, sqlGetSimById
 };

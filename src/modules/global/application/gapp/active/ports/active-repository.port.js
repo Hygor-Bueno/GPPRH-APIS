@@ -27,6 +27,12 @@ class ActiveRepositoryPort {
 
     /** @param {number} activeId */
     findVehicleByActiveId(activeId) { throw new Error('Not implemented'); }
+
+    /** @param {number} activeId */
+    findSmartphoneByActiveId(activeId) { throw new Error('Not implemented'); }
+    
+    /** @param {number} activeId */
+    findSimByActiveId(activeId) { throw new Error('Not implemented'); }
 }
 
 module.exports = { ActiveRepositoryPort };
