@@ -2564,8 +2564,6 @@ router.put('/gapp/settings/subdepartament/:id',
     asyncHandler(gappSettingsController.updateSubdepartament)
 );
 
-
-
 router.get('/gapp/operator',
     authMiddleware,
     canAll(['GAPP_VIEW_OPERATOR']),
@@ -2889,6 +2887,9 @@ router.get('/gapp/damage-type', authMiddleware, asyncHandler(gappLookupControlle
  * @access Autenticado
  */
 router.get('/gapp/infractions', authMiddleware, asyncHandler(gappLookupController.listInfractions));
+
+
+router.get('/gapp/numbers', authMiddleware, asyncHandler(gappLookupController.listNumbers));
 
 /**
  * Suite miepp — Mídia Interna e Externa Peg Pese.

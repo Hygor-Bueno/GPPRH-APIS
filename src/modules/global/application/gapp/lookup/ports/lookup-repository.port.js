@@ -21,6 +21,7 @@ class LookupRepositoryPort {
     listSubDepartments() { throw new Error('Not implemented'); }
     listDamageType() { throw new Error('Not implemented'); }
     listInfractions() { throw new Error('Not implemented'); }
+    listNumbers() { throw new Error('Not implemented'); }
 }
 
 module.exports = { LookupRepositoryPort };

@@ -28,6 +28,7 @@ class GappLookupUseCases {
     listSubDepartments() { return this.repository.listSubDepartments(); }
     listDamageType() { return this.repository.listDamageType(); }
     listInfractions() { return this.repository.listInfractions(); }
+    listNumbers() { return this.repository.listNumbers(); }
 }
 
 module.exports = { GappLookupUseCases };

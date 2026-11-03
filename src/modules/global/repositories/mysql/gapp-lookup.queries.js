@@ -95,10 +95,18 @@ function sqlListInfractions() {
     return 'SELECT * FROM global.gapp_infractions ORDER BY infraction';
 }
 
+function sqlListNumbers() {
+    return `    
+    SELECT sim.* FROM global.gapp_sim sim 
+	    LEFT JOIN global.gapp_sim_biding sim_b 
+		    ON (sim.sim_id = sim_b.sim_1_id_fk) 
+        where sim_1_id_fk is null AND sim_2_id_fk is null`;
+}
+
 module.exports = {
     sqlListUnits, sqlListActiveClass, sqlListWorkGroup,
     sqlListDriver, sqlListFuelType, sqlListUser,
     sqlListInsuranceCompany, sqlListTypeCoverage, sqlListUtilization,
     sqlListDepartments, sqlListSubDepartments, sqlListDamageType,
-    sqlListInfractions, sqlListActiveType, sqlListCompany
+    sqlListInfractions, sqlListActiveType, sqlListCompany, sqlListNumbers
 };

@@ -12,7 +12,8 @@ const {
     sqlListDriver, sqlListFuelType, sqlListUser,
     sqlListInsuranceCompany, sqlListTypeCoverage, sqlListUtilization,
     sqlListDepartments, sqlListSubDepartments, sqlListDamageType, sqlListInfractions,
-    sqlListActiveType, sqlListCompany
+    sqlListActiveType, sqlListCompany,
+    sqlListNumbers
 } = require('../../repositories/mysql/gapp-lookup.queries');
 
 class MysqlLookupRepository extends LookupRepositoryPort {
@@ -44,6 +45,7 @@ class MysqlLookupRepository extends LookupRepositoryPort {
     listSubDepartments() { return this._query(sqlListSubDepartments()); }
     listDamageType() { return this._query(sqlListDamageType()); }
     listInfractions() { return this._query(sqlListInfractions()); }
+    listNumbers() { return this._query(sqlListNumbers()); }
 }
 
 module.exports = { MysqlLookupRepository };

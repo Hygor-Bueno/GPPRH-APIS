@@ -61,9 +61,13 @@ async function listDamageType(req, res) {
 async function listInfractions(req, res) {
   return respond.ok(res, await useCases.listInfractions());
 }
+async function listNumbers(req, res) {
+  return respond.ok(res, await useCases.listNumbers());
+}
 
 module.exports = {
   listUnits, listActiveClass, listWorkGroup, listDriver, listFuelType, listUser,
   listInsuranceCompany, listTypeCoverage, listUtilization, listDepartments,
-  listSubDepartments, listDamageType, listInfractions, listActiveType, listCompany
+  listSubDepartments, listDamageType, listInfractions, listActiveType, listCompany,
+  listNumbers
 };

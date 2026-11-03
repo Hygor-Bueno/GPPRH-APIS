@@ -16,10 +16,6 @@ function sqlSelectActiveIdOut() {
     return 'SELECT @p_active_id_out AS id, @p_id_insurance_out AS insurance_id';
 }
 
-/**
- * Monta, na ordem exata da procedure, os 36 parâmetros de entrada
- * (35 de ativo/veículo + 1 JSON de seguro opcional).
- */
 function buildSaveActiveParams(data) {
     const vehicle = data.vehicle || {};
 
@@ -78,7 +74,7 @@ function buildSaveActiveParams(data) {
         // ===== SIM (opcional) =====
         // Mesma regra do seguro: objeto vazio ({}) vira NULL, o que faz a
         // procedure não mexer em gapp_sim.
-        isNonEmptyObject(data.sim) ? JSON.stringify(data.smartphone) : null,
+        isNonEmptyObject(data.sim) ? JSON.stringify(data.sim) : null,
     ];
 }
 
