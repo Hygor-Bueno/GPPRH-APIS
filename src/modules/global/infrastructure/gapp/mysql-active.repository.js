@@ -16,6 +16,7 @@ const {
     sqlGetVehicleByActiveId, sqlGetIsVehicleByActiveId,
     sqlGetSmartphoneById,
     sqlGetSimById,
+    sqlGetNumbersyId,
 } = require('../../repositories/mysql/gapp-active.queries');
 
 class MysqlActiveRepository extends ActiveRepositoryPort {
@@ -79,6 +80,10 @@ class MysqlActiveRepository extends ActiveRepositoryPort {
     async findSimByActiveId(activeId) {
         const [rows] = await this._query(sqlGetSimById(), [activeId]);
         return rows[0] ?? null;
+    }
+    async findNumbersById(id) {
+        const [rows] = await this._query(sqlGetNumbersyId(), [id]);
+        return rows ?? null;
     }
 }
 

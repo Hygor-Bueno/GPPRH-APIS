@@ -94,7 +94,8 @@ class GappActiveUseCases {
 
         if (active.id_active_class_fk === 18) {
             const smartphone = await this.repository.findSmartphoneByActiveId(id)
-            active.smartphone = smartphone
+            const numbers = smartphone.sim_biding_id_fk ? await this.repository.findNumbersById(smartphone.sim_biding_id_fk) : null;
+            active.smartphone = { ...smartphone, numbers: numbers }
         }
 
         if (active.id_active_class_fk === 19) {

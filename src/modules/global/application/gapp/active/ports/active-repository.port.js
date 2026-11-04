@@ -31,6 +31,9 @@ class ActiveRepositoryPort {
     /** @param {number} activeId */
     findSmartphoneByActiveId(activeId) { throw new Error('Not implemented'); }
     
+    /** @param {number} bidingId */
+    findNumbersById(bidingId) { throw new Error('Not implemented'); }
+    
     /** @param {number} activeId */
     findSimByActiveId(activeId) { throw new Error('Not implemented'); }
 }

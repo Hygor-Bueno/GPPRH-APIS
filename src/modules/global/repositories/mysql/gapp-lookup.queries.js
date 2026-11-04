@@ -97,11 +97,20 @@ function sqlListInfractions() {
 
 function sqlListNumbers() {
     return `    
-    SELECT sim.* FROM global.gapp_sim sim 
-	    LEFT JOIN global.gapp_sim_biding sim_b 
-		    ON (sim.sim_id = sim_b.sim_1_id_fk) 
-        where sim_1_id_fk is null AND sim_2_id_fk is null`;
-}
+            SELECT 
+                sim.*
+            FROM global.gapp_sim sim
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM global.gapp_smartphone smart
+                        JOIN global.gapp_sim_biding sim_b 
+                            ON (smart.sim_biding_id_fk = sim_b.sim_biding_id)
+                        WHERE sim.sim_id IN (
+                            sim_b.sim_1_id_fk,
+                            sim_b.sim_2_id_fk
+                        )
+                )`;
+            }
 
 module.exports = {
     sqlListUnits, sqlListActiveClass, sqlListWorkGroup,

@@ -183,6 +183,26 @@ function sqlGetSmartphoneById() {
 function sqlGetSimById() {
     return 'SELECT * FROM global.gapp_sim WHERE active_id_fk = ?'
 }
+function sqlGetNumbersyId() {
+    return `
+    SELECT 
+        sim.sim_id,
+        sim.*
+    FROM global.gapp_sim_biding b_sim
+    LEFT JOIN global.gapp_sim sim
+        ON sim.sim_id = b_sim.sim_1_id_fk
+    WHERE b_sim.sim_biding_id = 382
+
+    UNION ALL
+
+    SELECT 
+        sim.sim_id,
+        sim.*
+    FROM global.gapp_sim_biding b_sim
+    LEFT JOIN global.gapp_sim sim
+        ON sim.sim_id = b_sim.sim_2_id_fk
+    WHERE b_sim.sim_biding_id = ?;`
+}
 
 /**
  * Retorna o `is_vehicle` atual do ativo, restrito ao work_group_fk do
@@ -196,6 +216,6 @@ function sqlGetIsVehicleByActiveId() {
 module.exports = {
     sqlSaveActive, sqlSelectActiveIdOut, buildSaveActiveParams,
     sqlListActive, sqlCountActive, sqlGetActiveById,
-    sqlGetVehicleByActiveId,
+    sqlGetVehicleByActiveId, sqlGetNumbersyId,
     sqlGetIsVehicleByActiveId, sqlGetSmartphoneById, sqlGetSimById
 };
