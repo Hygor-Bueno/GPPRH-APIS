@@ -1,4 +1,12 @@
-const SQL_VIEW_MAITENANCE = `SELECT * FROM global.gapp_maintenance_process`;
+const SQL_VIEW_MAITENANCE = `SELECT 
+                                p.maint_process_id, 
+                                p.active_id_fk,
+                                a.brand,
+                                a.model,
+                                p.status_process
+                            FROM global.gapp_maintenance_process p
+                                JOIN global.gapp_active a 
+                                    ON (p.active_id_fk = a.active_id)`;
 
 const SQL_VIEW_MAITENANCE_LOGS_BY_ID = `SELECT * FROM global.gapp_maintenance_process_logs WHERE maint_process_id_fk = ?`;
 

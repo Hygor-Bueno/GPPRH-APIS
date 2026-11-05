@@ -1,7 +1,7 @@
 const { poolGlobal } = require("../../../../config/mysql");
 const { AppError } = require("../../../../errors/app.error");
 const { MaintenanceProcessRepositoryPorts } = require("../../application/gapp/maintenance-process/ports/maitenance-process.repository-ports");
-const { SQL_VIEW_MAITENANCE, SQL_VIEW_MAITENANCE_BY_ID, SQL_CREATE_MAITENANCE, SQL_CREATE_MAITENANCE_LOGS, SQL_UPDATE_MAITENANCE, SQL_UPDATE_MAITENANCE_LOGS, SQL_VIEW_MAITENANCE_LOGS_BY_ID } = require("../../repositories/mysql/gapp-maitenance-process.queries");
+const { SQL_VIEW_MAITENANCE, SQL_CREATE_MAITENANCE, SQL_CREATE_MAITENANCE_LOGS, SQL_UPDATE_MAITENANCE, SQL_UPDATE_MAITENANCE_LOGS, SQL_VIEW_MAITENANCE_LOGS_BY_ID } = require("../../repositories/mysql/gapp-maitenance-process.queries");
 
 class MysqlMaintenanceProcessReposiroty extends MaintenanceProcessRepositoryPorts {
     /** @private */
@@ -39,7 +39,7 @@ class MysqlMaintenanceProcessReposiroty extends MaintenanceProcessRepositoryPort
     }
 
     async createMaitenanceProcessLogs(payload) {
-        const [result] = await this._query(SQL_CREATE_MAITENANCE_LOGS, [payload.maint_process_id, payload.date, payload.description]);
+        const [result] = await this._query(SQL_CREATE_MAITENANCE_LOGS, [payload.maint_process_id_fk, payload.date, payload.description]);
         return { maint_process_logs_id: result.insertId };
     }
 

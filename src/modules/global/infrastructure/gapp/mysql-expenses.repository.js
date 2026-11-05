@@ -194,7 +194,6 @@ class MysqlExpensesRepository extends ExpensesRepositoryPort {
         };
 
         try {
-            console.log(insurancePayload);
             await conn.execute(sqlSaveInsurance(), buildSaveInsuranceParams(insurancePayload));
         } catch (error) {
             // SQLSTATE 45000 = erro de negócio sinalizado pela procedure → 400.

@@ -327,15 +327,16 @@ const updateNfSchema = {
 }
 
 const maintenanceSchema = {
-    technician:     { type: 'string' },
-    service_value:  { type: 'number' },
-    value_parts:    { type: 'number' },
-    km_day:         { type: 'number' },
-    km_next:        { type: 'number' },
-    date_next:      { type: 'string' },
-    warranty:       { type: 'number' },
-    validity:       { type: 'string' },
-    expen_id_fk:    { type: 'number' },
+    technician:             { type: 'string' },
+    service_value:          { type: 'number' },
+    value_parts:            { type: 'number' },
+    km_day:                 { type: 'number' },
+    km_next:                { type: 'number' },
+    date_next:              { type: 'string' },
+    warranty:               { type: 'number' },
+    validity:               { type: 'string' },
+    expen_id_fk:            { type: 'number' },
+    maint_process_id_fk:    { type: 'number' },
 }
 
 const fuelSchema = {

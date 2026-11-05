@@ -379,7 +379,7 @@ function buildExpenseFilters(filters = {}) {
     if (filters.date_start) { conditions.push('reg.date >= ?'); params.push(filters.date_start); }
     if (filters.date_end) { conditions.push('reg.date <= ?'); params.push(filters.date_end); }
 
-    return { where: `WHERE status_expen = 1 AND ${conditions.join(' AND ')}`, params };
+    return { where: `WHERE status_expen != 0 AND ${conditions.join(' AND ')}`, params };
 }
 
 function sqlListExpenses(filters = {}) {

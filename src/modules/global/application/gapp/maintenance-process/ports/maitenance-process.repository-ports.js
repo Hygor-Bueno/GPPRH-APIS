@@ -5,7 +5,7 @@ class MaintenanceProcessRepositoryPorts {
     listMaintenanceProcessById(id) { throw new Error('Not implemented'); }
 
     /** @param {object} payload */
-    createMaitenanceProcess(payload) { throw new Error('Not implemented'); }
+    createMaitenanceProcess(payload, user) { throw new Error('Not implemented'); }
 
     /** @param {object} payload */
     createMaitenanceProcessLogs(payload) { throw new Error('Not implemented'); }
