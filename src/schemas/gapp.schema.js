@@ -383,6 +383,35 @@ const updateOperatorSchema = {
     operator_id: { type: 'number', required: true}
 }
 
+// ─── Termos de ativo ────────────────────────────────────────────────
+
+// `created_by`, `file_id_fk` e `file_name` NÃO fazem parte destes schemas:
+// saem do usuário autenticado e do upload (FileService). O arquivo vem no
+// campo multipart `file` e é exigido pelo use-case no cadastro.
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+const assetTermFieldsSchema = {
+    reponsible_name: { type: 'string', maxLength: 100 },
+    active_id_fk:    { type: 'number', min: 1 },
+};
+
+const createAssetTermSchema = {
+    reponsible_name: { ...assetTermFieldsSchema.reponsible_name, required: true },
+    active_id_fk:    { ...assetTermFieldsSchema.active_id_fk, required: true },
+};
+
+const updateAssetTermSchema = { ...assetTermFieldsSchema };
+
+const listAssetTermQuerySchema = {
+    asset_term_id:   { type: 'number' },
+    reponsible_name: { type: 'string', maxLength: 100 },
+    active_id_fk:    { type: 'number' },
+    date_start:      { type: 'string', pattern: DATE_PATTERN },
+    date_end:        { type: 'string', pattern: DATE_PATTERN },
+    page:            { type: 'number', min: 1 },
+    limit:           { type: 'number', min: 1, max: 100 },
+};
+
 module.exports = {
     createActiveSchema,
     updateActiveSchema,
@@ -414,5 +443,8 @@ module.exports = {
     createOperatorSchema,
     updateOperatorSchema,
     createSimSchema,
-    updateSimSchema
+    updateSimSchema,
+    createAssetTermSchema,
+    updateAssetTermSchema,
+    listAssetTermQuerySchema
 };

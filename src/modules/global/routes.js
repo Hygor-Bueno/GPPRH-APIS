@@ -57,6 +57,7 @@ const gappStoreController = require('./controllers/gapp-store.controller');
 const gappSettingsController = require('./controllers/gapp-settings.controller');
 const gappOperatorController = require('./controllers/gapp-operator.controller');
 const gappMaintenanceProcessController = require('./controllers/gapp-maintenance-process.controller');
+const gappAssetTermController = require('./controllers/gapp-asset-term.controller');
 const mgppAwardsController = require('./controllers/mgpp-awards.controller');
 const mgppPercentageController = require('./controllers/mgpp-percentage.controller');
 const mgppInventoryConfigsController = require('./controllers/mgpp-inventory-configs.controller');
@@ -106,7 +107,10 @@ const {
     createNfSchema,
     updateNfSchema,
     createOperatorSchema,
-    updateOperatorSchema
+    updateOperatorSchema,
+    createAssetTermSchema,
+    updateAssetTermSchema,
+    listAssetTermQuerySchema
 } = require('../../schemas/gapp.schema');
 const {
     postTaskSchema, putTaskStateSchema, putTaskTitleSchema, putTaskDescriptionSchema, putTaskThemeSchema,
@@ -2615,6 +2619,69 @@ router.put('/gapp/maintenance-process-logs/:id',
     canAll(['GAPP_VIEW_MAINTENANCE_PROCESS']),
     asyncHandler(gappMaintenanceProcessController.updateMaitenanceProcessLogs)
 )
+
+// ─── GAPP — Termos de ativo ───────────────────────────────────────────────────
+// O arquivo do termo passa pelo FileService (módulo GAPP em `_files`) e é
+// servido pela rota genérica `GET /global/files/:fileId` com o `file_id_fk`.
+
+/**
+ * @route GET /gapp/asset-term
+ * @description Lista/filtra termos de ativo, com paginação.
+ * Filtros: asset_term_id, reponsible_name (parcial), active_id_fk,
+ * date_start/date_end (AAAA-MM-DD, sobre created_at), page, limit.
+ * @access Requer `GAPP_VIEW_ASSET_TERM`
+ */
+router.get('/gapp/asset-term',
+    authMiddleware,
+    canAll(['GAPP_VIEW_ASSET_TERM']),
+    validate(listAssetTermQuerySchema, 'query'),
+    asyncHandler(gappAssetTermController.listAssetTerms));
+
+/**
+ * @route GET /gapp/asset-term/:id
+ * @description Retorna um termo pelo asset_term_id.
+ * @access Requer `GAPP_VIEW_ASSET_TERM`
+ */
+router.get('/gapp/asset-term/:id',
+    authMiddleware,
+    canAll(['GAPP_VIEW_ASSET_TERM']),
+    asyncHandler(gappAssetTermController.getAssetTermById));
+
+/**
+ * @route POST /gapp/asset-term
+ * @description Cria um termo (multipart/form-data). Campos: `file` (obrigatório),
+ * `reponsible_name`, `active_id_fk`.
+ * @access Requer `GAPP_CREATE_ASSET_TERM`
+ */
+router.post('/gapp/asset-term',
+    authMiddleware,
+    canAll(['GAPP_CREATE_ASSET_TERM']),
+    fileUpload.single('file'),
+    validate(createAssetTermSchema),
+    asyncHandler(gappAssetTermController.createAssetTerm));
+
+/**
+ * @route PUT /gapp/asset-term/:id
+ * @description Atualiza um termo (multipart/form-data). Todos os campos opcionais;
+ * enviar `file` substitui o arquivo e libera o anterior.
+ * @access Requer `GAPP_UPDATE_ASSET_TERM`
+ */
+router.put('/gapp/asset-term/:id',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_ASSET_TERM']),
+    fileUpload.single('file'),
+    validate(updateAssetTermSchema),
+    asyncHandler(gappAssetTermController.updateAssetTerm));
+
+/**
+ * @route DELETE /gapp/asset-term/:id
+ * @description Exclui o termo e libera o arquivo, se nenhum outro termo o usar.
+ * @access Requer `GAPP_DELETE_ASSET_TERM`
+ */
+router.delete('/gapp/asset-term/:id',
+    authMiddleware,
+    canAll(['GAPP_DELETE_ASSET_TERM']),
+    asyncHandler(gappAssetTermController.deleteAssetTerm));
 
 // ─── MGPP ─ Rotas do modulo metas gerentes ─────────────────
 
