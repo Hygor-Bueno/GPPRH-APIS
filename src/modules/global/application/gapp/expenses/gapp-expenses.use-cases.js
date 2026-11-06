@@ -85,25 +85,25 @@ class GappExpensesUseCases {
 
         if (detail && Number(expTypeId) === ExpenseType.MAINTENANCE) {
             await validateSchema(data.maintenance, maintenanceSchema);
-            
+
             const maintenanceData = data.maintenance
-            const totalWithDiscount = Number(data.total_value) - (Number(data.discount) ?? 0);
             const totalParts = maintenanceData.value_parts ?? 0;
             const serviceValue = maintenanceData.service_value ?? 0;
 
-            if ((totalWithDiscount - ((totalParts + serviceValue) - Number(data.discount))) !== 0) {
+            if ((Number(data.total_value) - (totalParts + serviceValue)) !== 0) {
                 throw new AppError('A somatoria total dos valores é divergente do valor total da despesa!', 400)
             }
 
             if (maintenanceData.validity && (!maintenanceData.warranty || maintenanceData.warranty === "0")) {
                 throw new AppError('O campo garantia deve esta ativo para passar um prazo!', 400)
             }
+            
             if (maintenanceData.warranty === "1" && !maintenanceData.validity) {
                 throw new AppError('O campo prazo e obrigatorio quando existe uma garantia!', 400)
             }
         }
 
-        if(detail && Number(expTypeId) === ExpenseType.FINE){
+        if (detail && Number(expTypeId) === ExpenseType.FINE) {
             await validateSchema(data.fine, finesSchema);
         }
 
