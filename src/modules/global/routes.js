@@ -58,6 +58,7 @@ const gappSettingsController = require('./controllers/gapp-settings.controller')
 const gappOperatorController = require('./controllers/gapp-operator.controller');
 const gappMaintenanceProcessController = require('./controllers/gapp-maintenance-process.controller');
 const gappAssetTermController = require('./controllers/gapp-asset-term.controller');
+const gappAssetTermTemplateController = require('./controllers/gapp-asset-term-template.controller');
 const mgppAwardsController = require('./controllers/mgpp-awards.controller');
 const mgppPercentageController = require('./controllers/mgpp-percentage.controller');
 const mgppInventoryConfigsController = require('./controllers/mgpp-inventory-configs.controller');
@@ -110,7 +111,10 @@ const {
     updateOperatorSchema,
     createAssetTermSchema,
     updateAssetTermSchema,
-    listAssetTermQuerySchema
+    listAssetTermQuerySchema,
+    createAssetTermTemplateSchema,
+    updateAssetTermTemplateSchema,
+    listAssetTermTemplateQuerySchema
 } = require('../../schemas/gapp.schema');
 const {
     postTaskSchema, putTaskStateSchema, putTaskTitleSchema, putTaskDescriptionSchema, putTaskThemeSchema,
@@ -2682,6 +2686,63 @@ router.delete('/gapp/asset-term/:id',
     authMiddleware,
     canAll(['GAPP_DELETE_ASSET_TERM']),
     asyncHandler(gappAssetTermController.deleteAssetTerm));
+
+// ─── GAPP — Moldes de termo de ativo ──────────────────────────────────────────
+// Texto do termo com campos dinâmicos (`@nome@`, `@imei@`...) por tipo de ativo.
+// Sem exclusão: molde fora de uso é inativado (status_template = 0).
+
+/**
+ * @route GET /gapp/asset-term-template/fields
+ * @description Tipos de ativo e catálogo de campos dinâmicos dos moldes.
+ * @access Requer `GAPP_VIEW_ASSET_TERM`
+ */
+router.get('/gapp/asset-term-template/fields',
+    authMiddleware,
+    canAll(['GAPP_VIEW_ASSET_TERM']),
+    asyncHandler(gappAssetTermTemplateController.getTemplateFields));
+
+/**
+ * @route GET /gapp/asset-term-template
+ * @description Lista os moldes (sem o conteúdo). Filtros: asset_type, status_template, name.
+ * @access Requer `GAPP_VIEW_ASSET_TERM`
+ */
+router.get('/gapp/asset-term-template',
+    authMiddleware,
+    canAll(['GAPP_VIEW_ASSET_TERM']),
+    validate(listAssetTermTemplateQuerySchema, 'query'),
+    asyncHandler(gappAssetTermTemplateController.listTemplates));
+
+/**
+ * @route GET /gapp/asset-term-template/:id
+ * @description Retorna um molde com o conteúdo.
+ * @access Requer `GAPP_VIEW_ASSET_TERM`
+ */
+router.get('/gapp/asset-term-template/:id',
+    authMiddleware,
+    canAll(['GAPP_VIEW_ASSET_TERM']),
+    asyncHandler(gappAssetTermTemplateController.getTemplateById));
+
+/**
+ * @route POST /gapp/asset-term-template
+ * @description Cria um molde. Body: { name, asset_type, content, status_template? }.
+ * @access Requer `GAPP_MANAGE_ASSET_TERM_TEMPLATE`
+ */
+router.post('/gapp/asset-term-template',
+    authMiddleware,
+    canAll(['GAPP_MANAGE_ASSET_TERM_TEMPLATE']),
+    validate(createAssetTermTemplateSchema),
+    asyncHandler(gappAssetTermTemplateController.createTemplate));
+
+/**
+ * @route PUT /gapp/asset-term-template/:id
+ * @description Edita um molde (campos opcionais) — inclusive ativar/inativar.
+ * @access Requer `GAPP_MANAGE_ASSET_TERM_TEMPLATE`
+ */
+router.put('/gapp/asset-term-template/:id',
+    authMiddleware,
+    canAll(['GAPP_MANAGE_ASSET_TERM_TEMPLATE']),
+    validate(updateAssetTermTemplateSchema),
+    asyncHandler(gappAssetTermTemplateController.updateTemplate));
 
 // ─── MGPP ─ Rotas do modulo metas gerentes ─────────────────
 

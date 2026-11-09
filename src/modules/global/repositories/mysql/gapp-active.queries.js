@@ -102,6 +102,42 @@ const ACTIVE_FILTER_CLAUSES = {
     license_plates: 'v.license_plates LIKE ?'
 };
 
+// Telefone sem máscara: "(11) 98888-7777" e "11988887777" acham a mesma linha
+const digitsOnly = column => `REPLACE(REPLACE(REPLACE(REPLACE(${column}, '(', ''), ')', ''), '-', ''), ' ', '')`;
+
+/*
+ * Filtros pelos complementos do ativo (smartphone e chip). Com EXISTS, e não
+ * JOIN, o ativo não se repete na lista nem quebra a contagem da paginação.
+ * `params` monta os valores de cada `?` da cláusula a partir do que veio na query.
+ */
+const DEVICE_FILTER_CLAUSES = {
+    // IMEI 1 ou 2 do smartphone
+    imei: {
+        clause: `EXISTS (SELECT 1 FROM global.gapp_smartphone sp
+                         WHERE sp.active_id_fk = a.active_id AND (sp.imei_1 LIKE ? OR sp.imei_2 LIKE ?))`,
+        params: value => [`%${value}%`, `%${value}%`],
+    },
+    // Linha: o próprio chip (ativo SIM) ou um dos chips vinculados ao smartphone
+    number: {
+        clause: `(EXISTS (SELECT 1 FROM global.gapp_sim sm
+                          WHERE sm.active_id_fk = a.active_id AND ${digitsOnly('sm.number')} LIKE ?)
+              OR EXISTS (SELECT 1 FROM global.gapp_smartphone sp
+                          JOIN global.gapp_sim_biding b ON b.sim_biding_id = sp.sim_biding_id_fk
+                          JOIN global.gapp_sim sm ON sm.sim_id IN (b.sim_1_id_fk, b.sim_2_id_fk)
+                          WHERE sp.active_id_fk = a.active_id AND ${digitsOnly('sm.number')} LIKE ?))`,
+        params: value => {
+            const digits = `%${String(value).replace(/\D/g, '')}%`;
+            return [digits, digits];
+        },
+    },
+    // Nº de série do smartphone ou do chip
+    serial_number: {
+        clause: `(EXISTS (SELECT 1 FROM global.gapp_smartphone sp WHERE sp.active_id_fk = a.active_id AND sp.serial_number LIKE ?)
+              OR EXISTS (SELECT 1 FROM global.gapp_sim sm WHERE sm.active_id_fk = a.active_id AND sm.serial_number LIKE ?))`,
+        params: value => [`%${value}%`, `%${value}%`],
+    },
+};
+
 function buildActiveFilters(filters = {}) {
     const conditions = [];
     const params = [];
@@ -111,6 +147,13 @@ function buildActiveFilters(filters = {}) {
         if (filters[key] != null && filters[key] !== '') {
             conditions.push(clause);
             params.push(key === 'brand' || key === 'model' || key === 'license_plates' ? `%${filters[key]}%` : filters[key]);
+        }
+    }
+
+    for (const [key, { clause, params: build }] of Object.entries(DEVICE_FILTER_CLAUSES)) {
+        if (filters[key] != null && String(filters[key]).trim() !== '') {
+            conditions.push(clause);
+            params.push(...build(String(filters[key]).trim()));
         }
     }
 

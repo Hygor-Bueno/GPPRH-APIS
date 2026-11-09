@@ -147,6 +147,9 @@ const listActiveQuerySchema = {
     date_purchase_from:   { type: 'string' },
     date_purchase_to:     { type: 'string' },
     license_plates:       { type: 'string' },
+    imei:                 { type: 'string', maxLength: 20 },
+    number:               { type: 'string', maxLength: 20 },
+    serial_number:        { type: 'string', maxLength: 40 },
     page:                 { type: 'number', min: 1 },
     limit:                { type: 'number', min: 1, max: 100 },
 };
@@ -406,10 +409,41 @@ const listAssetTermQuerySchema = {
     asset_term_id:   { type: 'number' },
     reponsible_name: { type: 'string', maxLength: 100 },
     active_id_fk:    { type: 'number' },
+    asset_type:      { type: 'string', enum: ['generic', 'vehicle', 'smartphone', 'sim'] },
+    license_plates:  { type: 'string', maxLength: 10 },
+    imei:            { type: 'string', maxLength: 20 },
+    number:          { type: 'string', maxLength: 20 },
+    serial_number:   { type: 'string', maxLength: 40 },
     date_start:      { type: 'string', pattern: DATE_PATTERN },
     date_end:        { type: 'string', pattern: DATE_PATTERN },
     page:            { type: 'number', min: 1 },
     limit:           { type: 'number', min: 1, max: 100 },
+};
+
+// Moldes de termo: tipo e campos dinâmicos são conferidos no use-case
+// (catálogo em domain/gapp/asset-term/term-template.fields).
+const ASSET_TERM_TYPES = ['generic', 'vehicle', 'smartphone', 'sim'];
+
+const assetTermTemplateFieldsSchema = {
+    name:            { type: 'string', maxLength: 100 },
+    asset_type:      { type: 'string', enum: ASSET_TERM_TYPES },
+    content:         { type: 'string', maxLength: 60000 },
+    status_template: { type: 'number', enum: [0, 1] },
+};
+
+const createAssetTermTemplateSchema = {
+    ...assetTermTemplateFieldsSchema,
+    name:       { ...assetTermTemplateFieldsSchema.name, required: true },
+    asset_type: { ...assetTermTemplateFieldsSchema.asset_type, required: true },
+    content:    { ...assetTermTemplateFieldsSchema.content, required: true },
+};
+
+const updateAssetTermTemplateSchema = { ...assetTermTemplateFieldsSchema };
+
+const listAssetTermTemplateQuerySchema = {
+    asset_type:      { type: 'string', enum: ASSET_TERM_TYPES },
+    status_template: { type: 'number', enum: [0, 1] },
+    name:            { type: 'string', maxLength: 100 },
 };
 
 module.exports = {
@@ -446,5 +480,8 @@ module.exports = {
     updateSimSchema,
     createAssetTermSchema,
     updateAssetTermSchema,
-    listAssetTermQuerySchema
+    listAssetTermQuerySchema,
+    createAssetTermTemplateSchema,
+    updateAssetTermTemplateSchema,
+    listAssetTermTemplateQuerySchema
 };

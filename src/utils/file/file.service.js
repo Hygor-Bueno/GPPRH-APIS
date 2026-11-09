@@ -45,7 +45,9 @@ const { probeVideoCodec, probeVideoCodecFromFile } = require('./video-codec');
 const { withUploadLimit } = require('./upload-limit');
 const { decideTranscode } = require('../video/transcode-policy');
 const { SQL_ENQUEUE } = require('../../modules/global/repositories/mysql/video-transcode.queries');
-const { sqlFindByHash, sqlFindById, sqlInsertFile, sqlSoftDeleteFile } = require('../../modules/global/repositories/mysql/files.queries');
+const {
+    sqlFindByHash, sqlFindByHashAnyStatus, sqlReactivateFile, sqlFindById, sqlInsertFile, sqlSoftDeleteFile,
+} = require('../../modules/global/repositories/mysql/files.queries');
 
 // ─── Constantes de armazenamento ──────────────────────────────────────────────
 
@@ -314,11 +316,13 @@ class FileService {
         safeName = reconciled.name;
 
         // ── Deduplicação via SHA-256 ──────────────────────────────────────────
+        // Conteúdo já conhecido (ativo ou removido) reaproveita o registro existente.
         const fileHash = crypto.createHash('sha256').update(buf).digest('hex');
-        const existing = await FileService._execute(sqlFindByHash(), [fileHash]);
+        const writeBuffer = (target) => fs.writeFileSync(target, buf, { mode: 0o644 });
+        const existing = await FileService._reuseByHash(fileHash, userId, writeBuffer);
 
-        if (existing.length > 0) {
-            return existing[0];
+        if (existing) {
+            return existing;
         }
 
         // ── Constrói caminhos de armazenamento ────────────────────────────────
@@ -347,8 +351,9 @@ class FileService {
                 userId,
             ]);
         } catch (dbErr) {
-            // Rollback: remove o arquivo físico se o banco falhar
-            try { fs.unlinkSync(absolutePath); } catch { /* ignora */ }
+            // Envio simultâneo do mesmo conteúdo: o outro gravou primeiro — usa o dele
+            const winner = await FileService._recoverDuplicate(dbErr, fileHash, userId, absolutePath, relativePath, writeBuffer);
+            if (winner) return winner;
             throw new AppError(`Erro ao registrar arquivo no banco: ${dbErr.message}`, 500);
         }
 
@@ -428,11 +433,13 @@ class FileService {
         const videoCodec = probeVideoCodecFromFile(file.path, mimeType).video;
 
         // ── Deduplicação ──────────────────────────────────────────────────────
+        // Conteúdo já conhecido (ativo ou removido) reaproveita o registro existente.
         const fileHash = await FileService._hashFile(file.path);
-        const existing = await FileService._execute(sqlFindByHash(), [fileHash]);
+        const moveTemp = (target) => { FileService._moveFile(file.path, target); fs.chmodSync(target, 0o644); };
+        const existing = await FileService._reuseByHash(fileHash, userId, moveTemp);
 
-        if (existing.length > 0) {
-            return { ...existing[0], transcode_queued: false };
+        if (existing) {
+            return { ...existing, transcode_queued: false };
         }
 
         // ── Move para o storage definitivo ────────────────────────────────────
@@ -450,8 +457,9 @@ class FileService {
                 relativePath, safeName, extension, mimeType, size, fileHash, videoCodec, userId, userId,
             ]);
         } catch (dbErr) {
-            // Sem registro no banco o arquivo é órfão em disco — remove.
-            try { fs.unlinkSync(absolutePath); } catch { /* ignora */ }
+            // Envio simultâneo do mesmo conteúdo: o outro gravou primeiro — usa o dele
+            const winner = await FileService._recoverDuplicate(dbErr, fileHash, userId, absolutePath, relativePath, () => {});
+            if (winner) return { ...winner, transcode_queued: false };
             throw new AppError(`Erro ao registrar arquivo no banco: ${dbErr.message}`, 500);
         }
 
@@ -462,6 +470,56 @@ class FileService {
         console.log(`[files] vídeo grande gravado por streaming: ${(size / 1048576).toFixed(1)} MB, codec=${videoCodec || '?'}`);
 
         return { ...record, transcode_queued: queued };
+    }
+
+    /**
+     * Deduplicação por hash. O mesmo conteúdo nunca vira dois registros
+     * (`_files.file_hash` é único, inclusive para arquivo removido):
+     *   - ativo → devolve o registro, sem gravar nada;
+     *   - inativo (soft-delete) → reativa e devolve o mesmo registro. Se o
+     *     arquivo físico tiver sumido do disco, `restore(caminhoAbsoluto)` o
+     *     grava de novo no caminho do registro.
+     * Sem registro → `null` (segue o fluxo de arquivo novo).
+     *
+     * @private
+     * @param {string}   fileHash
+     * @param {number}   userId
+     * @param {(absolutePath: string) => void} restore
+     * @returns {Promise<Object|null>}
+     */
+    static async _reuseByHash(fileHash, userId, restore) {
+        const [record] = await FileService._execute(sqlFindByHashAnyStatus(), [fileHash]);
+        if (!record) return null;
+        if (Number(record.status) === 1) return record;
+
+        const absolutePath = resolveStoragePath(record.file_path);
+        if (!fs.existsSync(absolutePath)) {
+            fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+            restore(absolutePath);
+        }
+        await FileService._execute(sqlReactivateFile(), [userId, record.id]);
+        console.log(`[files] arquivo ${record.id} reaproveitado pelo hash (estava inativo)`);
+        return { ...record, status: 1 };
+    }
+
+    /**
+     * Falha no INSERT por hash duplicado (`ER_DUP_ENTRY`) é corrida entre dois
+     * envios do mesmo conteúdo: reaproveita o registro que entrou primeiro.
+     * Qualquer outra falha devolve `null` (quem chama lança o 500). O arquivo
+     * gravado por este envio é apagado, a menos que seja o mesmo caminho do
+     * registro reaproveitado.
+     *
+     * @private
+     * @returns {Promise<Object|null>}
+     */
+    static async _recoverDuplicate(dbErr, fileHash, userId, absolutePath, relativePath, restore) {
+        const winner = dbErr?.code === 'ER_DUP_ENTRY'
+            ? await FileService._reuseByHash(fileHash, userId, restore).catch(() => null)
+            : null;
+        if (!winner || winner.file_path !== relativePath) {
+            try { fs.unlinkSync(absolutePath); } catch { /* ignora */ }
+        }
+        return winner;
     }
 
     /**

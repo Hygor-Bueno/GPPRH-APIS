@@ -25,6 +25,37 @@ function sqlFindByHash() {
 }
 
 /**
+ * Busca pelo hash em qualquer situação (ativo ou inativo).
+ *
+ * `file_hash` é único em `_files` (`uq_file_hash`) mesmo depois do soft-delete:
+ * reenviar um conteúdo já removido precisa reaproveitar a linha existente
+ * (reativando), e não inserir outra — o INSERT esbarraria no índice único.
+ *
+ * Parâmetros: `[file_hash]`
+ *
+ * @returns {string}
+ */
+function sqlFindByHashAnyStatus() {
+    return `
+        SELECT id, file_path, file_name, file_extension, file_type, file_size, file_hash, video_codec, poster_path, status
+        FROM _files
+        WHERE file_hash = ?
+        LIMIT 1
+    `;
+}
+
+/**
+ * Reativa um arquivo inativo (desfaz o soft-delete) para reaproveitá-lo.
+ *
+ * Parâmetros: `[updated_by_fk, id]`
+ *
+ * @returns {string}
+ */
+function sqlReactivateFile() {
+    return `UPDATE _files SET status = 1, updated_by_fk = ? WHERE id = ?`;
+}
+
+/**
  * Busca um arquivo pelo ID.
  *
  * Parâmetros: `[id]`
@@ -70,6 +101,8 @@ function sqlSoftDeleteFile() {
 
 module.exports = {
     sqlFindByHash,
+    sqlFindByHashAnyStatus,
+    sqlReactivateFile,
     sqlFindById,
     sqlInsertFile,
     sqlSoftDeleteFile,
