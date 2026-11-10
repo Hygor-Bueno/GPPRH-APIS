@@ -67,6 +67,8 @@ const activeDirectoryUsersController = require('./controllers/ActiveDirectoryUse
 const mieppRoutes = require('./miepp.routes');
 const cpppRoutes = require('./cppp.routes');
 const reppRoutes = require('./repp.routes');
+// TEMPORÁRIO — migração de termos do legado. Remover junto com o router.use abaixo.
+const gappTermMigrationRoutes = require('./gapp-term-migration.routes');
 const { upload: fileUpload } = require('../../utils/file/file.service');
 const authMiddleware = require('../../middlewares/auth.middleware');
 const upload = require('../../middlewares/upload.middleware');
@@ -3051,6 +3053,17 @@ router.use('/cppp', cpppRoutes);
  * Prefixo final: `/api/v1/global/spaces/...`
  */
 router.use('/spaces', reppRoutes);
+
+/**
+ * GAPP — Migração TEMPORÁRIA dos termos de smartphone do sistema legado.
+ *
+ * Roteador próprio (`gapp-term-migration.routes.js`) para sair inteiro quando a
+ * migração acabar: apagar esta linha, o `require` lá em cima e os arquivos
+ * listados em `docs/gapp-migracao-termos.md`. Só `SYSTEM_OWNER`.
+ *
+ * Prefixo final: `/api/v1/global/gapp/term-migration/...`
+ */
+router.use('/gapp/term-migration', gappTermMigrationRoutes);
 
 /**
  * @route GET /active-directory-users
