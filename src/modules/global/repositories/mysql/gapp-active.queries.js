@@ -9,7 +9,7 @@
 
 function sqlSaveActive() {
     const placeholders = Array(39).fill('?').join(', ');
-    return `CALL sp_gapp_save_active_v2(${placeholders}, @p_active_id_out, @p_id_insurance_out)`;
+    return `CALL sp_gapp_save_active_v3(${placeholders}, @p_active_id_out, @p_id_insurance_out)`;
 }
 
 function sqlSelectActiveIdOut() {
