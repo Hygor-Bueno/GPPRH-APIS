@@ -67,7 +67,7 @@ function sqlCheckTemplateName() {
 function sqlInsertTemplate() {
     return `
         INSERT INTO global.gapp_asset_term_template
-            (name, asset_type, content, status_template, created_by, updated_by, created_at, updated_at)
+            (name, asset_type, content, status_template, created_by, updated_by)
         VALUES (?, ?, ?, ?, ?, ?)
     `;
 }
