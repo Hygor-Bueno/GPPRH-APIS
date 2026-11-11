@@ -2572,17 +2572,36 @@ router.put('/gapp/settings/subdepartament/:id',
     asyncHandler(gappSettingsController.updateSubdepartament)
 );
 
+
+/**
+ * @route GET /gapp/operator
+ * @description Retorna operadoras.
+ * @access Requer `GAPP_VIEW_OPERATOR`
+ */
+
 router.get('/gapp/operator',
     authMiddleware,
     canAll(['GAPP_VIEW_OPERATOR']),
     asyncHandler(gappOperatorController.listOperators)
 )
+
+/**
+ * @route POST /gapp/operator
+ * @description Registra uma operadoras.
+ * @access Requer `GAPP_CREATE_OPERATOR`
+ */
 router.post('/gapp/operator',
     authMiddleware,
     canAll(['GAPP_CREATE_OPERATOR']),
     validate(createOperatorSchema),
     asyncHandler(gappOperatorController.createOperator)
 )
+
+/**
+ * @route PUT /gapp/operator
+ * @description Altera uma operadoras.
+ * @access Requer `GAPP_UPDATE_OPERATOR`
+ */
 router.put('/gapp/operator/:id',
     authMiddleware,
     canAll(['GAPP_UPDATE_OPERATOR']),
@@ -2590,37 +2609,71 @@ router.put('/gapp/operator/:id',
     asyncHandler(gappOperatorController.updateOperator)
 )
 
+
+/**
+ * @route GET /gapp/maintenance-process
+ * @description Retorna processos de manutenção.
+ * @access Requer `GAPP_VIEW_MAINTENANCE_PROCESS`
+ */
 router.get('/gapp/maintenance-process',
     authMiddleware,
     canAll(['GAPP_VIEW_MAINTENANCE_PROCESS']),
     asyncHandler(gappMaintenanceProcessController.listMaintenanceProcess)
 )
 
+/**
+ * @route GET /gapp/maintenance-process/:id
+ * @description Retorna um processos de manutenção especifico.
+ * @access Requer `GAPP_VIEW_MAINTENANCE_PROCESS`
+ */
 router.get('/gapp/maintenance-process/:id',
     authMiddleware,
     canAll(['GAPP_VIEW_MAINTENANCE_PROCESS']),
     asyncHandler(gappMaintenanceProcessController.listMaintenanceProcessById)
 )
+
+/**
+ * @route POST /gapp/maintenance-process
+ * @description Registra processos de manutenção.
+ * @access Requer `GAPP_CREATE_MAINTENANCE_PROCESS`
+ */
 router.post('/gapp/maintenance-process',
     authMiddleware,
-    canAll(['GAPP_VIEW_MAINTENANCE_PROCESS']),
+    canAll(['GAPP_CREATE_MAINTENANCE_PROCESS']),
     asyncHandler(gappMaintenanceProcessController.createMaitenanceProcess)
 )
 
+/**
+ * @route PUT /gapp/maintenance-process
+ * @description Altera processos de manutenção.
+ * @access Requer `GAPP_UPDATE_MAINTENANCE_PROCESS`
+ */
 router.put('/gapp/maintenance-process/:id',
     authMiddleware,
-    canAll(['GAPP_VIEW_MAINTENANCE_PROCESS']),
+    canAll(['GAPP_UPDATE_MAINTENANCE_PROCESS']),
     asyncHandler(gappMaintenanceProcessController.updateMaitenanceProcess)
 )
 
+
+/**
+ * @route POST /gapp/maintenance-process-logs
+ * @description Registra processos de manutenção.
+ * @access Requer `GAPP_CREATE_MAINTENANCE_PROCESS`
+ */
 router.post('/gapp/maintenance-process-logs',
     authMiddleware,
-    canAll(['GAPP_VIEW_MAINTENANCE_PROCESS']),
+    canAll(['GAPP_CREATE_MAINTENANCE_PROCESS']),
     asyncHandler(gappMaintenanceProcessController.createMaitenanceProcessLogs)
 )
+
+/**
+ * @route PUT /gapp/maintenance-process-logs/:id
+ * @description Altera processos de manutenção.
+ * @access Requer `GAPP_UPDATE_MAINTENANCE_PROCESS`
+ */
 router.put('/gapp/maintenance-process-logs/:id',
     authMiddleware,
-    canAll(['GAPP_VIEW_MAINTENANCE_PROCESS']),
+    canAll(['GAPP_UPDATE_MAINTENANCE_PROCESS']),
     asyncHandler(gappMaintenanceProcessController.updateMaitenanceProcessLogs)
 )
 
