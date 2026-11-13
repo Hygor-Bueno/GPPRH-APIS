@@ -59,6 +59,7 @@ const gappOperatorController = require('./controllers/gapp-operator.controller')
 const gappMaintenanceProcessController = require('./controllers/gapp-maintenance-process.controller');
 const gappAssetTermController = require('./controllers/gapp-asset-term.controller');
 const gappAssetTermTemplateController = require('./controllers/gapp-asset-term-template.controller');
+const gappActiveAuditController = require('./controllers/gapp-active-audit.controller');
 const mgppAwardsController = require('./controllers/mgpp-awards.controller');
 const mgppPercentageController = require('./controllers/mgpp-percentage.controller');
 const mgppInventoryConfigsController = require('./controllers/mgpp-inventory-configs.controller');
@@ -114,7 +115,11 @@ const {
     listAssetTermQuerySchema,
     createAssetTermTemplateSchema,
     updateAssetTermTemplateSchema,
-    listAssetTermTemplateQuerySchema
+    listAssetTermTemplateQuerySchema,
+    registerActiveAuditItemSchema,
+    updateActiveAuditItemSchema,
+    cancelActiveAuditSchema,
+    listActiveAuditQuerySchema
 } = require('../../schemas/gapp.schema');
 const {
     postTaskSchema, putTaskStateSchema, putTaskTitleSchema, putTaskDescriptionSchema, putTaskThemeSchema,
@@ -2796,6 +2801,100 @@ router.put('/gapp/asset-term-template/:id',
     canAll(['GAPP_MANAGE_ASSET_TERM_TEMPLATE']),
     validate(updateAssetTermTemplateSchema),
     asyncHandler(gappAssetTermTemplateController.updateTemplate));
+
+// ─── GAPP — Auditoria de ativos / inventário ──────────────────────────────────
+// gapp_active_audit (cabeçalho + JSON inicial/final) e gapp_active_audit_temp
+// (uma conferência por ativo). O cadastro em gapp_active nunca é alterado.
+// Status: 0 ABERTA · 1 EM ANDAMENTO · 2 FINALIZADA · 3 CANCELADA.
+// DDL e permissões: repositories/mysql/gapp-active-audit-deploy.sql
+
+/**
+ * @route GET /gapp/active-audit
+ * @description Histórico de auditorias do grupo de trabalho do usuário, com paginação.
+ * Filtros: audit_id, status_audit, active_id (auditorias que incluíram o ativo),
+ * date_start/date_end (AAAA-MM-DD, sobre date_open), page, limit.
+ * @access Requer `GAPP_VIEW_ACTIVE_AUDIT`
+ */
+router.get('/gapp/active-audit',
+    authMiddleware,
+    canAll(['GAPP_VIEW_ACTIVE_AUDIT']),
+    validate(listActiveAuditQuerySchema, 'query'),
+    asyncHandler(gappActiveAuditController.listAudits));
+
+/**
+ * @route GET /gapp/active-audit/:id
+ * @description Auditoria com initial_data, final_data e as conferências registradas.
+ * @access Requer `GAPP_VIEW_ACTIVE_AUDIT`
+ */
+router.get('/gapp/active-audit/:id',
+    authMiddleware,
+    canAll(['GAPP_VIEW_ACTIVE_AUDIT']),
+    asyncHandler(gappActiveAuditController.getAuditById));
+
+/**
+ * @route GET /gapp/active-audit/:id/review
+ * @description Revisão: previstos, conferidos, pendentes, divergências e conservação.
+ * @access Requer `GAPP_VIEW_ACTIVE_AUDIT`
+ */
+router.get('/gapp/active-audit/:id/review',
+    authMiddleware,
+    canAll(['GAPP_VIEW_ACTIVE_AUDIT']),
+    asyncHandler(gappActiveAuditController.getReview));
+
+/**
+ * @route POST /gapp/active-audit
+ * @description Abre a auditoria. Body: { active_ids: number[] } (ativos do grupo do usuário).
+ * @access Requer `GAPP_CREATE_ACTIVE_AUDIT`
+ */
+router.post('/gapp/active-audit',
+    authMiddleware,
+    canAll(['GAPP_CREATE_ACTIVE_AUDIT']),
+    asyncHandler(gappActiveAuditController.openAudit));
+
+/**
+ * @route POST /gapp/active-audit/:id/items
+ * @description Registra a conferência de um ativo previsto. Body: { active_id_fk,
+ * identifier_type (SERIAL|PATRIMONIO|SEM_IDENTIFICACAO), identifier_value?,
+ * asset_condition (GOOD|REGULAR|BAD|UNUSABLE), additional_items?, observations? }
+ * @access Requer `GAPP_REGISTER_ACTIVE_AUDIT`
+ */
+router.post('/gapp/active-audit/:id/items',
+    authMiddleware,
+    canAll(['GAPP_REGISTER_ACTIVE_AUDIT']),
+    validate(registerActiveAuditItemSchema),
+    asyncHandler(gappActiveAuditController.registerItem));
+
+/**
+ * @route PUT /gapp/active-audit/:id/items/:activeId
+ * @description Edita a conferência (auditoria aberta ou em andamento). Campos opcionais.
+ * @access Requer `GAPP_REGISTER_ACTIVE_AUDIT`
+ */
+router.put('/gapp/active-audit/:id/items/:activeId',
+    authMiddleware,
+    canAll(['GAPP_REGISTER_ACTIVE_AUDIT']),
+    validate(updateActiveAuditItemSchema),
+    asyncHandler(gappActiveAuditController.updateItem));
+
+/**
+ * @route PATCH /gapp/active-audit/:id/finish
+ * @description Consolida as conferências em final_data e finaliza (transacional).
+ * @access Requer `GAPP_FINISH_ACTIVE_AUDIT`
+ */
+router.patch('/gapp/active-audit/:id/finish',
+    authMiddleware,
+    canAll(['GAPP_FINISH_ACTIVE_AUDIT']),
+    asyncHandler(gappActiveAuditController.finishAudit));
+
+/**
+ * @route PATCH /gapp/active-audit/:id/cancel
+ * @description Cancela a auditoria. Body: { reason? }. As conferências são preservadas.
+ * @access Requer `GAPP_FINISH_ACTIVE_AUDIT`
+ */
+router.patch('/gapp/active-audit/:id/cancel',
+    authMiddleware,
+    canAll(['GAPP_FINISH_ACTIVE_AUDIT']),
+    validate(cancelActiveAuditSchema),
+    asyncHandler(gappActiveAuditController.cancelAudit));
 
 // ─── MGPP ─ Rotas do modulo metas gerentes ─────────────────
 

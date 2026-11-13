@@ -446,6 +446,46 @@ const listAssetTermTemplateQuerySchema = {
     name:            { type: 'string', maxLength: 100 },
 };
 
+// ─── Auditoria de ativos ────────────────────────────────────────────
+// `active_ids` (lista) e `additional_items` (objeto) não cabem no validador
+// genérico — são conferidos no use-case (domain/gapp/active-audit).
+// Valores aceitos de identifier_type/asset_condition também ficam no domínio.
+const activeAuditItemFieldsSchema = {
+    identifier_type:  { type: 'string', maxLength: 30 },
+    identifier_value: { type: 'string', maxLength: 150 },
+    asset_condition:  { type: 'string', maxLength: 50 },
+    observations:     { type: 'string', maxLength: 5000 },
+    // Transferência: o motivo é obrigatório quando is_transfer = 1 (conferido no domínio)
+    is_transfer:                       { type: 'number', enum: [0, 1] },
+    transfer_reason:                   { type: 'string', maxLength: 500 },
+    transfer_branch_code:              { type: 'string', maxLength: 10 },
+    transfer_costcenter_code:          { type: 'string', maxLength: 20 },
+    transfer_responsible_registration: { type: 'string', maxLength: 20 },
+};
+
+const registerActiveAuditItemSchema = {
+    ...activeAuditItemFieldsSchema,
+    active_id_fk:    { type: 'number', required: true, min: 1 },
+    identifier_type: { ...activeAuditItemFieldsSchema.identifier_type, required: true },
+    asset_condition: { ...activeAuditItemFieldsSchema.asset_condition, required: true },
+};
+
+const updateActiveAuditItemSchema = { ...activeAuditItemFieldsSchema };
+
+const cancelActiveAuditSchema = {
+    reason: { type: 'string', maxLength: 500 },
+};
+
+const listActiveAuditQuerySchema = {
+    audit_id:     { type: 'number', min: 1 },
+    active_id:    { type: 'number', min: 1 },
+    status_audit: { type: 'number', enum: [0, 1, 2, 3] },
+    date_start:   { type: 'string', pattern: DATE_PATTERN },
+    date_end:     { type: 'string', pattern: DATE_PATTERN },
+    page:         { type: 'number', min: 1 },
+    limit:        { type: 'number', min: 1, max: 100 },
+};
+
 module.exports = {
     createActiveSchema,
     updateActiveSchema,
@@ -483,5 +523,9 @@ module.exports = {
     listAssetTermQuerySchema,
     createAssetTermTemplateSchema,
     updateAssetTermTemplateSchema,
-    listAssetTermTemplateQuerySchema
+    listAssetTermTemplateQuerySchema,
+    registerActiveAuditItemSchema,
+    updateActiveAuditItemSchema,
+    cancelActiveAuditSchema,
+    listActiveAuditQuerySchema
 };
