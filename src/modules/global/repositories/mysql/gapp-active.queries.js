@@ -96,6 +96,8 @@ const ACTIVE_FILTER_CLAUSES = {
     status_active: 'a.status_active = ?',
     units_id_fk: 'a.units_id_fk = ?',
     id_active_class_fk: 'a.id_active_class_fk = ?',
+    // Tipo do ativo vem da classe (gapp_active_class.active_type_id_fk)
+    active_type_id_fk: 'a.id_active_class_fk IN (SELECT ac.id_active_class FROM global.gapp_active_class ac WHERE ac.active_type_id_fk = ?)',
     user_id_fk: 'a.user_id_fk = ?',
     work_group_fk: 'a.work_group_fk = ?',
     used_in: 'a.used_in = ?',

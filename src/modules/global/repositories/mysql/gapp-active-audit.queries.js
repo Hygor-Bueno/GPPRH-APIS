@@ -5,32 +5,92 @@
  * Escopo: a auditoria pertence ao grupo de trabalho de quem a abriu
  * (gapp_user → gapp_level.group_id_fk) — o mesmo critério de `gapp_active.work_group_fk`.
  *
+ * A tabela temporária só guarda conferências de auditorias ABERTAS/EM ANDAMENTO:
+ * na finalização/cancelamento tudo vai para `final_data` e as linhas são
+ * apagadas. Por isso o histórico de identificadores lê o `final_data`.
+ *
+ * DDL: gapp-active-audit-deploy.sql (fora do repo, junto dos demais DDLs).
+ *
  * @module modules/global/repositories/mysql/gapp-active-audit.queries
  */
 
 // ─── Abertura ───────────────────────────────────────────────────────
 
-/** Ativos selecionados, restritos ao grupo de trabalho do usuário. `IN (?)` expande o array. */
-function sqlListActivesForSnapshot() {
-    return `
+/** Filtros do escopo da abertura sobre gapp_active (a = ativo, ac = classe). */
+const ACTIVE_SCOPE_CLAUSES = {
+    unit_id_fk: 'a.units_id_fk = ?',
+    dep_id_fk: 'a.used_in = ?',
+    id_active_class_fk: 'a.id_active_class_fk = ?',
+    active_type_id_fk: 'ac.active_type_id_fk = ?',
+};
+
+/**
+ * Ativos do grupo do usuário dentro do escopo (unidade obrigatória; setor,
+ * classe e tipo opcionais). Com `activeIds` → só os escolhidos (MANUAL);
+ * sem → todos do escopo (AUTO), limitado a `limit` linhas.
+ *
+ * @param {{ unit_id_fk: number, dep_id_fk?: number, id_active_class_fk?: number, active_type_id_fk?: number }} scope
+ * @param {number} workGroupFk
+ * @param {number[]|null} activeIds
+ * @param {number} limit
+ */
+function sqlListActivesForAudit(scope, workGroupFk, activeIds, limit) {
+    const conditions = ['a.work_group_fk = ?'];
+    const params = [workGroupFk];
+
+    for (const [field, clause] of Object.entries(ACTIVE_SCOPE_CLAUSES)) {
+        if (scope[field] != null) {
+            conditions.push(clause);
+            params.push(scope[field]);
+        }
+    }
+    if (activeIds?.length) {
+        conditions.push('a.active_id IN (?)');
+        params.push(activeIds);
+    }
+
+    const sql = `
         SELECT a.active_id, a.brand, a.model, a.number_nf, a.date_purchase, a.value_purchase,
                a.status_active, a.is_vehicle, a.id_active_class_fk, a.units_id_fk,
                a.used_in, a.work_group_fk,
-               ac.desc_active_class, u.unit_name
+               ac.desc_active_class, ac.active_type_id_fk, aty.desc_active_type,
+               u.unit_name, d.dep_name
         FROM global.gapp_active a
         LEFT JOIN global.gapp_active_class ac ON ac.id_active_class = a.id_active_class_fk
-        LEFT JOIN global.gapp_units u ON u.unit_id = a.units_id_fk
-        WHERE a.work_group_fk = ? AND a.active_id IN (?)
+        LEFT JOIN global.gapp_active_type aty ON aty.active_type_id = ac.active_type_id_fk
+        LEFT JOIN global.gapp_units u         ON u.unit_id = a.units_id_fk
+        LEFT JOIN global.gapp_departaments d  ON d.dep_id = a.used_in
+        WHERE ${conditions.join(' AND ')}
         ORDER BY a.active_id
+        LIMIT ?
     `;
+    return { sql, params: [...params, limit] };
 }
+
+// Referências do escopo / destino da transferência (existência e vínculos)
+const sqlFindUnit = () => 'SELECT unit_id, unit_name FROM global.gapp_units WHERE unit_id = ?';
+const sqlFindDepartment = () => 'SELECT dep_id, dep_name, unit_id_fk FROM global.gapp_departaments WHERE dep_id = ?';
+const sqlFindActiveClass = () => 'SELECT id_active_class, desc_active_class, active_type_id_fk FROM global.gapp_active_class WHERE id_active_class = ?';
+const sqlFindActiveType = () => 'SELECT active_type_id, desc_active_type FROM global.gapp_active_type WHERE active_type_id = ?';
 
 function sqlInsertAudit() {
     return `
         INSERT INTO global.gapp_active_audit
-            (user_open_id_fk, initial_data, quantity_active, status_audit)
-        VALUES (?, ?, ?, 0)
+            (user_open_id_fk, unit_id_fk, dep_id_fk, id_active_class_fk,
+             initial_data, quantity_active, status_audit)
+        VALUES (?, ?, ?, ?, ?, ?, 0)
     `;
+}
+
+function buildInsertAuditParams(data) {
+    return [
+        data.user_open_id_fk,
+        data.unit_id_fk,
+        data.dep_id_fk ?? null,
+        data.id_active_class_fk ?? null,
+        JSON.stringify(data.initial_data),
+        data.quantity_active,
+    ];
 }
 
 // ─── Consulta ───────────────────────────────────────────────────────
@@ -39,14 +99,25 @@ const AUDIT_FROM = `
     FROM global.gapp_active_audit au
     JOIN global.gapp_user uo ON uo.user_id = au.user_open_id_fk
     JOIN global.gapp_level lo ON lo.level_id = uo.level_id_fk
-    LEFT JOIN global.gapp_user uf ON uf.user_id = au.user_finish_id_fk
+    LEFT JOIN global.gapp_user uf          ON uf.user_id = au.user_finish_id_fk
+    LEFT JOIN global.gapp_units un         ON un.unit_id = au.unit_id_fk
+    LEFT JOIN global.gapp_departaments dp  ON dp.dep_id = au.dep_id_fk
+    LEFT JOIN global.gapp_active_class acl ON acl.id_active_class = au.id_active_class_fk
+    LEFT JOIN global.gapp_active_type aty  ON aty.active_type_id = acl.active_type_id_fk
 `;
 
+// Encerrada (2/3): as conferências estão no final_data; a temporária já foi limpa.
+// O tipo do ativo não é coluna da auditoria: sai da classe (gapp_active_class.active_type_id_fk).
 const AUDIT_SUMMARY_COLUMNS = `
     au.audit_id, au.user_open_id_fk, uo.name AS user_open_name,
     au.user_finish_id_fk, uf.name AS user_finish_name,
+    au.unit_id_fk, un.unit_name, au.dep_id_fk, dp.dep_name,
+    au.id_active_class_fk, acl.desc_active_class, acl.active_type_id_fk, aty.desc_active_type,
     au.quantity_active, au.date_open, au.date_finish, au.status_audit,
-    (SELECT COUNT(*) FROM global.gapp_active_audit_temp t WHERE t.audit_id_fk = au.audit_id) AS quantity_registered
+    CASE WHEN au.status_audit IN (2, 3)
+         THEN COALESCE(JSON_LENGTH(au.final_data, '$.items'), 0)
+         ELSE (SELECT COUNT(*) FROM global.gapp_active_audit_temp t WHERE t.audit_id_fk = au.audit_id)
+    END AS quantity_registered
 `;
 
 // Período sobre `date_open`. `date_end` é inclusivo: pega o dia inteiro.
@@ -54,6 +125,8 @@ const AUDIT_FILTER_CLAUSES = {
     audit_id: 'au.audit_id = ?',
     status_audit: 'au.status_audit = ?',
     user_open_id_fk: 'au.user_open_id_fk = ?',
+    unit_id_fk: 'au.unit_id_fk = ?',
+    dep_id_fk: 'au.dep_id_fk = ?',
     date_start: 'au.date_open >= ?',
     date_end: 'au.date_open < DATE_ADD(?, INTERVAL 1 DAY)',
     // Auditorias que incluíram o ativo (previsto na abertura, conferido ou não)
@@ -105,40 +178,59 @@ function sqlGetAuditById() {
     `;
 }
 
-/** Params: [audit_id] */
+/** Conferências da temporária com os nomes resolvidos. Params: [audit_id] */
 function sqlListAuditItems() {
     return `
         SELECT t.audit_temp_id, t.audit_id_fk, t.active_id_fk, t.user_register_id_fk,
                ur.name AS user_register_name,
-               t.identifier_type, t.identifier_value, t.asset_condition,
+               t.identifier_type, t.identifier_value, t.asset_condition, t.lifecycle_status,
                t.additional_items, t.observations, t.date_register,
-               t.is_transfer, t.transfer_reason, 
-               t.transfer_branch_code, 
-               t.transfer_costcenter_code, 
-               t.transfer_responsible_registration
+               t.is_transfer, t.transfer_reason,
+               t.transfer_origin_unit_id_fk, uor.unit_name AS transfer_origin_unit_name,
+               t.transfer_origin_dep_id_fk,  dor.dep_name  AS transfer_origin_dep_name,
+               t.transfer_unit_id_fk,        ude.unit_name AS transfer_unit_name,
+               t.transfer_dep_id_fk,         dde.dep_name  AS transfer_dep_name
         FROM global.gapp_active_audit_temp t
-        LEFT JOIN global.gapp_user ur ON ur.user_id = t.user_register_id_fk
+        LEFT JOIN global.gapp_user ur          ON ur.user_id  = t.user_register_id_fk
+        LEFT JOIN global.gapp_units uor        ON uor.unit_id = t.transfer_origin_unit_id_fk
+        LEFT JOIN global.gapp_departaments dor ON dor.dep_id  = t.transfer_origin_dep_id_fk
+        LEFT JOIN global.gapp_units ude        ON ude.unit_id = t.transfer_unit_id_fk
+        LEFT JOIN global.gapp_departaments dde ON dde.dep_id  = t.transfer_dep_id_fk
         WHERE t.audit_id_fk = ?
         ORDER BY t.date_register, t.audit_temp_id
     `;
 }
 
+/** Nomes de usuários (para conferências antigas no final_data, que não guardavam o nome). */
+function sqlListUserNames() {
+    return 'SELECT user_id, name FROM global.gapp_user WHERE user_id IN (?)';
+}
+
 /**
- * Registros de auditorias FINALIZADAS (exceto a atual) com algum dos
- * identificadores informados. `pairs` = [[type, value], ...].
+ * Identificadores registrados em auditorias FINALIZADAS (exceto a atual),
+ * lidos do `final_data` — a temporária é limpa na finalização.
+ * Comparação sem caixa e sem espaços nas pontas. `pairs` = [[type, value], ...].
  */
 function sqlIdentifierHistory(pairs) {
     const tuples = pairs.map(() => '(?, ?)').join(', ');
     return {
         sql: `
-            SELECT t.audit_id_fk, t.active_id_fk, t.identifier_type, t.identifier_value
-            FROM global.gapp_active_audit_temp t
-            JOIN global.gapp_active_audit au ON au.audit_id = t.audit_id_fk
+            SELECT au.audit_id AS audit_id_fk, j.active_id AS active_id_fk,
+                   j.identifier_type, j.identifier_value
+            FROM global.gapp_active_audit au,
+                 JSON_TABLE(au.final_data, '$.items[*]' COLUMNS (
+                     active_id        INT          PATH '$.active_id'        NULL ON ERROR,
+                     identifier_type  VARCHAR(30)  PATH '$.identifier_type'  NULL ON ERROR,
+                     identifier_value VARCHAR(150) PATH '$.identifier_value' NULL ON ERROR
+                 )) j
             WHERE au.status_audit = 2
-              AND t.audit_id_fk <> ?
-              AND (t.identifier_type, t.identifier_value) IN (${tuples})
+              AND au.audit_id <> ?
+              AND (j.identifier_type, UPPER(TRIM(j.identifier_value))) IN (${tuples})
         `,
-        build: auditId => [auditId, ...pairs.flat()],
+        build: auditId => [
+            auditId,
+            ...pairs.flatMap(([type, value]) => [type, String(value).trim().toUpperCase()]),
+        ],
     };
 }
 
@@ -153,6 +245,11 @@ function sqlGetAuditItem() {
     return 'SELECT * FROM global.gapp_active_audit_temp WHERE audit_id_fk = ? AND active_id_fk = ?';
 }
 
+/** Unidade e setor atuais do ativo — origem da transferência. */
+function sqlGetActiveLocation() {
+    return 'SELECT active_id, units_id_fk, used_in FROM global.gapp_active WHERE active_id = ?';
+}
+
 /** Outro ativo da mesma auditoria com o mesmo identificador (valores gravados já sem espaços nas pontas). */
 function sqlFindItemByIdentifier() {
     return `
@@ -163,61 +260,46 @@ function sqlFindItemByIdentifier() {
     `;
 }
 
-/** Transferência registrada na conferência (motivo + destino/responsável vindos do Protheus). */
-const TRANSFER_COLUMNS = [
+/** Colunas gravadas na conferência, na ordem dos parâmetros. */
+const ITEM_COLUMNS = [
+    'identifier_type', 'identifier_value', 'asset_condition', 'lifecycle_status',
+    'additional_items', 'observations',
     'is_transfer', 'transfer_reason',
-    'transfer_branch_code',
-    'transfer_costcenter_code',
-    'transfer_responsible_registration',
+    'transfer_origin_unit_id_fk', 'transfer_origin_dep_id_fk',
+    'transfer_unit_id_fk', 'transfer_dep_id_fk',
 ];
-const transferParams = data => TRANSFER_COLUMNS.map(column => (column === 'is_transfer' ? (data.is_transfer ? 1 : 0) : data[column] ?? null));
+
+function itemParams(data) {
+    return ITEM_COLUMNS.map(column => {
+        if (column === 'additional_items') return data.additional_items != null ? JSON.stringify(data.additional_items) : null;
+        if (column === 'is_transfer') return data.is_transfer ? 1 : 0;
+        return data[column] ?? null;
+    });
+}
 
 function sqlInsertAuditItem() {
     return `
         INSERT INTO global.gapp_active_audit_temp
-            (audit_id_fk, active_id_fk, user_register_id_fk, identifier_type, identifier_value,
-             asset_condition, additional_items, observations, ${TRANSFER_COLUMNS.join(', ')})
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${TRANSFER_COLUMNS.map(() => '?').join(', ')})
+            (audit_id_fk, active_id_fk, user_register_id_fk, ${ITEM_COLUMNS.join(', ')})
+        VALUES (?, ?, ?, ${ITEM_COLUMNS.map(() => '?').join(', ')})
     `;
 }
 
 function buildInsertAuditItemParams(auditId, data) {
-    return [
-        auditId,
-        data.active_id_fk,
-        data.user_register_id_fk,
-        data.identifier_type,
-        data.identifier_value,
-        data.asset_condition,
-        data.additional_items != null ? JSON.stringify(data.additional_items) : null,
-        data.observations,
-        ...transferParams(data),
-    ];
+    return [auditId, data.active_id_fk, data.user_register_id_fk, ...itemParams(data)];
 }
 
 /** Editar a conferência registra quem fez a última alteração e quando. */
 function sqlUpdateAuditItem() {
     return `
         UPDATE global.gapp_active_audit_temp
-        SET user_register_id_fk = ?, identifier_type = ?, identifier_value = ?,
-            asset_condition = ?, additional_items = ?, observations = ?,
-            ${TRANSFER_COLUMNS.map(column => `${column} = ?`).join(', ')}, date_register = NOW()
+        SET user_register_id_fk = ?, ${ITEM_COLUMNS.map(column => `${column} = ?`).join(', ')}, date_register = NOW()
         WHERE audit_id_fk = ? AND active_id_fk = ?
     `;
 }
 
 function buildUpdateAuditItemParams(auditId, data) {
-    return [
-        data.user_register_id_fk,
-        data.identifier_type,
-        data.identifier_value,
-        data.asset_condition,
-        data.additional_items != null ? JSON.stringify(data.additional_items) : null,
-        data.observations,
-        ...transferParams(data),
-        auditId,
-        data.active_id_fk,
-    ];
+    return [data.user_register_id_fk, ...itemParams(data), auditId, data.active_id_fk];
 }
 
 /** Transição condicionada ao status anterior. Params: [to, audit_id, from] */
@@ -234,16 +316,33 @@ function sqlCloseAudit() {
     `;
 }
 
+/** Relê o que foi gravado (mesma transação) para conferir antes de limpar a temporária. */
+function sqlGetFinalData() {
+    return 'SELECT status_audit, final_data FROM global.gapp_active_audit WHERE audit_id = ?';
+}
+
+/** Limpa as conferências da temporária — só depois do final_data conferido. */
+function sqlDeleteAuditItems() {
+    return 'DELETE FROM global.gapp_active_audit_temp WHERE audit_id_fk = ?';
+}
+
 module.exports = {
-    sqlListActivesForSnapshot,
+    sqlListActivesForAudit,
+    sqlFindUnit,
+    sqlFindDepartment,
+    sqlFindActiveClass,
+    sqlFindActiveType,
     sqlInsertAudit,
+    buildInsertAuditParams,
     sqlListAudits,
     sqlCountAudits,
     sqlGetAuditById,
     sqlListAuditItems,
+    sqlListUserNames,
     sqlIdentifierHistory,
     sqlLockAudit,
     sqlGetAuditItem,
+    sqlGetActiveLocation,
     sqlFindItemByIdentifier,
     sqlInsertAuditItem,
     buildInsertAuditItemParams,
@@ -251,4 +350,6 @@ module.exports = {
     buildUpdateAuditItemParams,
     sqlUpdateAuditStatus,
     sqlCloseAudit,
+    sqlGetFinalData,
+    sqlDeleteAuditItems,
 };

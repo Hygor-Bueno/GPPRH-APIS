@@ -11,17 +11,29 @@
 
 class ActiveAuditRepositoryPort {
     /**
-     * @param {number[]} activeIds
-     * @param {number} workGroupFk
-     * @returns {Promise<object[]>} linhas de gapp_active (só do grupo)
+     * Ativos do grupo dentro do escopo (unidade, setor, classe, tipo).
+     * Com `activeIds` → só esses; sem → todos do escopo, até `limit`.
+     * @param {{ scope: object, workGroupFk: number, activeIds?: number[]|null, limit: number }} params
+     * @returns {Promise<object[]>} linhas de gapp_active com nomes de classe, tipo, unidade e setor
      */
-    findActivesForSnapshot(activeIds, workGroupFk) { throw new Error('Not implemented'); }
+    findActivesForAudit(params) { throw new Error('Not implemented'); }
 
     /**
-     * @param {{ user_open_id_fk: number, initial_data: object, quantity_active: number }} data
+     * Referências por id (só as informadas).
+     * @param {{ unit_id_fk?: number, dep_id_fk?: number, id_active_class_fk?: number, active_type_id_fk?: number }} refs
+     * @returns {Promise<{ unit: object|null, department: object|null, activeClass: object|null, activeType: object|null }>}
+     */
+    findRefs(refs) { throw new Error('Not implemented'); }
+
+    /**
+     * @param {{ user_open_id_fk: number, unit_id_fk: number, dep_id_fk?: number, id_active_class_fk?: number,
+     *           initial_data: object, quantity_active: number }} data
      * @returns {Promise<{ insertId: number }>}
      */
     createAudit(data) { throw new Error('Not implemented'); }
+
+    /** @param {number[]} userIds @returns {Promise<Array<{ user_id: number, name: string }>>} */
+    findUserNames(userIds) { throw new Error('Not implemented'); }
 
     /** @param {object} filters inclui `work_group_fk` */
     list(filters) { throw new Error('Not implemented'); }
@@ -46,8 +58,9 @@ class ActiveAuditRepositoryPort {
     /**
      * Executa `fn(tx)` numa transação com a auditoria travada.
      * `tx.audit` = { audit_id, status_audit, initial_data } ou `null` se não existir.
-     * `tx` expõe: findItem, findItemByIdentifier, insertItem, updateItem,
-     * updateStatus, listItems, findIdentifierHistory, closeAudit.
+     * `tx` expõe: findItem, findActiveLocation, findRefs, findItemByIdentifier,
+     * insertItem, updateItem, updateStatus, listItems, findIdentifierHistory,
+     * closeAudit, getFinalData (relê final_data) e deleteItems (limpa a temporária).
      *
      * @template T
      * @param {number} auditId

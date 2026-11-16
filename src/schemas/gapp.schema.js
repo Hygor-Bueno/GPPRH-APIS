@@ -141,6 +141,7 @@ const listActiveQuerySchema = {
     status_active:        { type: 'number' },
     units_id_fk:          { type: 'number' },
     id_active_class_fk:   { type: 'number' },
+    active_type_id_fk:    { type: 'number' },
     user_id_fk:           { type: 'number' },
     work_group_fk:        { type: 'number' },
     used_in:              { type: 'number' },
@@ -449,25 +450,37 @@ const listAssetTermTemplateQuerySchema = {
 // ─── Auditoria de ativos ────────────────────────────────────────────
 // `active_ids` (lista) e `additional_items` (objeto) não cabem no validador
 // genérico — são conferidos no use-case (domain/gapp/active-audit).
-// Valores aceitos de identifier_type/asset_condition também ficam no domínio.
+// Valores aceitos de identifier_type/asset_condition/lifecycle_status também
+// ficam no domínio; vínculos (setor ∈ unidade, classe ∈ tipo) são lidos no banco.
+
+// Abertura: unidade obrigatória; sem `active_ids` entram todos os ativos do escopo.
+const openActiveAuditSchema = {
+    unit_id_fk:         { type: 'number', required: true, min: 1 },
+    dep_id_fk:          { type: 'number', min: 1 },
+    id_active_class_fk: { type: 'number', min: 1 },
+    active_type_id_fk:  { type: 'number', min: 1 },
+};
+
 const activeAuditItemFieldsSchema = {
     identifier_type:  { type: 'string', maxLength: 30 },
     identifier_value: { type: 'string', maxLength: 150 },
     asset_condition:  { type: 'string', maxLength: 50 },
+    lifecycle_status: { type: 'string', maxLength: 30 },
     observations:     { type: 'string', maxLength: 5000 },
-    // Transferência: o motivo é obrigatório quando is_transfer = 1 (conferido no domínio)
-    is_transfer:                       { type: 'number', enum: [0, 1] },
-    transfer_reason:                   { type: 'string', maxLength: 500 },
-    transfer_branch_code:              { type: 'string', maxLength: 10 },
-    transfer_costcenter_code:          { type: 'string', maxLength: 20 },
-    transfer_responsible_registration: { type: 'string', maxLength: 20 },
+    // Transferência GAPP: motivo e unidade de destino obrigatórios quando
+    // is_transfer = 1 (conferido no domínio). A origem vem de gapp_active.
+    is_transfer:         { type: 'number', enum: [0, 1] },
+    transfer_reason:     { type: 'string', maxLength: 500 },
+    transfer_unit_id_fk: { type: 'number', min: 1 },
+    transfer_dep_id_fk:  { type: 'number', min: 1 },
 };
 
 const registerActiveAuditItemSchema = {
     ...activeAuditItemFieldsSchema,
-    active_id_fk:    { type: 'number', required: true, min: 1 },
-    identifier_type: { ...activeAuditItemFieldsSchema.identifier_type, required: true },
-    asset_condition: { ...activeAuditItemFieldsSchema.asset_condition, required: true },
+    active_id_fk:     { type: 'number', required: true, min: 1 },
+    identifier_type:  { ...activeAuditItemFieldsSchema.identifier_type, required: true },
+    asset_condition:  { ...activeAuditItemFieldsSchema.asset_condition, required: true },
+    lifecycle_status: { ...activeAuditItemFieldsSchema.lifecycle_status, required: true },
 };
 
 const updateActiveAuditItemSchema = { ...activeAuditItemFieldsSchema };
@@ -480,6 +493,8 @@ const listActiveAuditQuerySchema = {
     audit_id:     { type: 'number', min: 1 },
     active_id:    { type: 'number', min: 1 },
     status_audit: { type: 'number', enum: [0, 1, 2, 3] },
+    unit_id_fk:   { type: 'number', min: 1 },
+    dep_id_fk:    { type: 'number', min: 1 },
     date_start:   { type: 'string', pattern: DATE_PATTERN },
     date_end:     { type: 'string', pattern: DATE_PATTERN },
     page:         { type: 'number', min: 1 },
@@ -524,6 +539,7 @@ module.exports = {
     createAssetTermTemplateSchema,
     updateAssetTermTemplateSchema,
     listAssetTermTemplateQuerySchema,
+    openActiveAuditSchema,
     registerActiveAuditItemSchema,
     updateActiveAuditItemSchema,
     cancelActiveAuditSchema,

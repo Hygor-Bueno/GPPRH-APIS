@@ -4,20 +4,27 @@
  * - Usuários (`user_open_id_fk`, `user_register_id_fk`, `user_finish_id_fk`)
  *   são sempre o `gapp_user.user_id` do usuário autenticado — nunca do body.
  * - Escopo: só ativos e auditorias do `work_group_fk` do usuário.
- * - O cadastro original (`gapp_active`) nunca é alterado pela auditoria.
+ * - Abertura: unidade obrigatória, setor/classe/tipo opcionais. Com
+ *   `active_ids` só os escolhidos (precisam estar no escopo); sem, todos os
+ *   ativos do escopo entram automaticamente.
+ * - O cadastro original (`gapp_active`) nunca é alterado pela auditoria; a
+ *   origem da transferência é lida dele.
  * - Depois da abertura, toda escrita roda em `repository.runLocked`
- *   (transação + `FOR UPDATE` na auditoria): o status é conferido e alterado
- *   na mesma transação, sem corrida com finalização/cancelamento.
+ *   (transação + `FOR UPDATE` na auditoria).
+ * - Finalização/cancelamento: grava `final_data`, relê e confere contra a
+ *   tabela temporária e só então a limpa — tudo na mesma transação. Depois
+ *   disso as conferências são servidas a partir do `final_data`.
  *
  * @module modules/global/application/gapp/active-audit/gapp-active-audit.use-cases
  */
 
 const { AppError } = require('../../../../../errors/app.error');
 const {
-    AUDIT_STATUS, AUDIT_STATUS_LABEL,
-    lockedStatusMessage, normalizeActiveIds, toSnapshotAsset,
+    AUDIT_STATUS, AUDIT_STATUS_LABEL, MAX_ACTIVES_PER_AUDIT,
+    lockedStatusMessage, normalizeOpenAudit, validateAuditScope, validateTransferDestination,
+    isSameLocation, toSnapshotAsset,
     normalizeRegistration, findDuplicateIdentifiers,
-    buildReview, buildFinalData, buildCanceledData,
+    buildReview, buildFinalData, buildCanceledData, verifyFinalData, itemsFromFinalData,
 } = require('../../../domain/gapp/active-audit/active-audit.rules');
 
 /** Pares (tipo, valor) dos itens com identificador — para buscar conflitos no histórico. */
@@ -27,13 +34,15 @@ const identifierPairs = items => items
 
 /** Campos que a edição pode trocar; o que não vier mantém o valor atual (inclusive a transferência). */
 const EDITABLE_ITEM_FIELDS = [
-    'identifier_type', 'identifier_value', 'asset_condition', 'additional_items', 'observations',
-    'is_transfer', 'transfer_reason', 'transfer_branch_code', 'transfer_costcenter_code', 'transfer_responsible_registration',
+    'identifier_type', 'identifier_value', 'asset_condition', 'lifecycle_status', 'additional_items', 'observations',
+    'is_transfer', 'transfer_reason', 'transfer_unit_id_fk', 'transfer_dep_id_fk',
 ];
 const mergeItem = (current, data) =>
     Object.fromEntries(EDITABLE_ITEM_FIELDS.map(field => [field, data[field] !== undefined ? data[field] : current[field]]));
 
 const withStatusLabel = audit => audit && ({ ...audit, status_label: AUDIT_STATUS_LABEL[audit.status_audit] ?? null });
+
+const isClosed = status => [AUDIT_STATUS.FINISHED, AUDIT_STATUS.CANCELED].includes(Number(status));
 
 class GappActiveAuditUseCases {
     /**
@@ -71,28 +80,60 @@ class GappActiveAuditUseCases {
     // ─── Etapa 1 — Abertura ─────────────────────────────────────────
 
     /**
-     * Abre a auditoria com a fotografia dos ativos selecionados.
-     * @param {{ active_ids: number[] }} data
+     * Abre a auditoria com a fotografia dos ativos previstos.
+     * @param {{ unit_id_fk: number, dep_id_fk?: number, id_active_class_fk?: number,
+     *           active_type_id_fk?: number, active_ids?: number[] }} data
      */
     async openAudit(data, currentUser) {
         const gappUser = await this._resolveGappUser(currentUser);
 
-        const { ids, error } = normalizeActiveIds(data?.active_ids);
+        const { value, error } = normalizeOpenAudit(data);
         if (error) throw new AppError(error, 400);
+        const { scope, active_ids: activeIds } = value;
 
-        const rows = await this.repository.findActivesForSnapshot(ids, gappUser.work_group_fk);
-        const found = new Set(rows.map(row => Number(row.active_id)));
-        const missing = ids.filter(id => !found.has(id));
-        if (missing.length) {
-            throw new AppError(`Ativo(s) não encontrado(s): ${missing.join(', ')}.`, 404, {
-                code: 'GAPP_AUDIT_ACTIVE_NOT_FOUND',
-                details: { active_ids: missing },
-            });
+        const refs = await this.repository.findRefs(scope);
+        const scopeError = validateAuditScope(scope, refs);
+        if (scopeError) throw new AppError(scopeError, 400, { code: 'GAPP_AUDIT_INVALID_SCOPE' });
+
+        // Sem lista: todos do escopo, buscando um a mais que o teto para saber se estourou.
+        const rows = await this.repository.findActivesForAudit({
+            scope,
+            workGroupFk: gappUser.work_group_fk,
+            activeIds,
+            limit: activeIds ? activeIds.length : MAX_ACTIVES_PER_AUDIT + 1,
+        });
+
+        if (activeIds) {
+            const found = new Set(rows.map(row => Number(row.active_id)));
+            const missing = activeIds.filter(id => !found.has(id));
+            if (missing.length) {
+                throw new AppError(
+                    `Ativo(s) não encontrado(s) ou fora da unidade/setor/classe/tipo selecionados: ${missing.join(', ')}.`,
+                    404,
+                    { code: 'GAPP_AUDIT_ACTIVE_NOT_FOUND', details: { active_ids: missing } }
+                );
+            }
+        } else {
+            if (!rows.length) {
+                throw new AppError('Nenhum ativo encontrado para a unidade/setor/classe/tipo selecionados.', 404, {
+                    code: 'GAPP_AUDIT_NO_ACTIVES',
+                });
+            }
+            if (rows.length > MAX_ACTIVES_PER_AUDIT) {
+                throw new AppError(
+                    `O escopo selecionado tem mais de ${MAX_ACTIVES_PER_AUDIT} ativos. Refine por setor, classe ou tipo.`,
+                    400,
+                    { code: 'GAPP_AUDIT_TOO_MANY_ACTIVES' }
+                );
+            }
         }
 
-        const initialData = { assets: rows.map(toSnapshotAsset) };
+        const initialData = { scope, assets: rows.map(toSnapshotAsset) };
         const { insertId } = await this.repository.createAudit({
             user_open_id_fk: gappUser.user_id,
+            unit_id_fk: scope.unit_id_fk,
+            dep_id_fk: scope.dep_id_fk,
+            id_active_class_fk: scope.id_active_class_fk,
             initial_data: initialData,
             quantity_active: initialData.assets.length,
         });
@@ -109,23 +150,43 @@ class GappActiveAuditUseCases {
         return { ...result, items: result.items.map(withStatusLabel) };
     }
 
-    /** Cabeçalho + initial_data + final_data + conferências registradas. */
+    /**
+     * Cabeçalho + initial_data + final_data + conferências.
+     * Aberta: conferências da temporária. Encerrada: do `final_data`
+     * (a temporária foi limpa), no mesmo formato.
+     */
     async getAuditById(auditId, currentUser) {
         const gappUser = await this._resolveGappUser(currentUser);
         const audit = await this._getScopedAudit(auditId, gappUser);
-        const items = await this.repository.listItems(audit.audit_id);
+        const items = isClosed(audit.status_audit)
+            ? await this._closedItems(audit)
+            : await this.repository.listItems(audit.audit_id);
         return { ...withStatusLabel(audit), items };
+    }
+
+    /** @private Conferências do final_data; nomes faltantes (formato antigo) são resolvidos no gapp_user. */
+    async _closedItems(audit) {
+        const items = itemsFromFinalData(audit.audit_id, audit.final_data);
+        const missing = [...new Set(items
+            .filter(item => item.user_register_id_fk != null && !item.user_register_name)
+            .map(item => Number(item.user_register_id_fk)))];
+        if (!missing.length) return items;
+
+        const names = new Map((await this.repository.findUserNames(missing)).map(row => [Number(row.user_id), row.name]));
+        return items.map(item => (item.user_register_name || item.user_register_id_fk == null
+            ? item
+            : { ...item, user_register_name: names.get(Number(item.user_register_id_fk)) ?? null }));
     }
 
     // ─── Etapa 3 — Revisão ──────────────────────────────────────────
 
-    /** Previstos, conferidos, pendentes, divergências e resumo de conservação. */
+    /** Previstos, conferidos, pendentes, divergências e resumos de conservação e ciclo de vida. */
     async getReview(auditId, currentUser) {
         const gappUser = await this._resolveGappUser(currentUser);
         const audit = await this._getScopedAudit(auditId, gappUser);
 
         // Finalizada/cancelada: a revisão é o que foi consolidado no fechamento.
-        if (audit.status_audit === AUDIT_STATUS.FINISHED || audit.status_audit === AUDIT_STATUS.CANCELED) {
+        if (isClosed(audit.status_audit)) {
             return { audit_id: audit.audit_id, status_audit: audit.status_audit, status_label: AUDIT_STATUS_LABEL[audit.status_audit], ...audit.final_data };
         }
 
@@ -153,12 +214,9 @@ class GappActiveAuditUseCases {
 
     /** @private */
     async _saveItem(auditId, data, currentUser, { isUpdate }) {
-        console.log(data)
         const gappUser = await this._resolveGappUser(currentUser);
         const audit = await this._getScopedAudit(auditId, gappUser);
         const activeId = Number(data.active_id_fk);
-
-        console.log(audit)
 
         const expected = (audit.initial_data?.assets ?? []).some(asset => Number(asset.active_id) === activeId);
         if (!expected) {
@@ -181,6 +239,8 @@ class GappActiveAuditUseCases {
 
             const { value, error } = normalizeRegistration(merged);
             if (error) throw new AppError(error, 400);
+
+            if (value.is_transfer) await this._resolveTransfer(tx, activeId, current, value);
 
             if (value.identifier_value != null) {
                 const other = await tx.findItemByIdentifier(value.identifier_type, value.identifier_value, activeId);
@@ -205,12 +265,72 @@ class GappActiveAuditUseCases {
         return this.getAuditById(audit.audit_id, currentUser);
     }
 
+    /**
+     * @private Completa a transferência em `value` (mutando-o):
+     * - destino existe e o setor é da unidade;
+     * - origem = unidade/setor do ativo em gapp_active (mantém a já gravada numa edição);
+     * - destino precisa ser diferente da origem.
+     */
+    async _resolveTransfer(tx, activeId, current, value) {
+        const refs = await tx.findRefs({ unit_id_fk: value.transfer_unit_id_fk, dep_id_fk: value.transfer_dep_id_fk });
+        const destinationError = validateTransferDestination(value, refs);
+        if (destinationError) throw new AppError(destinationError, 400, { code: 'GAPP_AUDIT_INVALID_TRANSFER' });
+
+        if (current && Number(current.is_transfer) === 1) {
+            value.transfer_origin_unit_id_fk = current.transfer_origin_unit_id_fk ?? null;
+            value.transfer_origin_dep_id_fk = current.transfer_origin_dep_id_fk ?? null;
+        } else {
+            const origin = await tx.findActiveLocation(activeId);
+            if (!origin) throw new AppError('Ativo não encontrado no cadastro.', 404);
+            value.transfer_origin_unit_id_fk = origin.units_id_fk ?? null;
+            value.transfer_origin_dep_id_fk = origin.used_in ?? null;
+        }
+
+        if (isSameLocation(value.transfer_unit_id_fk, value.transfer_dep_id_fk,
+            value.transfer_origin_unit_id_fk, value.transfer_origin_dep_id_fk)) {
+            throw new AppError('O destino da transferência é igual à unidade/setor atual do ativo.', 400, {
+                code: 'GAPP_AUDIT_INVALID_TRANSFER',
+            });
+        }
+    }
+
     // ─── Etapa 4 — Finalização ──────────────────────────────────────
 
     /**
-     * Consolida as conferências em `final_data` e fecha a auditoria (transacional).
-     * Pendentes e conflitos com auditorias anteriores entram como divergência;
-     * identificador repetido dentro da auditoria impede a finalização.
+     * @private Encerra na transação: grava final_data, relê e confere contra a
+     * temporária, e só então a limpa. Qualquer falha desfaz tudo (ROLLBACK) —
+     * as conferências continuam na temporária e a auditoria continua aberta.
+     */
+    async _closeAndClear(tx, { finalData, userId, status, items }) {
+        const { updated } = await tx.closeAudit({ finalData, userId, status });
+        if (!updated) {
+            const action = status === AUDIT_STATUS.FINISHED ? 'finalização' : 'cancelamento';
+            throw new AppError(`Status da auditoria não permite ${action}.`, 409, { code: 'GAPP_AUDIT_LOCKED' });
+        }
+
+        const saved = await tx.getFinalData();
+        const problems = verifyFinalData(saved, items);
+        if (problems.length) {
+            throw new AppError('Os dados consolidados não conferem com as conferências registradas. Nada foi alterado.', 500, {
+                code: 'GAPP_AUDIT_FINAL_DATA_MISMATCH',
+                details: { problems },
+            });
+        }
+
+        const { deleted } = await tx.deleteItems();
+        if (deleted !== items.length) {
+            throw new AppError('Quantidade de conferências apagadas diferente da consolidada. Nada foi alterado.', 500, {
+                code: 'GAPP_AUDIT_CLEANUP_MISMATCH',
+                details: { expected: items.length, deleted },
+            });
+        }
+    }
+
+    /**
+     * Consolida as conferências em `final_data`, fecha a auditoria e limpa a
+     * temporária (transacional). Pendentes e conflitos com auditorias
+     * anteriores entram como divergência; identificador repetido dentro da
+     * auditoria impede a finalização.
      */
     async finishAudit(auditId, currentUser) {
         const gappUser = await this._resolveGappUser(currentUser);
@@ -233,14 +353,16 @@ class GappActiveAuditUseCases {
             const history = await tx.findIdentifierHistory(identifierPairs(items));
             const finalData = buildFinalData(audit.audit_id, tx.audit.initial_data, items, history);
 
-            const { updated } = await tx.closeAudit({ finalData, userId: gappUser.user_id, status: AUDIT_STATUS.FINISHED });
-            if (!updated) throw new AppError('Status da auditoria não permite finalização.', 409, { code: 'GAPP_AUDIT_LOCKED' });
+            await this._closeAndClear(tx, { finalData, userId: gappUser.user_id, status: AUDIT_STATUS.FINISHED, items });
         });
 
         return this.getAuditById(audit.audit_id, currentUser);
     }
 
-    /** Cancela a auditoria. As conferências ficam preservadas (rastreabilidade). */
+    /**
+     * Cancela a auditoria. As conferências já feitas ficam no `final_data`
+     * (rastreabilidade) e a temporária é limpa, como na finalização.
+     */
     async cancelAudit(auditId, data, currentUser) {
         const gappUser = await this._resolveGappUser(currentUser);
         const audit = await this._getScopedAudit(auditId, gappUser);
@@ -252,8 +374,7 @@ class GappActiveAuditUseCases {
             const items = await tx.listItems();
             const finalData = buildCanceledData(audit.audit_id, tx.audit.initial_data, items, data?.reason);
 
-            const { updated } = await tx.closeAudit({ finalData, userId: gappUser.user_id, status: AUDIT_STATUS.CANCELED });
-            if (!updated) throw new AppError('Status da auditoria não permite cancelamento.', 409, { code: 'GAPP_AUDIT_LOCKED' });
+            await this._closeAndClear(tx, { finalData, userId: gappUser.user_id, status: AUDIT_STATUS.CANCELED, items });
         });
 
         return this.getAuditById(audit.audit_id, currentUser);

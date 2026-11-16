@@ -10,7 +10,7 @@ const useCases = new GappActiveAuditUseCases({
 
 /**
  * GET /gapp/active-audit
- * Query: ?audit_id&status_audit&active_id&date_start&date_end&page&limit (todos opcionais)
+ * Query: ?audit_id&status_audit&unit_id_fk&dep_id_fk&active_id&date_start&date_end&page&limit (todos opcionais)
  */
 async function listAudits(req, res) {
     const result = await useCases.listAudits(req.query, req.user);
@@ -29,7 +29,10 @@ async function getReview(req, res) {
     return respond.ok(res, result);
 }
 
-/** POST /gapp/active-audit — Body: { active_ids: number[] } */
+/**
+ * POST /gapp/active-audit
+ * Body: { unit_id_fk, dep_id_fk?, id_active_class_fk?, active_type_id_fk?, active_ids? }
+ */
 async function openAudit(req, res) {
     const result = await useCases.openAudit(req.body ?? {}, req.user);
     return respond.created(res, result);
@@ -37,7 +40,8 @@ async function openAudit(req, res) {
 
 /**
  * POST /gapp/active-audit/:id/items
- * Body: { active_id_fk, identifier_type, identifier_value?, asset_condition, additional_items?, observations? }
+ * Body: { active_id_fk, identifier_type, identifier_value?, asset_condition, lifecycle_status,
+ *         additional_items?, observations?, is_transfer?, transfer_reason?, transfer_unit_id_fk?, transfer_dep_id_fk? }
  */
 async function registerItem(req, res) {
     const result = await useCases.registerItem(req.params.id, req.body ?? {}, req.user);
@@ -50,7 +54,7 @@ async function updateItem(req, res) {
     return respond.ok(res, result);
 }
 
-/** PATCH /gapp/active-audit/:id/finish */
+/** PATCH /gapp/active-audit/:id/finish — consolida, confere e limpa a temporária. */
 async function finishAudit(req, res) {
     const result = await useCases.finishAudit(req.params.id, req.user);
     return respond.ok(res, result);

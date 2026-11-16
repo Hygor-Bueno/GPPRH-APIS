@@ -116,6 +116,7 @@ const {
     createAssetTermTemplateSchema,
     updateAssetTermTemplateSchema,
     listAssetTermTemplateQuerySchema,
+    openActiveAuditSchema,
     registerActiveAuditItemSchema,
     updateActiveAuditItemSchema,
     cancelActiveAuditSchema,
@@ -2803,15 +2804,17 @@ router.put('/gapp/asset-term-template/:id',
     asyncHandler(gappAssetTermTemplateController.updateTemplate));
 
 // ─── GAPP — Auditoria de ativos / inventário ──────────────────────────────────
-// gapp_active_audit (cabeçalho + JSON inicial/final) e gapp_active_audit_temp
-// (uma conferência por ativo). O cadastro em gapp_active nunca é alterado.
+// gapp_active_audit (cabeçalho + local/escopo + JSON inicial/final) e
+// gapp_active_audit_temp (uma conferência por ativo enquanto a auditoria está
+// aberta — limpa na finalização/cancelamento, depois de consolidada e conferida
+// no final_data). O cadastro em gapp_active nunca é alterado.
 // Status: 0 ABERTA · 1 EM ANDAMENTO · 2 FINALIZADA · 3 CANCELADA.
-// DDL e permissões: repositories/mysql/gapp-active-audit-deploy.sql
+// DDL: gapp-active-audit-deploy.sql / -migration*.sql (fora do repo)
 
 /**
  * @route GET /gapp/active-audit
  * @description Histórico de auditorias do grupo de trabalho do usuário, com paginação.
- * Filtros: audit_id, status_audit, active_id (auditorias que incluíram o ativo),
+ * Filtros: audit_id, status_audit, unit_id_fk, dep_id_fk, active_id (auditorias que incluíram o ativo),
  * date_start/date_end (AAAA-MM-DD, sobre date_open), page, limit.
  * @access Requer `GAPP_VIEW_ACTIVE_AUDIT`
  */
@@ -2823,7 +2826,8 @@ router.get('/gapp/active-audit',
 
 /**
  * @route GET /gapp/active-audit/:id
- * @description Auditoria com initial_data, final_data e as conferências registradas.
+ * @description Auditoria com initial_data, final_data e as conferências (da temporária
+ * enquanto aberta; do final_data depois de encerrada — mesmo formato).
  * @access Requer `GAPP_VIEW_ACTIVE_AUDIT`
  */
 router.get('/gapp/active-audit/:id',
@@ -2843,19 +2847,25 @@ router.get('/gapp/active-audit/:id/review',
 
 /**
  * @route POST /gapp/active-audit
- * @description Abre a auditoria. Body: { active_ids: number[] } (ativos do grupo do usuário).
+ * @description Abre a auditoria. Body: { unit_id_fk, dep_id_fk?, id_active_class_fk?,
+ * active_type_id_fk?, active_ids? }. Com active_ids → só esses (precisam estar no
+ * escopo); sem → todos os ativos do grupo no escopo (máx. 1000). O tipo só filtra
+ * (não é coluna da auditoria — vem da classe).
  * @access Requer `GAPP_CREATE_ACTIVE_AUDIT`
  */
 router.post('/gapp/active-audit',
     authMiddleware,
     canAll(['GAPP_CREATE_ACTIVE_AUDIT']),
+    validate(openActiveAuditSchema),
     asyncHandler(gappActiveAuditController.openAudit));
 
 /**
  * @route POST /gapp/active-audit/:id/items
  * @description Registra a conferência de um ativo previsto. Body: { active_id_fk,
  * identifier_type (SERIAL|PATRIMONIO|SEM_IDENTIFICACAO), identifier_value?,
- * asset_condition (GOOD|REGULAR|BAD|UNUSABLE), additional_items?, observations? }
+ * asset_condition (GOOD|REGULAR|BAD|UNUSABLE),
+ * lifecycle_status (IN_USE|IN_STOCK|IN_MAINTENANCE|DISCARDED), additional_items?, observations?,
+ * is_transfer?, transfer_reason?, transfer_unit_id_fk?, transfer_dep_id_fk? }
  * @access Requer `GAPP_REGISTER_ACTIVE_AUDIT`
  */
 router.post('/gapp/active-audit/:id/items',
@@ -2877,7 +2887,8 @@ router.put('/gapp/active-audit/:id/items/:activeId',
 
 /**
  * @route PATCH /gapp/active-audit/:id/finish
- * @description Consolida as conferências em final_data e finaliza (transacional).
+ * @description Consolida as conferências em final_data, confere o gravado, finaliza e
+ * limpa a tabela temporária (tudo numa transação).
  * @access Requer `GAPP_FINISH_ACTIVE_AUDIT`
  */
 router.patch('/gapp/active-audit/:id/finish',
@@ -2887,7 +2898,8 @@ router.patch('/gapp/active-audit/:id/finish',
 
 /**
  * @route PATCH /gapp/active-audit/:id/cancel
- * @description Cancela a auditoria. Body: { reason? }. As conferências são preservadas.
+ * @description Cancela a auditoria. Body: { reason? }. As conferências vão para o
+ * final_data e a temporária é limpa (mesma transação).
  * @access Requer `GAPP_FINISH_ACTIVE_AUDIT`
  */
 router.patch('/gapp/active-audit/:id/cancel',
@@ -3214,4 +3226,4 @@ router.get('/active-directory-users',
     asyncHandler(activeDirectoryUsersController.listActiveDirectoryUsers)
 )
 
-module.exports = router;
+module.exports = router;

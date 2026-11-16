@@ -3,7 +3,9 @@
  *
  * `runLocked` abre a transação, trava a auditoria com `SELECT ... FOR UPDATE`
  * e entrega à função um `tx` com as operações ligadas à MESMA conexão.
- * COMMIT no fim; qualquer erro → ROLLBACK.
+ * COMMIT no fim; qualquer erro → ROLLBACK. É isso que torna a finalização
+ * segura: gravar final_data → reler e conferir → limpar a temporária
+ * acontecem juntos ou não acontecem.
  *
  * @module modules/global/infrastructure/gapp/mysql-active-audit.repository
  */
@@ -12,12 +14,13 @@ const { poolGlobal } = require('../../../../config/mysql');
 const { AppError } = require('../../../../errors/app.error');
 const { ActiveAuditRepositoryPort } = require('../../application/gapp/active-audit/ports/active-audit-repository.port');
 const {
-    sqlListActivesForSnapshot, sqlInsertAudit,
-    sqlListAudits, sqlCountAudits, sqlGetAuditById, sqlListAuditItems,
-    sqlIdentifierHistory, sqlLockAudit, sqlGetAuditItem, sqlFindItemByIdentifier,
+    sqlListActivesForAudit, sqlFindUnit, sqlFindDepartment, sqlFindActiveClass, sqlFindActiveType,
+    sqlInsertAudit, buildInsertAuditParams,
+    sqlListAudits, sqlCountAudits, sqlGetAuditById, sqlListAuditItems, sqlListUserNames,
+    sqlIdentifierHistory, sqlLockAudit, sqlGetAuditItem, sqlGetActiveLocation, sqlFindItemByIdentifier,
     sqlInsertAuditItem, buildInsertAuditItemParams,
     sqlUpdateAuditItem, buildUpdateAuditItemParams,
-    sqlUpdateAuditStatus, sqlCloseAudit,
+    sqlUpdateAuditStatus, sqlCloseAudit, sqlGetFinalData, sqlDeleteAuditItems,
 } = require('../../repositories/mysql/gapp-active-audit.queries');
 
 /** O mysql2 já devolve coluna JSON como objeto; o parse cobre driver/config que devolva texto. */
@@ -53,6 +56,24 @@ async function queryIdentifierHistory(runner, auditId, pairs) {
     return rows;
 }
 
+/** Primeira linha de uma consulta por id, ou `null` (id vazio não consulta). */
+async function findOne(runner, sql, id) {
+    if (id == null) return null;
+    const [rows] = await runner.query(sql, [id]);
+    return rows[0] ?? null;
+}
+
+/** Unidade, setor, classe e tipo — o que vier preenchido. Usado na abertura e no destino da transferência. */
+async function queryRefs(runner, { unit_id_fk, dep_id_fk, id_active_class_fk, active_type_id_fk } = {}) {
+    const [unit, department, activeClass, activeType] = await Promise.all([
+        findOne(runner, sqlFindUnit(), unit_id_fk),
+        findOne(runner, sqlFindDepartment(), dep_id_fk),
+        findOne(runner, sqlFindActiveClass(), id_active_class_fk),
+        findOne(runner, sqlFindActiveType(), active_type_id_fk),
+    ]);
+    return { unit, department, activeClass, activeType };
+}
+
 class MysqlActiveAuditRepository extends ActiveAuditRepositoryPort {
     /** @private */
     async _query(sql, params = []) {
@@ -63,19 +84,29 @@ class MysqlActiveAuditRepository extends ActiveAuditRepositoryPort {
         }
     }
 
-    async findActivesForSnapshot(activeIds, workGroupFk) {
-        if (!activeIds.length) return [];
-        const [rows] = await this._query(sqlListActivesForSnapshot(), [workGroupFk, activeIds]);
+    async findActivesForAudit({ scope, workGroupFk, activeIds = null, limit }) {
+        const { sql, params } = sqlListActivesForAudit(scope, workGroupFk, activeIds, limit);
+        const [rows] = await this._query(sql, params);
         return rows;
     }
 
+    async findRefs(refs) {
+        try {
+            return await queryRefs(poolGlobal, refs);
+        } catch (error) {
+            throw toAppError(error);
+        }
+    }
+
     async createAudit(data) {
-        const [result] = await this._query(sqlInsertAudit(), [
-            data.user_open_id_fk,
-            JSON.stringify(data.initial_data),
-            data.quantity_active,
-        ]);
+        const [result] = await this._query(sqlInsertAudit(), buildInsertAuditParams(data));
         return { insertId: result.insertId };
+    }
+
+    async findUserNames(userIds) {
+        if (!userIds.length) return [];
+        const [rows] = await this._query(sqlListUserNames(), [userIds]);
+        return rows;
     }
 
     async list(filters) {
@@ -133,6 +164,14 @@ class MysqlActiveAuditRepository extends ActiveAuditRepositoryPort {
                 return parseItem(rows[0]) ?? null;
             },
 
+            async findActiveLocation(activeId) {
+                return findOne(conn, sqlGetActiveLocation(), activeId);
+            },
+
+            findRefs(refs) {
+                return queryRefs(conn, refs);
+            },
+
             async findItemByIdentifier(type, value, ignoreActiveId) {
                 const [rows] = await conn.query(sqlFindItemByIdentifier(), [auditId, type, value, ignoreActiveId]);
                 return rows[0] ?? null;
@@ -165,6 +204,16 @@ class MysqlActiveAuditRepository extends ActiveAuditRepositoryPort {
             async closeAudit({ finalData, userId, status }) {
                 const [result] = await conn.query(sqlCloseAudit(), [JSON.stringify(finalData), userId, status, auditId]);
                 return { updated: result.affectedRows };
+            },
+
+            async getFinalData() {
+                const [rows] = await conn.query(sqlGetFinalData(), [auditId]);
+                return rows[0] ? parseJson(rows[0].final_data) : null;
+            },
+
+            async deleteItems() {
+                const [result] = await conn.query(sqlDeleteAuditItems(), [auditId]);
+                return { deleted: result.affectedRows };
             },
         };
     }

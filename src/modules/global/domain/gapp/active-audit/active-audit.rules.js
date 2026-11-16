@@ -2,8 +2,12 @@
  * @fileoverview Regras puras da auditoria de ativos GAPP (sem I/O).
  *
  * - Status e transições permitidas.
- * - Normalização/validação da conferência (identificador, conservação, itens adicionais).
- * - Revisão (pendentes, divergências, resumo de conservação) e o JSON final.
+ * - Abertura: escopo (unidade, setor, classe, tipo) e seleção MANUAL × AUTO.
+ * - Normalização/validação da conferência (identificador, conservação, ciclo
+ *   de vida, itens adicionais, transferência GAPP).
+ * - Revisão (pendentes, divergências, resumos) e o JSON final.
+ * - Conferência do `final_data` gravado antes de limpar a tabela temporária,
+ *   e leitura das conferências de volta a partir dele.
  *
  * @module modules/global/domain/gapp/active-audit/active-audit.rules
  */
@@ -34,6 +38,9 @@ const IDENTIFIER_TYPES = Object.freeze(Object.values(IDENTIFIER_TYPE));
 
 const ASSET_CONDITIONS = Object.freeze(['GOOD', 'REGULAR', 'BAD', 'UNUSABLE']);
 
+/** Ciclo de vida do ativo identificado na conferência (CHECK ck_audit_temp_lifecycle). */
+const LIFECYCLE_STATUSES = Object.freeze(['IN_USE', 'IN_STOCK', 'IN_MAINTENANCE', 'DISCARDED']);
+
 const DIVERGENCE_TYPE = Object.freeze({
     PENDING: 'PENDING',                         // previsto e não conferido
     DUPLICATE_IDENTIFIER: 'DUPLICATE_IDENTIFIER', // mesmo identificador em 2+ ativos da auditoria
@@ -45,18 +52,14 @@ const MAX_ACTIVES_PER_AUDIT = 1000;
 const MAX_IDENTIFIER_LENGTH = 150;
 const ADDITIONAL_ITEMS_LIMITS = Object.freeze({ maxKeys: 50, maxKeyLength: 60, maxStringLength: 200 });
 
-/**
- * Destino da transferência — só os códigos do Protheus (filial, centro de
- * custo e matrícula do responsável); os nomes o front resolve pelos códigos.
- * Tudo opcional, menos o motivo: o que faltar no Protheus não impede o registro.
- */
-const TRANSFER_FIELD_LIMITS = Object.freeze({
-    transfer_branch_code: 10,
-    transfer_costcenter_code: 20,
-    transfer_responsible_registration: 20,
-});
-const TRANSFER_FIELDS = Object.freeze(Object.keys(TRANSFER_FIELD_LIMITS));
 const MAX_TRANSFER_REASON = 500;
+
+/** Inteiro positivo ou `null` (vazio). `undefined` quando o valor é inválido. */
+function positiveIntOrNull(value) {
+    if (value === undefined || value === null || value === '') return null;
+    const number = Number(value);
+    return Number.isInteger(number) && number > 0 ? number : undefined;
+}
 
 const isEditableStatus = status => EDITABLE_STATUSES.includes(Number(status));
 
@@ -94,6 +97,79 @@ function normalizeActiveIds(input) {
 }
 
 /**
+ * Filtros da abertura sobre gapp_active. Unidade, setor e classe ficam no
+ * cabeçalho; o tipo só filtra (vem da classe: gapp_active_class.active_type_id_fk)
+ * e fica registrado em `initial_data.scope`.
+ */
+const AUDIT_SCOPE_FIELDS = Object.freeze(['unit_id_fk', 'dep_id_fk', 'id_active_class_fk', 'active_type_id_fk']);
+
+/**
+ * Corpo da abertura. A unidade é obrigatória; setor, classe e tipo refinam o escopo.
+ * Com `active_ids` → só os escolhidos (precisam estar no escopo);
+ * sem `active_ids` (ou lista vazia) → `active_ids: null` = todos os ativos do escopo.
+ *
+ * @returns {{ value?: { scope: object, active_ids: number[]|null }, error?: string }}
+ */
+function normalizeOpenAudit(data = {}) {
+    const scope = {};
+    for (const field of AUDIT_SCOPE_FIELDS) {
+        const value = positiveIntOrNull(data[field]);
+        if (value === undefined) return { error: `O campo '${field}' deve ser um id válido.` };
+        scope[field] = value;
+    }
+    if (!scope.unit_id_fk) return { error: 'Informe a unidade onde a auditoria será realizada.' };
+
+    const hasIds = Array.isArray(data.active_ids) ? data.active_ids.length > 0 : data.active_ids != null;
+    if (!hasIds) return { value: { scope, active_ids: null } };
+
+    const { ids, error } = normalizeActiveIds(data.active_ids);
+    if (error) return { error };
+    return { value: { scope, active_ids: ids } };
+}
+
+/**
+ * Confere as referências do escopo lidas do banco.
+ * `refs` = { unit, department, activeClass, activeType } (null quando não achou).
+ * @returns {string|null} mensagem de erro
+ */
+function validateAuditScope(scope, refs) {
+    if (!refs.unit) return 'Unidade não encontrada.';
+    if (scope.dep_id_fk) {
+        if (!refs.department) return 'Setor não encontrado.';
+        if (Number(refs.department.unit_id_fk) !== Number(scope.unit_id_fk)) return 'O setor informado não pertence à unidade.';
+    }
+    if (scope.id_active_class_fk && !refs.activeClass) return 'Classe de ativo não encontrada.';
+    if (scope.active_type_id_fk) {
+        if (!refs.activeType) return 'Tipo de ativo não encontrado.';
+        if (refs.activeClass && Number(refs.activeClass.active_type_id_fk) !== Number(scope.active_type_id_fk)) {
+            return 'A classe de ativo informada não pertence ao tipo.';
+        }
+    }
+    return null;
+}
+
+/**
+ * Destino da transferência lido do banco: unidade existe e o setor é dela.
+ * `refs` = { unit, department }.
+ * @returns {string|null}
+ */
+function validateTransferDestination(value, refs) {
+    if (!Number(value.is_transfer)) return null;
+    if (!refs.unit) return 'Unidade de destino não encontrada.';
+    if (value.transfer_dep_id_fk) {
+        if (!refs.department) return 'Setor de destino não encontrado.';
+        if (Number(refs.department.unit_id_fk) !== Number(value.transfer_unit_id_fk)) {
+            return 'O setor de destino não pertence à unidade de destino.';
+        }
+    }
+    return null;
+}
+
+/** Mesma unidade e mesmo setor (NULL = NULL), como o `<=>` do CHECK. */
+const isSameLocation = (unitA, depA, unitB, depB) =>
+    (unitA ?? null) == (unitB ?? null) && (depA ?? null) == (depB ?? null); // eslint-disable-line eqeqeq
+
+/**
  * Fotografia do ativo guardada em `initial_data` — só o que vem do cadastro.
  */
 function toSnapshotAsset(row) {
@@ -108,9 +184,12 @@ function toSnapshotAsset(row) {
         is_vehicle: row.is_vehicle ?? null,
         id_active_class_fk: row.id_active_class_fk ?? null,
         desc_active_class: row.desc_active_class ?? null,
+        active_type_id_fk: row.active_type_id_fk ?? null,
+        desc_active_type: row.desc_active_type ?? null,
         units_id_fk: row.units_id_fk ?? null,
         unit_name: row.unit_name ?? null,
         used_in: row.used_in ?? null,
+        dep_name: row.dep_name ?? null,
         work_group_fk: row.work_group_fk ?? null,
     };
 }
@@ -151,14 +230,24 @@ function validateAdditionalItems(value) {
 
 const trimOrNull = value => (value == null ? null : String(value).trim() || null);
 
+/** Colunas de transferência gravadas na conferência (origem é preenchida pelo use-case). */
+const TRANSFER_COLUMNS = Object.freeze([
+    'transfer_reason',
+    'transfer_origin_unit_id_fk', 'transfer_origin_dep_id_fk',
+    'transfer_unit_id_fk', 'transfer_dep_id_fk',
+]);
+
 /**
- * Transferência: `is_transfer` 1 exige motivo; 0 limpa motivo e destino.
+ * Transferência GAPP: `is_transfer` 1 exige motivo e unidade de destino (setor
+ * opcional); 0 limpa tudo. A origem NÃO vem do cliente — o use-case a lê de
+ * `gapp_active` (unidade e setor atuais do ativo).
  * @returns {{ value?: object, error?: string }}
  */
 function normalizeTransfer(data) {
     const isTransfer = data.is_transfer === true || Number(data.is_transfer) === 1;
-    const empty = Object.fromEntries(TRANSFER_FIELDS.map(field => [field, null]));
-    if (!isTransfer) return { value: { is_transfer: 0, transfer_reason: null, ...empty } };
+    if (!isTransfer) {
+        return { value: { is_transfer: 0, ...Object.fromEntries(TRANSFER_COLUMNS.map(column => [column, null])) } };
+    }
 
     const reason = trimOrNull(data.transfer_reason);
     if (!reason) return { error: 'Informe o motivo da transferência.' };
@@ -166,14 +255,21 @@ function normalizeTransfer(data) {
         return { error: `O motivo da transferência deve ter no máximo ${MAX_TRANSFER_REASON} caracteres.` };
     }
 
-    const value = { is_transfer: 1, transfer_reason: reason };
-    for (const [field, limit] of Object.entries(TRANSFER_FIELD_LIMITS)) {
-        value[field] = trimOrNull(data[field]);
-        if (value[field] && value[field].length > limit) {
-            return { error: `O campo '${field}' deve ter no máximo ${limit} caracteres.` };
-        }
-    }
-    return { value };
+    const unitId = positiveIntOrNull(data.transfer_unit_id_fk);
+    if (!unitId) return { error: 'Informe a unidade de destino da transferência.' };
+    const depId = positiveIntOrNull(data.transfer_dep_id_fk);
+    if (depId === undefined) return { error: "O campo 'transfer_dep_id_fk' deve ser um id válido." };
+
+    return {
+        value: {
+            is_transfer: 1,
+            transfer_reason: reason,
+            transfer_origin_unit_id_fk: null,
+            transfer_origin_dep_id_fk: null,
+            transfer_unit_id_fk: unitId,
+            transfer_dep_id_fk: depId,
+        },
+    };
 }
 
 /**
@@ -199,6 +295,10 @@ function normalizeRegistration(data) {
         return { error: `O campo 'asset_condition' deve ser um destes valores: ${ASSET_CONDITIONS.join(', ')}.` };
     }
 
+    if (!LIFECYCLE_STATUSES.includes(data.lifecycle_status)) {
+        return { error: `O campo 'lifecycle_status' deve ser um destes valores: ${LIFECYCLE_STATUSES.join(', ')}.` };
+    }
+
     const additional = validateAdditionalItems(data.additional_items);
     if (additional.error) return { error: additional.error };
 
@@ -210,6 +310,7 @@ function normalizeRegistration(data) {
             identifier_type: identifierType,
             identifier_value: identifierValue,
             asset_condition: data.asset_condition,
+            lifecycle_status: data.lifecycle_status,
             additional_items: additional.value,
             observations: trimOrNull(data.observations),
             ...transfer.value,
@@ -263,41 +364,55 @@ function findIdentifierConflicts(items, history = []) {
     return conflicts;
 }
 
+const location = (unitId, unitName, depId, depName) => ({
+    unit_id: unitId ?? null, unit_name: unitName ?? null, dep_id: depId ?? null, dep_name: depName ?? null,
+});
+
 /**
- * Transferência consolidada: origem (unidade do ativo na fotografia da abertura)
- * × destino (códigos do Protheus), motivo e matrícula do responsável. `null` quando não houve.
+ * Transferência consolidada: origem (cadastro do ativo em gapp_active no
+ * registro) × destino GAPP, com os nomes da época. `null` quando não houve.
  */
-function toTransfer(item, asset) {
+function toTransfer(item) {
     if (!Number(item.is_transfer)) return null;
     return {
         reason: item.transfer_reason ?? null,
-        origin: { unit_id: asset?.units_id_fk ?? null, unit_name: asset?.unit_name ?? null },
-        destination: {
-            branch_code: item.transfer_branch_code ?? null,
-            costcenter_code: item.transfer_costcenter_code ?? null,
-        },
-        responsible_registration: item.transfer_responsible_registration ?? null,
+        origin: location(item.transfer_origin_unit_id_fk, item.transfer_origin_unit_name,
+            item.transfer_origin_dep_id_fk, item.transfer_origin_dep_name),
+        destination: location(item.transfer_unit_id_fk, item.transfer_unit_name,
+            item.transfer_dep_id_fk, item.transfer_dep_name),
     };
 }
 
-function toFinalItem(item, asset) {
+/**
+ * Conferência como fica no `final_data`. Depois da finalização a tabela
+ * temporária é limpa, então este objeto precisa carregar TUDO o que a tela
+ * de detalhe mostra (inclusive nomes).
+ */
+function toFinalItem(item) {
     return {
         active_id: Number(item.active_id_fk),
         identifier_type: item.identifier_type,
         identifier_value: item.identifier_value ?? null,
         condition: item.asset_condition ?? null,
+        lifecycle_status: item.lifecycle_status ?? null,
         additional_items: item.additional_items ?? null,
         observations: item.observations ?? null,
         user_register_id: item.user_register_id_fk ?? null,
+        user_register_name: item.user_register_name ?? null,
         date_register: item.date_register ?? null,
-        transfer: toTransfer(item, asset),
+        transfer: toTransfer(item),
     };
 }
 
-/** Itens consolidados, cada um com o ativo da fotografia (origem da transferência). */
-function toFinalItems(initialData, items) {
-    const assetById = new Map((initialData?.assets ?? []).map(asset => [Number(asset.active_id), asset]));
-    return items.map(item => toFinalItem(item, assetById.get(Number(item.active_id_fk))));
+const toFinalItems = items => items.map(toFinalItem);
+
+/** Contagem por valor, com todos os valores conhecidos zerados. */
+function countBy(items, field, known) {
+    const counts = Object.fromEntries(known.map(value => [value, 0]));
+    for (const item of items) {
+        if (item[field] in counts) counts[item[field]] += 1;
+    }
+    return counts;
 }
 
 /**
@@ -315,10 +430,8 @@ function buildReview(initialData, items, history = []) {
         .filter(asset => !registered.has(Number(asset.active_id)))
         .map(asset => ({ active_id: asset.active_id, brand: asset.brand, model: asset.model }));
 
-    const conditions = Object.fromEntries(ASSET_CONDITIONS.map(condition => [condition, 0]));
-    for (const item of items) {
-        if (item.asset_condition in conditions) conditions[item.asset_condition] += 1;
-    }
+    const conditions = countBy(items, 'asset_condition', ASSET_CONDITIONS);
+    const lifecycles = countBy(items, 'lifecycle_status', LIFECYCLE_STATUSES);
 
     const duplicates = findDuplicateIdentifiers(items);
     const conflicts = findIdentifierConflicts(items, history);
@@ -356,10 +469,11 @@ function buildReview(initialData, items, history = []) {
         quantity_transferred: transferred.length,
         pending,
         conditions,
+        lifecycles,
         duplicates,
         divergences,
         has_divergence: divergences.length > 0,
-        items: toFinalItems(initialData, items),
+        items: toFinalItems(items),
     };
 }
 
@@ -376,6 +490,7 @@ function buildFinalData(auditId, initialData, items, history = []) {
         quantity_transferred: review.quantity_transferred,
         has_divergence: review.has_divergence,
         conditions: review.conditions,
+        lifecycles: review.lifecycles,
         items: review.items,
         pending: review.pending,
         divergences: review.divergences,
@@ -393,8 +508,100 @@ function buildCanceledData(auditId, initialData, items, reason) {
         reason: reason ? String(reason).trim() || null : null,
         quantity_expected: initialData?.assets?.length ?? 0,
         quantity_found: items.length,
-        items: toFinalItems(initialData, items),
+        items: toFinalItems(items),
     };
+}
+
+/** Valor comparável: número quando for numérico, `null` para vazio. */
+const comparable = value => {
+    if (value === undefined || value === null || value === '') return null;
+    return typeof value === 'number' || /^\d+$/.test(String(value)) ? Number(value) : String(value);
+};
+
+/**
+ * Confere o `final_data` relido do banco contra as conferências da tabela
+ * temporária, ANTES de limpá-la. Qualquer diferença impede a limpeza (e a
+ * transação inteira volta).
+ *
+ * @param {object|null} saved  final_data como ficou gravado
+ * @param {object[]} items     linhas de gapp_active_audit_temp
+ * @returns {string[]} diferenças encontradas (vazio = ok)
+ */
+function verifyFinalData(saved, items) {
+    if (!saved || !Array.isArray(saved.items)) return ['final_data não foi gravado com a lista de conferências.'];
+    if (saved.items.length !== items.length) {
+        return [`final_data tem ${saved.items.length} conferência(s); a tabela temporária tem ${items.length}.`];
+    }
+
+    const byActive = new Map(saved.items.map(entry => [Number(entry.active_id), entry]));
+    const problems = [];
+    for (const item of items) {
+        const activeId = Number(item.active_id_fk);
+        const entry = byActive.get(activeId);
+        if (!entry) {
+            problems.push(`Ativo ${activeId} ausente do final_data.`);
+            continue;
+        }
+        const transfer = entry.transfer ?? null;
+        const pairs = [
+            ['identifier_type', entry.identifier_type, item.identifier_type],
+            ['identifier_value', entry.identifier_value, item.identifier_value],
+            ['asset_condition', entry.condition, item.asset_condition],
+            ['lifecycle_status', entry.lifecycle_status, item.lifecycle_status],
+            ['is_transfer', transfer ? 1 : 0, Number(item.is_transfer) ? 1 : 0],
+            ['transfer_unit_id_fk', transfer?.destination?.unit_id, Number(item.is_transfer) ? item.transfer_unit_id_fk : null],
+            ['transfer_dep_id_fk', transfer?.destination?.dep_id, Number(item.is_transfer) ? item.transfer_dep_id_fk : null],
+        ];
+        for (const [field, savedValue, currentValue] of pairs) {
+            if (comparable(savedValue) !== comparable(currentValue)) {
+                problems.push(`Ativo ${activeId}: '${field}' diverge entre final_data e a conferência.`);
+            }
+        }
+    }
+    return problems;
+}
+
+/**
+ * Conferências de uma auditoria encerrada, lidas do `final_data` no mesmo
+ * formato das linhas de gapp_active_audit_temp (a temporária já foi limpa).
+ * Aceita o formato antigo (destino do Protheus), devolvido em `legacy_transfer`.
+ */
+function itemsFromFinalData(auditId, finalData) {
+    return (finalData?.items ?? []).map(entry => {
+        const transfer = entry.transfer ?? null;
+        const origin = transfer?.origin ?? {};
+        const destination = transfer?.destination ?? {};
+        const legacy = transfer && ('branch_code' in destination || 'responsible_registration' in transfer);
+        return {
+            audit_temp_id: null,
+            audit_id_fk: Number(auditId),
+            active_id_fk: Number(entry.active_id),
+            user_register_id_fk: entry.user_register_id ?? null,
+            user_register_name: entry.user_register_name ?? null,
+            identifier_type: entry.identifier_type ?? null,
+            identifier_value: entry.identifier_value ?? null,
+            asset_condition: entry.condition ?? null,
+            lifecycle_status: entry.lifecycle_status ?? null,
+            additional_items: entry.additional_items ?? null,
+            observations: entry.observations ?? null,
+            date_register: entry.date_register ?? null,
+            is_transfer: transfer ? 1 : 0,
+            transfer_reason: transfer?.reason ?? null,
+            transfer_origin_unit_id_fk: origin.unit_id ?? null,
+            transfer_origin_unit_name: origin.unit_name ?? null,
+            transfer_origin_dep_id_fk: origin.dep_id ?? null,
+            transfer_origin_dep_name: origin.dep_name ?? null,
+            transfer_unit_id_fk: legacy ? null : destination.unit_id ?? null,
+            transfer_unit_name: legacy ? null : destination.unit_name ?? null,
+            transfer_dep_id_fk: legacy ? null : destination.dep_id ?? null,
+            transfer_dep_name: legacy ? null : destination.dep_name ?? null,
+            legacy_transfer: legacy ? {
+                branch_code: destination.branch_code ?? null,
+                costcenter_code: destination.costcenter_code ?? null,
+                responsible_registration: transfer.responsible_registration ?? null,
+            } : null,
+        };
+    });
 }
 
 module.exports = {
@@ -404,11 +611,17 @@ module.exports = {
     IDENTIFIER_TYPE,
     IDENTIFIER_TYPES,
     ASSET_CONDITIONS,
+    LIFECYCLE_STATUSES,
     DIVERGENCE_TYPE,
     MAX_ACTIVES_PER_AUDIT,
+    TRANSFER_COLUMNS,
     isEditableStatus,
     lockedStatusMessage,
     normalizeActiveIds,
+    normalizeOpenAudit,
+    validateAuditScope,
+    validateTransferDestination,
+    isSameLocation,
     toSnapshotAsset,
     identifierKey,
     normalizeRegistration,
@@ -418,4 +631,6 @@ module.exports = {
     buildReview,
     buildFinalData,
     buildCanceledData,
+    verifyFinalData,
+    itemsFromFinalData,
 };
