@@ -226,25 +226,14 @@ function sqlGetSmartphoneById() {
 function sqlGetSimById() {
     return 'SELECT * FROM global.gapp_sim WHERE active_id_fk = ?'
 }
+
 function sqlGetNumbersyId() {
     return `
-    SELECT 
-        sim.sim_id,
-        sim.*
-    FROM global.gapp_sim_biding b_sim
-    LEFT JOIN global.gapp_sim sim
-        ON sim.sim_id = b_sim.sim_1_id_fk
-    WHERE b_sim.sim_biding_id = 382
-
-    UNION ALL
-
-    SELECT 
-        sim.sim_id,
-        sim.*
-    FROM global.gapp_sim_biding b_sim
-    LEFT JOIN global.gapp_sim sim
-        ON sim.sim_id = b_sim.sim_2_id_fk
-    WHERE b_sim.sim_biding_id = ?;`
+        SELECT sim.*
+        FROM global.gapp_sim_biding b_sim
+        JOIN global.gapp_sim sim ON sim.sim_id IN (b_sim.sim_1_id_fk, b_sim.sim_2_id_fk)
+        WHERE b_sim.sim_biding_id = ?
+        ORDER BY sim.sim_id = b_sim.sim_1_id_fk DESC`;
 }
 
 /**
