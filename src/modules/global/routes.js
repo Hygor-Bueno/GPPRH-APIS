@@ -2809,6 +2809,27 @@ router.put('/gapp/asset-term-template/:id',
     validate(updateAssetTermTemplateSchema),
     asyncHandler(gappAssetTermTemplateController.updateTemplate));
 
+/**
+ * @route PUT /gapp/asset-term-template/:id/logo
+ * @description Logo do molde (imagem no alto do termo, como nos originais). Multipart, imagem em `file`.
+ * @access Requer `GAPP_UPDATE_ASSET_TERM_TEMPLATE`
+ */
+router.put('/gapp/asset-term-template/:id/logo',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_ASSET_TERM_TEMPLATE']),
+    fileUpload.single('file'),
+    asyncHandler(gappAssetTermTemplateController.setTemplateLogo));
+
+/**
+ * @route DELETE /gapp/asset-term-template/:id/logo
+ * @description Tira o logo do molde (o arquivo continua em `_files`).
+ * @access Requer `GAPP_UPDATE_ASSET_TERM_TEMPLATE`
+ */
+router.delete('/gapp/asset-term-template/:id/logo',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_ASSET_TERM_TEMPLATE']),
+    asyncHandler(gappAssetTermTemplateController.removeTemplateLogo));
+
 // ─── MGPP ─ Rotas do modulo metas gerentes ─────────────────
 
 /**

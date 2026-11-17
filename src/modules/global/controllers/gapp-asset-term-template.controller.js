@@ -1,9 +1,11 @@
 const { GappAssetTermTemplateUseCases } = require('../application/gapp/asset-term-template/gapp-asset-term-template.use-cases');
 const { MysqlAssetTermTemplateRepository } = require('../infrastructure/gapp/mysql-asset-term-template.repository');
+const { GappAssetTermStorage } = require('../infrastructure/gapp/gapp-asset-term.storage');
 const { respond } = require('../../../utils/respond');
 
 const useCases = new GappAssetTermTemplateUseCases({
     repository: new MysqlAssetTermTemplateRepository(),
+    storage: new GappAssetTermStorage(),
 });
 
 /**
@@ -49,4 +51,20 @@ async function updateTemplate(req, res) {
     return respond.ok(res, result);
 }
 
-module.exports = { getTemplateFields, listTemplates, getTemplateById, createTemplate, updateTemplate };
+/**
+ * PUT /gapp/asset-term-template/:id/logo (multipart/form-data, imagem em `file`)
+ */
+async function setTemplateLogo(req, res) {
+    const result = await useCases.setLogo(req.params.id, req.file, req.user.id);
+    return respond.ok(res, result);
+}
+
+/**
+ * DELETE /gapp/asset-term-template/:id/logo
+ */
+async function removeTemplateLogo(req, res) {
+    const result = await useCases.removeLogo(req.params.id, req.user.id);
+    return respond.ok(res, result);
+}
+
+module.exports = { getTemplateFields, listTemplates, getTemplateById, createTemplate, updateTemplate, setTemplateLogo, removeTemplateLogo };
