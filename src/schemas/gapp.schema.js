@@ -290,14 +290,15 @@ const createStoreSchema = { ...storeFieldsSchema };
 const updateStoreSchema = { ...storeFieldsSchema };
 
 const listStoreQuerySchema = {
-    store_id:     { type: 'number' },
-    cnpj:         { type: 'string', maxLength: 14 },
-    name:         { type: 'string', maxLength: 60 },
-    city:         { type: 'string', maxLength: 100 },
-    state:        { type: 'string', maxLength: 2 },
-    status_store: { type: 'number', enum: [0, 1] },
-    page:         { type: 'number' },
-    limit:        { type: 'number' },
+    store_id:          { type: 'number' },
+    cnpj:              { type: 'string', maxLength: 14 },
+    name:              { type: 'string', maxLength: 60 },
+    city:              { type: 'string', maxLength: 100 },
+    state:             { type: 'string', maxLength: 2 },
+    status_store:      { type: 'number', enum: [0, 1] },
+    active_type_id_fk: { type: 'number' },
+    page:              { type: 'number' },
+    limit:             { type: 'number' },
 };
 
 const nfFieldSchema = {
