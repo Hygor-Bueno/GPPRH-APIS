@@ -2761,7 +2761,7 @@ router.get('/gapp/asset-term-template/fields',
  */
 router.get('/gapp/asset-term-template',
     authMiddleware,
-    canAll(['GAPP_VIEW_ASSET_TERM']),
+    canAll(['GAPP_VIEW_ASSET_TERM_TEMPLATE']),
     validate(listAssetTermTemplateQuerySchema, 'query'),
     asyncHandler(gappAssetTermTemplateController.listTemplates));
 
@@ -2772,7 +2772,7 @@ router.get('/gapp/asset-term-template',
  */
 router.get('/gapp/asset-term-template/:id',
     authMiddleware,
-    canAll(['GAPP_VIEW_ASSET_TERM']),
+    canAll(['GAPP_VIEW_ASSET_TERM_TEMPLATE']),
     asyncHandler(gappAssetTermTemplateController.getTemplateById));
 
 /**
@@ -2782,7 +2782,7 @@ router.get('/gapp/asset-term-template/:id',
  */
 router.post('/gapp/asset-term-template',
     authMiddleware,
-    canAll(['GAPP_MANAGE_ASSET_TERM_TEMPLATE']),
+    canAll(['GAPP_CREATE_ASSET_TERM_TEMPLATE']),
     validate(createAssetTermTemplateSchema),
     asyncHandler(gappAssetTermTemplateController.createTemplate));
 
@@ -2793,7 +2793,7 @@ router.post('/gapp/asset-term-template',
  */
 router.put('/gapp/asset-term-template/:id',
     authMiddleware,
-    canAll(['GAPP_MANAGE_ASSET_TERM_TEMPLATE']),
+    canAll(['GAPP_UPDATE_ASSET_TERM_TEMPLATE']),
     validate(updateAssetTermTemplateSchema),
     asyncHandler(gappAssetTermTemplateController.updateTemplate));
 
