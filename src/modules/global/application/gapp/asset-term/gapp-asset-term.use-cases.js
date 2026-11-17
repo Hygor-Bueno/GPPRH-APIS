@@ -5,6 +5,8 @@
  * - Tudo que pode recusar a operação (termo/ativo inexistente, arquivo ausente)
  *   é validado ANTES de gravar o arquivo.
  * - Troca de arquivo: o termo passa a apontar para o novo e só então o antigo é liberado.
+ * - Vínculo: cada ativo tem no máximo um termo ativo (`status_term = 1`). Termo
+ *   novo inativa o anterior; "desvincular" inativa o atual sem criar outro.
  * - Exclusão: a linha sai primeiro e só então o arquivo é liberado — nunca existe
  *   termo apontando para arquivo removido.
  * - O `FileService` deduplica por hash: o mesmo arquivo pode estar em mais de um
@@ -14,6 +16,9 @@
  */
 
 const { AppError } = require('../../../../../errors/app.error');
+
+/** `status_term`: 1 = termo ativo (colaborador vinculado ao ativo agora), 0 = inativo. */
+const STATUS_ACTIVE = 1;
 
 class GappAssetTermUseCases {
     /**
@@ -40,8 +45,11 @@ class GappAssetTermUseCases {
         await this._assertActiveExists(data.active_id_fk);
 
         const stored = await this.storage.save(file, userId);
+        // O repositório inativa o termo anterior do ativo: o novo passa a ser o vínculo atual
         const { insertId } = await this.repository.insert({
             reponsible_name: data.reponsible_name,
+            reponsible_registration: data.reponsible_registration ?? null,
+            status_term: STATUS_ACTIVE,
             created_by: userId,
             active_id_fk: data.active_id_fk,
             file_id_fk: stored.fileId,
@@ -58,6 +66,7 @@ class GappAssetTermUseCases {
         const stored = file ? await this.storage.save(file, userId) : null;
         await this.repository.update(current.asset_term_id, {
             reponsible_name: data.reponsible_name ?? current.reponsible_name,
+            reponsible_registration: data.reponsible_registration ?? current.reponsible_registration,
             active_id_fk: data.active_id_fk ?? current.active_id_fk,
             file_id_fk: stored?.fileId ?? current.file_id_fk,
             file_name: stored?.fileName ?? current.file_name,
@@ -67,6 +76,16 @@ class GappAssetTermUseCases {
             await this._releaseFile(current.file_id_fk, current.asset_term_id, userId);
         }
         return this.getAssetTermById(current.asset_term_id);
+    }
+
+    /** Desvincula o colaborador do ativo: o termo ativo fica inativo e o ativo, sem vínculo. */
+    async unlinkAsset(activeId) {
+        await this._assertActiveExists(activeId);
+        const { updated } = await this.repository.inactivateByActive(Number(activeId));
+        if (!updated) {
+            throw new AppError('Este ativo não tem colaborador vinculado.', 409, { code: 'GAPP_ASSET_TERM_NOT_LINKED' });
+        }
+        return { active_id_fk: Number(activeId), unlinked: updated };
     }
 
     async deleteAssetTerm(id, userId) {

@@ -18,8 +18,8 @@ const ASSET_TYPE_SQL = `
 `;
 
 const ASSET_TERM_COLUMNS = `
-    t.asset_term_id, t.reponsible_name, t.created_by, t.active_id_fk,
-    t.file_id_fk, t.file_name, t.created_at, t.updated_at,
+    t.asset_term_id, t.reponsible_registration, t.reponsible_name, t.status_term, t.created_by, 
+    t.active_id_fk, t.file_id_fk, t.file_name, t.created_at, t.updated_at,
     a.brand, a.model, ac.desc_active_class,
     ${ASSET_TYPE_SQL} AS asset_type,
     v.license_plates, sp.imei_1, sm.number AS sim_number, sm.serial_number AS sim_serial_number
@@ -39,6 +39,7 @@ const ASSET_TERM_FROM = `
 const ASSET_TERM_FILTER_CLAUSES = {
     asset_term_id: 't.asset_term_id = ?',
     active_id_fk: 't.active_id_fk = ?',
+    status_term: 't.status_term = ?',
     asset_type: `${ASSET_TYPE_SQL} = ?`,
     reponsible_name: 't.reponsible_name LIKE ?',
     date_start: 't.created_at >= ?',
@@ -134,25 +135,27 @@ function sqlCountFileReferences() {
 function sqlInsertAssetTerm() {
     return `
         INSERT INTO global.gapp_asset_term
-            (reponsible_name, created_by, active_id_fk, file_id_fk, file_name, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+            (reponsible_name, reponsible_registration, created_by, active_id_fk, file_id_fk, file_name, status_term, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
     `;
 }
 
 function buildInsertAssetTermParams(data) {
     return [
         data.reponsible_name,
+        data.reponsible_registration,
         data.created_by,
         data.active_id_fk,
         data.file_id_fk,
         data.file_name,
+        data.status_term,
     ];
 }
 
 function sqlUpdateAssetTerm() {
     return `
         UPDATE global.gapp_asset_term
-        SET reponsible_name = ?, active_id_fk = ?, file_id_fk = ?, file_name = ?, updated_at = NOW()
+        SET reponsible_name = ?, reponsible_registration = ?, active_id_fk = ?, file_id_fk = ?, file_name = ?
         WHERE asset_term_id = ?
     `;
 }
@@ -160,6 +163,7 @@ function sqlUpdateAssetTerm() {
 function buildUpdateAssetTermParams(data, assetTermId) {
     return [
         data.reponsible_name,
+        data.reponsible_registration,
         data.active_id_fk,
         data.file_id_fk,
         data.file_name,
@@ -167,9 +171,17 @@ function buildUpdateAssetTermParams(data, assetTermId) {
     ];
 }
 
-/** A tabela não tem coluna de status: exclusão física da linha. */
+/** Exclusão física da linha (desvincular o colaborador é `status_term = 0`, não exclusão). */
 function sqlDeleteAssetTerm() {
     return 'DELETE FROM global.gapp_asset_term WHERE asset_term_id = ?';
+}
+
+/**
+ * Inativa o(s) termo(s) ativo(s) do ativo: roda antes de vincular um termo novo
+ * e no "desvincular". Assim o ativo tem no máximo um termo ativo — o colaborador atual.
+ */
+function sqlInactivateAssetTerms() {
+    return 'UPDATE global.gapp_asset_term SET status_term = 0 WHERE active_id_fk = ? AND status_term = 1';
 }
 
 module.exports = {
@@ -177,5 +189,5 @@ module.exports = {
     sqlCheckActiveExists, sqlCountFileReferences,
     sqlInsertAssetTerm, buildInsertAssetTermParams,
     sqlUpdateAssetTerm, buildUpdateAssetTermParams,
-    sqlDeleteAssetTerm,
+    sqlDeleteAssetTerm, sqlInactivateAssetTerms,
 };

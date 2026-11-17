@@ -21,7 +21,7 @@ class AssetTermRepositoryPort {
     /** Quantos outros termos (exceto `ignoreAssetTermId`) usam o arquivo. @returns {Promise<number>} */
     async countFileReferences(fileId, ignoreAssetTermId) { throw new Error('AssetTermRepositoryPort.countFileReferences não implementado'); }
 
-    /** @returns {Promise<{ insertId: number }>} */
+    /** Insere como termo ativo e inativa os anteriores do mesmo ativo (atômico). @returns {Promise<{ insertId: number }>} */
     async insert(fields) { throw new Error('AssetTermRepositoryPort.insert não implementado'); }
 
     /** @returns {Promise<{ updated: number }>} */
@@ -29,6 +29,9 @@ class AssetTermRepositoryPort {
 
     /** @returns {Promise<{ deleted: number }>} */
     async delete(id) { throw new Error('AssetTermRepositoryPort.delete não implementado'); }
+
+    /** Inativa o termo ativo do ativo (desvincular). @returns {Promise<{ updated: number }>} */
+    async inactivateByActive(activeId) { throw new Error('AssetTermRepositoryPort.inactivateByActive não implementado'); }
 }
 
 class AssetTermStoragePort {

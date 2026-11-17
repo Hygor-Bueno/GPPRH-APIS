@@ -2707,7 +2707,8 @@ router.get('/gapp/asset-term/:id',
 /**
  * @route POST /gapp/asset-term
  * @description Cria um termo (multipart/form-data). Campos: `file` (obrigatório),
- * `reponsible_name`, `active_id_fk`.
+ * `reponsible_name`, `reponsible_registration`, `active_id_fk`. O termo novo
+ * vira o vínculo atual: o termo ativo anterior do ativo passa a inativo.
  * @access Requer `GAPP_CREATE_ASSET_TERM`
  */
 router.post('/gapp/asset-term',
@@ -2729,6 +2730,17 @@ router.put('/gapp/asset-term/:id',
     fileUpload.single('file'),
     validate(updateAssetTermSchema),
     asyncHandler(gappAssetTermController.updateAssetTerm));
+
+/**
+ * @route PATCH /gapp/asset-term/unlink/:activeId
+ * @description Desvincula o colaborador do ativo: o termo ativo (`status_term = 1`)
+ * passa a inativo e o ativo fica sem vínculo. 409 se não houver termo ativo.
+ * @access Requer `GAPP_UPDATE_ASSET_TERM`
+ */
+router.patch('/gapp/asset-term/unlink/:activeId',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_ASSET_TERM']),
+    asyncHandler(gappAssetTermController.unlinkAsset));
 
 /**
  * @route DELETE /gapp/asset-term/:id

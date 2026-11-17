@@ -1,7 +1,7 @@
 const { GappAssetTermUseCases } = require('../gapp-asset-term.use-cases');
 
 const TERM = {
-    asset_term_id: 7, reponsible_name: 'Fulano', created_by: 1, active_id_fk: 42,
+    asset_term_id: 7, reponsible_name: 'Fulano', reponsible_registration: '0012345', status_term: 1, created_by: 1, active_id_fk: 42,
     file_id_fk: 100, file_name: 'termo.pdf',
 };
 const FILE = { originalname: 'novo.pdf', buffer: Buffer.from('x') };
@@ -15,6 +15,7 @@ function makeDeps(overrides = {}) {
         insert: jest.fn().mockResolvedValue({ insertId: 7 }),
         update: jest.fn().mockResolvedValue({ updated: 1 }),
         delete: jest.fn().mockResolvedValue({ deleted: 1 }),
+        inactivateByActive: jest.fn().mockResolvedValue({ updated: 1 }),
         ...overrides.repository,
     };
     const storage = {
@@ -41,13 +42,20 @@ describe('GappAssetTermUseCases', () => {
     });
 
     describe('createAssetTerm', () => {
-        test('grava o arquivo e o termo com created_by do usuário', async () => {
+        test('grava o arquivo e o termo ativo, com matrícula e created_by do usuário', async () => {
             const { useCases, repository, storage } = makeDeps();
-            await useCases.createAssetTerm({ reponsible_name: 'Fulano', active_id_fk: 42 }, FILE, 1);
+            await useCases.createAssetTerm({ reponsible_name: 'Fulano', reponsible_registration: '0012345', active_id_fk: 42 }, FILE, 1);
             expect(storage.save).toHaveBeenCalledWith(FILE, 1);
             expect(repository.insert).toHaveBeenCalledWith({
-                reponsible_name: 'Fulano', created_by: 1, active_id_fk: 42, file_id_fk: 200, file_name: 'novo.pdf',
+                reponsible_name: 'Fulano', reponsible_registration: '0012345', status_term: 1,
+                created_by: 1, active_id_fk: 42, file_id_fk: 200, file_name: 'novo.pdf',
             });
+        });
+
+        test('sem matrícula (ex.: migração do legado) grava null', async () => {
+            const { useCases, repository } = makeDeps();
+            await useCases.createAssetTerm({ reponsible_name: 'Fulano', active_id_fk: 42 }, FILE, 1);
+            expect(repository.insert).toHaveBeenCalledWith(expect.objectContaining({ reponsible_registration: null, status_term: 1 }));
         });
 
         test('sem arquivo: 400 e nada é gravado', async () => {
@@ -72,7 +80,7 @@ describe('GappAssetTermUseCases', () => {
             await useCases.updateAssetTerm(7, { reponsible_name: 'Beltrano' }, undefined, 1);
             expect(storage.save).not.toHaveBeenCalled();
             expect(repository.update).toHaveBeenCalledWith(7, {
-                reponsible_name: 'Beltrano', active_id_fk: 42, file_id_fk: 100, file_name: 'termo.pdf',
+                reponsible_name: 'Beltrano', reponsible_registration: '0012345', active_id_fk: 42, file_id_fk: 100, file_name: 'termo.pdf',
             });
             expect(storage.remove).not.toHaveBeenCalled();
         });
@@ -109,6 +117,25 @@ describe('GappAssetTermUseCases', () => {
             const { useCases, storage } = makeDeps({ repository: { activeExists: jest.fn().mockResolvedValue(false) } });
             await expect(useCases.updateAssetTerm(7, { active_id_fk: 5 }, FILE, 1)).rejects.toMatchObject({ statusCode: 404 });
             expect(storage.save).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('unlinkAsset', () => {
+        test('inativa o termo ativo do ativo', async () => {
+            const { useCases, repository } = makeDeps();
+            await expect(useCases.unlinkAsset('42')).resolves.toEqual({ active_id_fk: 42, unlinked: 1 });
+            expect(repository.inactivateByActive).toHaveBeenCalledWith(42);
+        });
+
+        test('ativo sem termo ativo: 409', async () => {
+            const { useCases } = makeDeps({ repository: { inactivateByActive: jest.fn().mockResolvedValue({ updated: 0 }) } });
+            await expect(useCases.unlinkAsset(42)).rejects.toMatchObject({ statusCode: 409, code: 'GAPP_ASSET_TERM_NOT_LINKED' });
+        });
+
+        test('ativo inexistente: 404 sem mexer nos termos', async () => {
+            const { useCases, repository } = makeDeps({ repository: { activeExists: jest.fn().mockResolvedValue(false) } });
+            await expect(useCases.unlinkAsset(1)).rejects.toMatchObject({ statusCode: 404 });
+            expect(repository.inactivateByActive).not.toHaveBeenCalled();
         });
     });
 

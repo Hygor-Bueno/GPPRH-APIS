@@ -12,7 +12,7 @@ const {
     sqlCheckActiveExists, sqlCountFileReferences,
     sqlInsertAssetTerm, buildInsertAssetTermParams,
     sqlUpdateAssetTerm, buildUpdateAssetTermParams,
-    sqlDeleteAssetTerm,
+    sqlDeleteAssetTerm, sqlInactivateAssetTerms,
 } = require('../../repositories/mysql/gapp-asset-term.queries');
 
 class MysqlAssetTermRepository extends AssetTermRepositoryPort {
@@ -52,9 +52,35 @@ class MysqlAssetTermRepository extends AssetTermRepositoryPort {
         return Number(total);
     }
 
+    /** @private Executa `work(conn)` numa transação: tudo grava ou nada grava. */
+    async _transaction(work) {
+        const conn = await poolGlobal.getConnection();
+        try {
+            await conn.beginTransaction();
+            const result = await work(conn);
+            await conn.commit();
+            return result;
+        } catch (error) {
+            await conn.rollback();
+            throw new AppError(error.message || 'Erro ao acessar o banco de dados.', 500, { code: 'GAPP_ASSET_TERM_MYSQL_ERROR', details: error });
+        } finally {
+            conn.release();
+        }
+    }
+
+    /** Novo termo vira o vínculo atual: inativa os anteriores do ativo e insere, na mesma transação. */
     async insert(fields) {
-        const [result] = await this._query(sqlInsertAssetTerm(), buildInsertAssetTermParams(fields));
-        return { insertId: result.insertId };
+        return this._transaction(async conn => {
+            await conn.query(sqlInactivateAssetTerms(), [fields.active_id_fk]);
+            const [result] = await conn.query(sqlInsertAssetTerm(), buildInsertAssetTermParams(fields));
+            return { insertId: result.insertId };
+        });
+    }
+
+    /** Desvincula o colaborador: inativa o termo ativo do ativo. */
+    async inactivateByActive(activeId) {
+        const [result] = await this._query(sqlInactivateAssetTerms(), [activeId]);
+        return { updated: result.affectedRows };
     }
 
     async update(id, fields) {
