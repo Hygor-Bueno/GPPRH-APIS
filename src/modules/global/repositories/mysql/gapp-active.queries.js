@@ -235,6 +235,14 @@ function sqlGetNumbersyId() {
         ORDER BY sim.sim_id = b_sim.sim_1_id_fk DESC`;
 }
 
+function sqlGetTypeActiveById() {
+    return `
+        SELECT t.active_type_id FROM global.gapp_active_class c
+        JOIN global.gapp_active_type t 
+            ON (c.active_type_id_fk = t.active_type_id)
+        WHERE c.id_active_class = ?`;
+}
+
 /**
  * Retorna o `is_vehicle` atual do ativo, restrito ao work_group_fk do
  * usuário — usado no PUT quando o cliente não reenvia esse campo, pra não
@@ -248,5 +256,5 @@ module.exports = {
     sqlSaveActive, sqlSelectActiveIdOut, buildSaveActiveParams,
     sqlListActive, sqlCountActive, sqlGetActiveById,
     sqlGetVehicleByActiveId, sqlGetNumbersyId,
-    sqlGetIsVehicleByActiveId, sqlGetSmartphoneById, sqlGetSimById
+    sqlGetIsVehicleByActiveId, sqlGetSmartphoneById, sqlGetSimById, sqlGetTypeActiveById
 };
