@@ -28,7 +28,7 @@ async function getAssetTermById(req, res) {
 /**
  * POST /gapp/asset-term (multipart/form-data)
  * Campos: file (obrigatório), reponsible_name, reponsible_registration, active_id_fk.
- * O novo termo vira o vínculo atual (o anterior do ativo é inativado).
+ * O termo nasce vinculado (status_term = 1); os outros termos do ativo não mudam.
  * `created_by`, `file_id_fk` e `file_name` saem do usuário autenticado e do upload.
  */
 async function createAssetTerm(req, res) {
@@ -46,12 +46,12 @@ async function updateAssetTerm(req, res) {
 }
 
 /**
- * PATCH /gapp/asset-term/unlink/:activeId
- * Desvincula o colaborador do ativo (o termo ativo fica inativo).
+ * PATCH /gapp/asset-term/:id/status
+ * Body: { status_term } — 1 vincula, 0 desvincula o colaborador deste termo.
  */
-async function unlinkAsset(req, res) {
-    await useCases.unlinkAsset(req.params.activeId);
-    return respond.message(res, 'Colaborador desvinculado do ativo.');
+async function setAssetTermStatus(req, res) {
+    const result = await useCases.setTermStatus(req.params.id, req.body.status_term);
+    return respond.ok(res, result);
 }
 
 /**
@@ -63,4 +63,4 @@ async function deleteAssetTerm(req, res) {
     return respond.message(res, 'Termo excluído com sucesso');
 }
 
-module.exports = { listAssetTerms, getAssetTermById, createAssetTerm, updateAssetTerm, unlinkAsset, deleteAssetTerm };
+module.exports = { listAssetTerms, getAssetTermById, createAssetTerm, updateAssetTerm, setAssetTermStatus, deleteAssetTerm };

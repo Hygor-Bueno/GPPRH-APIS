@@ -15,7 +15,7 @@ function makeDeps(overrides = {}) {
         insert: jest.fn().mockResolvedValue({ insertId: 7 }),
         update: jest.fn().mockResolvedValue({ updated: 1 }),
         delete: jest.fn().mockResolvedValue({ deleted: 1 }),
-        inactivateByActive: jest.fn().mockResolvedValue({ updated: 1 }),
+        setStatus: jest.fn().mockResolvedValue({ updated: 1 }),
         ...overrides.repository,
     };
     const storage = {
@@ -120,22 +120,23 @@ describe('GappAssetTermUseCases', () => {
         });
     });
 
-    describe('unlinkAsset', () => {
-        test('inativa o termo ativo do ativo', async () => {
+    describe('setTermStatus', () => {
+        test('desvincula só o termo pedido', async () => {
             const { useCases, repository } = makeDeps();
-            await expect(useCases.unlinkAsset('42')).resolves.toEqual({ active_id_fk: 42, unlinked: 1 });
-            expect(repository.inactivateByActive).toHaveBeenCalledWith(42);
+            await useCases.setTermStatus('7', 0);
+            expect(repository.setStatus).toHaveBeenCalledWith(7, 0);
         });
 
-        test('ativo sem termo ativo: 409', async () => {
-            const { useCases } = makeDeps({ repository: { inactivateByActive: jest.fn().mockResolvedValue({ updated: 0 }) } });
-            await expect(useCases.unlinkAsset(42)).rejects.toMatchObject({ statusCode: 409, code: 'GAPP_ASSET_TERM_NOT_LINKED' });
+        test('mesmo status: não grava de novo', async () => {
+            const { useCases, repository } = makeDeps();
+            await useCases.setTermStatus(7, 1);
+            expect(repository.setStatus).not.toHaveBeenCalled();
         });
 
-        test('ativo inexistente: 404 sem mexer nos termos', async () => {
-            const { useCases, repository } = makeDeps({ repository: { activeExists: jest.fn().mockResolvedValue(false) } });
-            await expect(useCases.unlinkAsset(1)).rejects.toMatchObject({ statusCode: 404 });
-            expect(repository.inactivateByActive).not.toHaveBeenCalled();
+        test('termo inexistente: 404', async () => {
+            const { useCases, repository } = makeDeps({ repository: { findById: jest.fn().mockResolvedValue(null) } });
+            await expect(useCases.setTermStatus(9, 0)).rejects.toMatchObject({ statusCode: 404 });
+            expect(repository.setStatus).not.toHaveBeenCalled();
         });
     });
 

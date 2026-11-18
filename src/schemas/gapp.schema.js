@@ -408,6 +408,11 @@ const createAssetTermSchema = {
 
 const updateAssetTermSchema = { ...assetTermFieldsSchema };
 
+/** Vincular (1) ou desvincular (0) o colaborador de um termo. */
+const assetTermStatusSchema = {
+    status_term: { type: 'number', enum: [0, 1], required: true },
+};
+
 const listAssetTermQuerySchema = {
     status_term:     { type: 'number', enum: [0, 1] },
     asset_term_id:           { type: 'number' },
@@ -485,6 +490,7 @@ module.exports = {
     updateSimSchema,
     createAssetTermSchema,
     updateAssetTermSchema,
+    assetTermStatusSchema,
     listAssetTermQuerySchema,
     createAssetTermTemplateSchema,
     updateAssetTermTemplateSchema,

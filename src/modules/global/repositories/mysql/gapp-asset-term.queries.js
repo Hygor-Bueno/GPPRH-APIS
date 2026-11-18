@@ -177,11 +177,11 @@ function sqlDeleteAssetTerm() {
 }
 
 /**
- * Inativa o(s) termo(s) ativo(s) do ativo: roda antes de vincular um termo novo
- * e no "desvincular". Assim o ativo tem no máximo um termo ativo — o colaborador atual.
+ * Vincula (1) ou desvincula (0) o colaborador de UM termo. Um ativo pode ter
+ * vários termos vinculados ao mesmo tempo: quem decide é o usuário, termo a termo.
  */
-function sqlInactivateAssetTerms() {
-    return 'UPDATE global.gapp_asset_term SET status_term = 0 WHERE active_id_fk = ? AND status_term = 1';
+function sqlSetAssetTermStatus() {
+    return 'UPDATE global.gapp_asset_term SET status_term = ? WHERE asset_term_id = ?';
 }
 
 module.exports = {
@@ -189,5 +189,5 @@ module.exports = {
     sqlCheckActiveExists, sqlCountFileReferences,
     sqlInsertAssetTerm, buildInsertAssetTermParams,
     sqlUpdateAssetTerm, buildUpdateAssetTermParams,
-    sqlDeleteAssetTerm, sqlInactivateAssetTerms,
+    sqlDeleteAssetTerm, sqlSetAssetTermStatus,
 };

@@ -110,6 +110,7 @@ const {
     createOperatorSchema,
     updateOperatorSchema,
     createAssetTermSchema,
+    assetTermStatusSchema,
     updateAssetTermSchema,
     listAssetTermQuerySchema,
     createAssetTermTemplateSchema,
@@ -2707,8 +2708,8 @@ router.get('/gapp/asset-term/:id',
 /**
  * @route POST /gapp/asset-term
  * @description Cria um termo (multipart/form-data). Campos: `file` (obrigatório),
- * `reponsible_name`, `reponsible_registration`, `active_id_fk`. O termo novo
- * vira o vínculo atual: o termo ativo anterior do ativo passa a inativo.
+ * `reponsible_name`, `reponsible_registration`, `active_id_fk`. O termo nasce
+ * vinculado; os outros termos do ativo não mudam.
  * @access Requer `GAPP_CREATE_ASSET_TERM`
  */
 router.post('/gapp/asset-term',
@@ -2732,15 +2733,16 @@ router.put('/gapp/asset-term/:id',
     asyncHandler(gappAssetTermController.updateAssetTerm));
 
 /**
- * @route PATCH /gapp/asset-term/unlink/:activeId
- * @description Desvincula o colaborador do ativo: o termo ativo (`status_term = 1`)
- * passa a inativo e o ativo fica sem vínculo. 409 se não houver termo ativo.
+ * @route PATCH /gapp/asset-term/:id/status
+ * @description Vincula (`status_term: 1`) ou desvincula (`0`) o colaborador deste
+ * termo. Os outros termos do ativo não mudam: o ativo pode ter vários vinculados.
  * @access Requer `GAPP_UPDATE_ASSET_TERM`
  */
-router.patch('/gapp/asset-term/unlink/:activeId',
+router.patch('/gapp/asset-term/:id/status',
     authMiddleware,
     canAll(['GAPP_UPDATE_ASSET_TERM']),
-    asyncHandler(gappAssetTermController.unlinkAsset));
+    validate(assetTermStatusSchema),
+    asyncHandler(gappAssetTermController.setAssetTermStatus));
 
 /**
  * @route DELETE /gapp/asset-term/:id

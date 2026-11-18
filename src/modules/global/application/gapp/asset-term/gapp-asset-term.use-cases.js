@@ -5,8 +5,9 @@
  * - Tudo que pode recusar a operação (termo/ativo inexistente, arquivo ausente)
  *   é validado ANTES de gravar o arquivo.
  * - Troca de arquivo: o termo passa a apontar para o novo e só então o antigo é liberado.
- * - Vínculo: cada ativo tem no máximo um termo ativo (`status_term = 1`). Termo
- *   novo inativa o anterior; "desvincular" inativa o atual sem criar outro.
+ * - Vínculo: o termo novo nasce vinculado (`status_term = 1`) e não mexe nos
+ *   outros — um ativo pode ter vários colaboradores vinculados ao mesmo tempo.
+ *   Desvincular (ou vincular de novo) é decisão do usuário, termo a termo.
  * - Exclusão: a linha sai primeiro e só então o arquivo é liberado — nunca existe
  *   termo apontando para arquivo removido.
  * - O `FileService` deduplica por hash: o mesmo arquivo pode estar em mais de um
@@ -45,7 +46,6 @@ class GappAssetTermUseCases {
         await this._assertActiveExists(data.active_id_fk);
 
         const stored = await this.storage.save(file, userId);
-        // O repositório inativa o termo anterior do ativo: o novo passa a ser o vínculo atual
         const { insertId } = await this.repository.insert({
             reponsible_name: data.reponsible_name,
             reponsible_registration: data.reponsible_registration ?? null,
@@ -78,14 +78,12 @@ class GappAssetTermUseCases {
         return this.getAssetTermById(current.asset_term_id);
     }
 
-    /** Desvincula o colaborador do ativo: o termo ativo fica inativo e o ativo, sem vínculo. */
-    async unlinkAsset(activeId) {
-        await this._assertActiveExists(activeId);
-        const { updated } = await this.repository.inactivateByActive(Number(activeId));
-        if (!updated) {
-            throw new AppError('Este ativo não tem colaborador vinculado.', 409, { code: 'GAPP_ASSET_TERM_NOT_LINKED' });
-        }
-        return { active_id_fk: Number(activeId), unlinked: updated };
+    /** Vincula (1) ou desvincula (0) o colaborador de um termo; os demais termos do ativo não mudam. */
+    async setTermStatus(id, status) {
+        const term = await this.getAssetTermById(id);
+        const next = Number(status) === STATUS_ACTIVE ? STATUS_ACTIVE : 0;
+        if (Number(term.status_term) !== next) await this.repository.setStatus(term.asset_term_id, next);
+        return this.getAssetTermById(term.asset_term_id);
     }
 
     async deleteAssetTerm(id, userId) {
