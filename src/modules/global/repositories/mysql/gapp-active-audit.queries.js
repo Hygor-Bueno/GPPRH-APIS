@@ -251,13 +251,35 @@ function sqlGetActiveLocation() {
 }
 
 /** Outro ativo da mesma auditoria com o mesmo identificador (valores gravados já sem espaços nas pontas). */
+/**
+ * Outro ativo que já usa o identificador: em qualquer auditoria aberta (temporária)
+ * ou finalizada (final_data). Prefere a auditoria atual, para a mensagem certa.
+ * Params: buildFindItemByIdentifierParams.
+ */
 function sqlFindItemByIdentifier() {
     return `
-        SELECT active_id_fk
-        FROM global.gapp_active_audit_temp
-        WHERE audit_id_fk = ? AND identifier_type = ? AND identifier_value = ? AND active_id_fk <> ?
+        SELECT active_id_fk, audit_id_fk FROM (
+            SELECT t.active_id_fk, t.audit_id_fk
+            FROM global.gapp_active_audit_temp t
+            WHERE t.identifier_type = ? AND t.identifier_value = ? AND t.active_id_fk <> ?
+            UNION ALL
+            SELECT j.active_id, au.audit_id
+            FROM global.gapp_active_audit au,
+                 JSON_TABLE(au.final_data, '$.items[*]' COLUMNS (
+                     active_id        INT          PATH '$.active_id'        NULL ON ERROR,
+                     identifier_type  VARCHAR(30)  PATH '$.identifier_type'  NULL ON ERROR,
+                     identifier_value VARCHAR(150) PATH '$.identifier_value' NULL ON ERROR
+                 )) j
+            WHERE au.status_audit = 2
+              AND j.identifier_type = ? AND UPPER(TRIM(j.identifier_value)) = UPPER(?) AND j.active_id <> ?
+        ) owners
+        ORDER BY audit_id_fk = ? DESC
         LIMIT 1
     `;
+}
+
+function buildFindItemByIdentifierParams(auditId, type, value, ignoreActiveId) {
+    return [type, value, ignoreActiveId, type, value, ignoreActiveId, auditId];
 }
 
 /** Colunas gravadas na conferência, na ordem dos parâmetros. */
@@ -344,6 +366,7 @@ module.exports = {
     sqlGetAuditItem,
     sqlGetActiveLocation,
     sqlFindItemByIdentifier,
+    buildFindItemByIdentifierParams,
     sqlInsertAuditItem,
     buildInsertAuditItemParams,
     sqlUpdateAuditItem,

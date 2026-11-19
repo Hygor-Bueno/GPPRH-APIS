@@ -17,7 +17,7 @@ const {
     sqlListActivesForAudit, sqlFindUnit, sqlFindDepartment, sqlFindActiveClass, sqlFindActiveType,
     sqlInsertAudit, buildInsertAuditParams,
     sqlListAudits, sqlCountAudits, sqlGetAuditById, sqlListAuditItems, sqlListUserNames,
-    sqlIdentifierHistory, sqlLockAudit, sqlGetAuditItem, sqlGetActiveLocation, sqlFindItemByIdentifier,
+    sqlIdentifierHistory, sqlLockAudit, sqlGetAuditItem, sqlGetActiveLocation, sqlFindItemByIdentifier, buildFindItemByIdentifierParams,
     sqlInsertAuditItem, buildInsertAuditItemParams,
     sqlUpdateAuditItem, buildUpdateAuditItemParams,
     sqlUpdateAuditStatus, sqlCloseAudit, sqlGetFinalData, sqlDeleteAuditItems,
@@ -173,7 +173,8 @@ class MysqlActiveAuditRepository extends ActiveAuditRepositoryPort {
             },
 
             async findItemByIdentifier(type, value, ignoreActiveId) {
-                const [rows] = await conn.query(sqlFindItemByIdentifier(), [auditId, type, value, ignoreActiveId]);
+                const params = buildFindItemByIdentifierParams(auditId, type, value, ignoreActiveId);
+                const [rows] = await conn.query(sqlFindItemByIdentifier(), params);
                 return rows[0] ?? null;
             },
 

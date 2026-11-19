@@ -174,10 +174,19 @@ describe('GappActiveAuditUseCases', () => {
         });
 
         test('identificador já usado por outro ativo da auditoria → 409', async () => {
-            const tx = makeTx({ findItemByIdentifier: jest.fn().mockResolvedValue({ active_id_fk: 121 }) });
+            const tx = makeTx({ findItemByIdentifier: jest.fn().mockResolvedValue({ active_id_fk: 121, audit_id_fk: 15 }) });
             const { useCases } = makeDeps({ tx });
             await expect(useCases.registerItem(15, ITEM, CURRENT_USER))
                 .rejects.toMatchObject({ statusCode: 409, code: 'GAPP_AUDIT_IDENTIFIER_DUPLICATED' });
+        });
+
+        test('identificador já usado por outro ativo em outra auditoria → 409 e não grava', async () => {
+            const tx = makeTx({ findItemByIdentifier: jest.fn().mockResolvedValue({ active_id_fk: 300, audit_id_fk: 9 }) });
+            const { useCases } = makeDeps({ tx });
+            await expect(useCases.registerItem(15, ITEM, CURRENT_USER)).rejects.toMatchObject({
+                statusCode: 409, code: 'GAPP_AUDIT_IDENTIFIER_IN_USE', details: { active_id: 300, audit_id: 9 },
+            });
+            expect(tx.insertItem).not.toHaveBeenCalled();
         });
 
         test.each([AUDIT_STATUS.FINISHED, AUDIT_STATUS.CANCELED])('status %p não aceita registro (409)', async status => {

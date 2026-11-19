@@ -40,6 +40,19 @@ const EDITABLE_ITEM_FIELDS = [
 const mergeItem = (current, data) =>
     Object.fromEntries(EDITABLE_ITEM_FIELDS.map(field => [field, data[field] !== undefined ? data[field] : current[field]]));
 
+/**
+ * 409 quando o identificador já pertence a outro ativo — nesta auditoria ou
+ * em outra (aberta ou finalizada): um identificador valida um único ativo.
+ */
+function identifierInUseError(other, auditId) {
+    const sameAudit = Number(other.audit_id_fk) === Number(auditId);
+    const where = sameAudit ? 'nesta auditoria' : `na auditoria #${other.audit_id_fk}`;
+    return new AppError(`Identificador já usado para o ativo ${other.active_id_fk} ${where}.`, 409, {
+        code: sameAudit ? 'GAPP_AUDIT_IDENTIFIER_DUPLICATED' : 'GAPP_AUDIT_IDENTIFIER_IN_USE',
+        details: { active_id: other.active_id_fk, audit_id: other.audit_id_fk },
+    });
+}
+
 const withStatusLabel = audit => audit && ({ ...audit, status_label: AUDIT_STATUS_LABEL[audit.status_audit] ?? null });
 
 const isClosed = status => [AUDIT_STATUS.FINISHED, AUDIT_STATUS.CANCELED].includes(Number(status));
@@ -244,13 +257,7 @@ class GappActiveAuditUseCases {
 
             if (value.identifier_value != null) {
                 const other = await tx.findItemByIdentifier(value.identifier_type, value.identifier_value, activeId);
-                if (other) {
-                    throw new AppError(
-                        `Identificador já informado para o ativo ${other.active_id_fk} nesta auditoria.`,
-                        409,
-                        { code: 'GAPP_AUDIT_IDENTIFIER_DUPLICATED', details: { active_id: other.active_id_fk } }
-                    );
-                }
+                if (other) throw identifierInUseError(other, tx.audit.audit_id);
             }
 
             const payload = { ...value, active_id_fk: activeId, user_register_id_fk: gappUser.user_id };

@@ -58,6 +58,8 @@ class ActiveAuditRepositoryPort {
     /**
      * Executa `fn(tx)` numa transação com a auditoria travada.
      * `tx.audit` = { audit_id, status_audit, initial_data } ou `null` se não existir.
+     * `findItemByIdentifier(type, value, ignoreActiveId)` procura em todas as
+     * auditorias abertas e finalizadas e devolve `{ active_id_fk, audit_id_fk }`.
      * `tx` expõe: findItem, findActiveLocation, findRefs, findItemByIdentifier,
      * insertItem, updateItem, updateStatus, listItems, findIdentifierHistory,
      * closeAudit, getFinalData (relê final_data) e deleteItems (limpa a temporária).
