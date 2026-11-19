@@ -23,9 +23,13 @@ const {
 const STATUS_ACTIVE = 1;
 
 class GappAssetTermTemplateUseCases {
-    /** @param {{ repository: import('./ports/asset-term-template-repository.port').AssetTermTemplateRepositoryPort }} deps */
-    constructor({ repository }) {
+    /**
+     * @param {{ repository: import('./ports/asset-term-template-repository.port').AssetTermTemplateRepositoryPort,
+     *           storage?: import('../asset-term/ports/asset-term-repository.port').AssetTermStoragePort }} deps
+     */
+    constructor({ repository, storage }) {
         this.repository = repository;
+        this.storage = storage; // arquivos (o logo) — o mesmo armazenamento dos termos
     }
 
     /** Catálogo de tipos e campos dinâmicos (usado pela tela e pela geração). */
@@ -48,6 +52,26 @@ class GappAssetTermTemplateUseCases {
         await this._validate(fields, 0);
         const { insertId } = await this.repository.insert({ ...fields, user_id: userId });
         return this.getTemplateById(insertId);
+    }
+
+    /**
+     * Logo do molde: a imagem que vai no alto do termo, como nos originais. O
+     * arquivo vai para `_files` (deduplicado por hash). O logo anterior não é
+     * liberado: outro molde pode usar a mesma imagem.
+     */
+    async setLogo(id, file, userId) {
+        const template = await this.getTemplateById(id);
+        if (!file) throw new AppError('Envie a imagem do logo.', 400);
+        if (!String(file.mimetype ?? '').startsWith('image/')) throw new AppError('O logo precisa ser uma imagem (PNG ou JPG).', 400);
+        const stored = await this.storage.save(file, userId);
+        await this.repository.setLogo(template.asset_term_template_id, stored.fileId, userId);
+        return this.getTemplateById(template.asset_term_template_id);
+    }
+
+    async removeLogo(id, userId) {
+        const template = await this.getTemplateById(id);
+        await this.repository.setLogo(template.asset_term_template_id, null, userId);
+        return this.getTemplateById(template.asset_term_template_id);
     }
 
     async updateTemplate(id, data, userId) {

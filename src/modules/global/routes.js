@@ -110,6 +110,7 @@ const {
     createOperatorSchema,
     updateOperatorSchema,
     createAssetTermSchema,
+    assetTermStatusSchema,
     updateAssetTermSchema,
     listAssetTermQuerySchema,
     createAssetTermTemplateSchema,
@@ -2707,7 +2708,8 @@ router.get('/gapp/asset-term/:id',
 /**
  * @route POST /gapp/asset-term
  * @description Cria um termo (multipart/form-data). Campos: `file` (obrigatório),
- * `reponsible_name`, `active_id_fk`.
+ * `reponsible_name`, `reponsible_registration`, `active_id_fk`. O termo nasce
+ * vinculado; os outros termos do ativo não mudam.
  * @access Requer `GAPP_CREATE_ASSET_TERM`
  */
 router.post('/gapp/asset-term',
@@ -2729,6 +2731,18 @@ router.put('/gapp/asset-term/:id',
     fileUpload.single('file'),
     validate(updateAssetTermSchema),
     asyncHandler(gappAssetTermController.updateAssetTerm));
+
+/**
+ * @route PATCH /gapp/asset-term/:id/status
+ * @description Vincula (`status_term: 1`) ou desvincula (`0`) o colaborador deste
+ * termo. Os outros termos do ativo não mudam: o ativo pode ter vários vinculados.
+ * @access Requer `GAPP_UPDATE_ASSET_TERM`
+ */
+router.patch('/gapp/asset-term/:id/status',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_ASSET_TERM']),
+    validate(assetTermStatusSchema),
+    asyncHandler(gappAssetTermController.setAssetTermStatus));
 
 /**
  * @route DELETE /gapp/asset-term/:id
@@ -2761,7 +2775,7 @@ router.get('/gapp/asset-term-template/fields',
  */
 router.get('/gapp/asset-term-template',
     authMiddleware,
-    canAll(['GAPP_VIEW_ASSET_TERM']),
+    canAll(['GAPP_VIEW_ASSET_TERM_TEMPLATE']),
     validate(listAssetTermTemplateQuerySchema, 'query'),
     asyncHandler(gappAssetTermTemplateController.listTemplates));
 
@@ -2772,7 +2786,7 @@ router.get('/gapp/asset-term-template',
  */
 router.get('/gapp/asset-term-template/:id',
     authMiddleware,
-    canAll(['GAPP_VIEW_ASSET_TERM']),
+    canAll(['GAPP_VIEW_ASSET_TERM_TEMPLATE']),
     asyncHandler(gappAssetTermTemplateController.getTemplateById));
 
 /**
@@ -2782,7 +2796,7 @@ router.get('/gapp/asset-term-template/:id',
  */
 router.post('/gapp/asset-term-template',
     authMiddleware,
-    canAll(['GAPP_MANAGE_ASSET_TERM_TEMPLATE']),
+    canAll(['GAPP_CREATE_ASSET_TERM_TEMPLATE']),
     validate(createAssetTermTemplateSchema),
     asyncHandler(gappAssetTermTemplateController.createTemplate));
 
@@ -2793,9 +2807,30 @@ router.post('/gapp/asset-term-template',
  */
 router.put('/gapp/asset-term-template/:id',
     authMiddleware,
-    canAll(['GAPP_MANAGE_ASSET_TERM_TEMPLATE']),
+    canAll(['GAPP_UPDATE_ASSET_TERM_TEMPLATE']),
     validate(updateAssetTermTemplateSchema),
     asyncHandler(gappAssetTermTemplateController.updateTemplate));
+
+/**
+ * @route PUT /gapp/asset-term-template/:id/logo
+ * @description Logo do molde (imagem no alto do termo, como nos originais). Multipart, imagem em `file`.
+ * @access Requer `GAPP_UPDATE_ASSET_TERM_TEMPLATE`
+ */
+router.put('/gapp/asset-term-template/:id/logo',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_ASSET_TERM_TEMPLATE']),
+    fileUpload.single('file'),
+    asyncHandler(gappAssetTermTemplateController.setTemplateLogo));
+
+/**
+ * @route DELETE /gapp/asset-term-template/:id/logo
+ * @description Tira o logo do molde (o arquivo continua em `_files`).
+ * @access Requer `GAPP_UPDATE_ASSET_TERM_TEMPLATE`
+ */
+router.delete('/gapp/asset-term-template/:id/logo',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_ASSET_TERM_TEMPLATE']),
+    asyncHandler(gappAssetTermTemplateController.removeTemplateLogo));
 
 // ─── MGPP ─ Rotas do modulo metas gerentes ─────────────────
 

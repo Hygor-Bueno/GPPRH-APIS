@@ -20,6 +20,9 @@ class AssetTermTemplateRepositoryPort {
 
     /** @returns {Promise<{ updated: number }>} */
     async update(id, fields) { throw new Error('AssetTermTemplateRepositoryPort.update não implementado'); }
+
+    /** Grava (ou tira, com `null`) o arquivo do logo do molde. @returns {Promise<{ updated: number }>} */
+    async setLogo(id, fileId, userId) { throw new Error('AssetTermTemplateRepositoryPort.setLogo não implementado'); }
 }
 
 module.exports = { AssetTermTemplateRepositoryPort };

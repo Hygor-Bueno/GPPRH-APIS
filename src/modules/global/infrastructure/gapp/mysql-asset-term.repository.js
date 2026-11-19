@@ -12,7 +12,7 @@ const {
     sqlCheckActiveExists, sqlCountFileReferences,
     sqlInsertAssetTerm, buildInsertAssetTermParams,
     sqlUpdateAssetTerm, buildUpdateAssetTermParams,
-    sqlDeleteAssetTerm,
+    sqlDeleteAssetTerm, sqlSetAssetTermStatus,
 } = require('../../repositories/mysql/gapp-asset-term.queries');
 
 class MysqlAssetTermRepository extends AssetTermRepositoryPort {
@@ -55,6 +55,12 @@ class MysqlAssetTermRepository extends AssetTermRepositoryPort {
     async insert(fields) {
         const [result] = await this._query(sqlInsertAssetTerm(), buildInsertAssetTermParams(fields));
         return { insertId: result.insertId };
+    }
+
+    /** Vincula (1) ou desvincula (0) o colaborador de um termo. */
+    async setStatus(id, status) {
+        const [result] = await this._query(sqlSetAssetTermStatus(), [status, id]);
+        return { updated: result.affectedRows };
     }
 
     async update(id, fields) {

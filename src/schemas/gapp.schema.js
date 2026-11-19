@@ -290,14 +290,15 @@ const createStoreSchema = { ...storeFieldsSchema };
 const updateStoreSchema = { ...storeFieldsSchema };
 
 const listStoreQuerySchema = {
-    store_id:     { type: 'number' },
-    cnpj:         { type: 'string', maxLength: 14 },
-    name:         { type: 'string', maxLength: 60 },
-    city:         { type: 'string', maxLength: 100 },
-    state:        { type: 'string', maxLength: 2 },
-    status_store: { type: 'number', enum: [0, 1] },
-    page:         { type: 'number' },
-    limit:        { type: 'number' },
+    store_id:          { type: 'number' },
+    cnpj:              { type: 'string', maxLength: 14 },
+    name:              { type: 'string', maxLength: 60 },
+    city:              { type: 'string', maxLength: 100 },
+    state:             { type: 'string', maxLength: 2 },
+    status_store:      { type: 'number', enum: [0, 1] },
+    active_type_id_fk: { type: 'number' },
+    page:              { type: 'number' },
+    limit:             { type: 'number' },
 };
 
 const nfFieldSchema = {
@@ -394,30 +395,39 @@ const updateOperatorSchema = {
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const assetTermFieldsSchema = {
-    reponsible_name: { type: 'string', maxLength: 100 },
-    active_id_fk:    { type: 'number', min: 1 },
+    reponsible_name:         { type: 'string', maxLength: 100 },
+    reponsible_registration: { type: 'string', maxLength: 7 },
+    active_id_fk:            { type: 'number', min: 1 },
 };
 
 const createAssetTermSchema = {
-    reponsible_name: { ...assetTermFieldsSchema.reponsible_name, required: true },
-    active_id_fk:    { ...assetTermFieldsSchema.active_id_fk, required: true },
+    reponsible_name:         { ...assetTermFieldsSchema.reponsible_name, required: true },
+    reponsible_registration: { ...assetTermFieldsSchema.reponsible_registration, required: true },
+    active_id_fk:            { ...assetTermFieldsSchema.active_id_fk, required: true },
 };
 
 const updateAssetTermSchema = { ...assetTermFieldsSchema };
 
+/** Vincular (1) ou desvincular (0) o colaborador de um termo. */
+const assetTermStatusSchema = {
+    status_term: { type: 'number', enum: [0, 1], required: true },
+};
+
 const listAssetTermQuerySchema = {
-    asset_term_id:   { type: 'number' },
-    reponsible_name: { type: 'string', maxLength: 100 },
-    active_id_fk:    { type: 'number' },
-    asset_type:      { type: 'string', enum: ['generic', 'vehicle', 'smartphone', 'sim'] },
-    license_plates:  { type: 'string', maxLength: 10 },
-    imei:            { type: 'string', maxLength: 20 },
-    number:          { type: 'string', maxLength: 20 },
-    serial_number:   { type: 'string', maxLength: 40 },
-    date_start:      { type: 'string', pattern: DATE_PATTERN },
-    date_end:        { type: 'string', pattern: DATE_PATTERN },
-    page:            { type: 'number', min: 1 },
-    limit:           { type: 'number', min: 1, max: 100 },
+    status_term:     { type: 'number', enum: [0, 1] },
+    asset_term_id:           { type: 'number' },
+    reponsible_name:         { type: 'string', maxLength: 100 },
+    reponsible_registration: { type: 'string', maxLength: 7 },
+    active_id_fk:            { type: 'number' },
+    asset_type:              { type: 'string', enum: ['generic', 'vehicle', 'smartphone', 'sim'] },
+    license_plates:          { type: 'string', maxLength: 10 },
+    imei:                    { type: 'string', maxLength: 20 },
+    number:                  { type: 'string', maxLength: 20 },
+    serial_number:           { type: 'string', maxLength: 40 },
+    date_start:              { type: 'string', pattern: DATE_PATTERN },
+    date_end:                { type: 'string', pattern: DATE_PATTERN },
+    page:                    { type: 'number', min: 1 },
+    limit:                   { type: 'number', min: 1, max: 100 },
 };
 
 // Moldes de termo: tipo e campos dinâmicos são conferidos no use-case
@@ -480,6 +490,7 @@ module.exports = {
     updateSimSchema,
     createAssetTermSchema,
     updateAssetTermSchema,
+    assetTermStatusSchema,
     listAssetTermQuerySchema,
     createAssetTermTemplateSchema,
     updateAssetTermTemplateSchema,

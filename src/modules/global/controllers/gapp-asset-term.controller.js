@@ -27,7 +27,8 @@ async function getAssetTermById(req, res) {
 
 /**
  * POST /gapp/asset-term (multipart/form-data)
- * Campos: file (obrigatório), reponsible_name, active_id_fk.
+ * Campos: file (obrigatório), reponsible_name, reponsible_registration, active_id_fk.
+ * O termo nasce vinculado (status_term = 1); os outros termos do ativo não mudam.
  * `created_by`, `file_id_fk` e `file_name` saem do usuário autenticado e do upload.
  */
 async function createAssetTerm(req, res) {
@@ -45,6 +46,15 @@ async function updateAssetTerm(req, res) {
 }
 
 /**
+ * PATCH /gapp/asset-term/:id/status
+ * Body: { status_term } — 1 vincula, 0 desvincula o colaborador deste termo.
+ */
+async function setAssetTermStatus(req, res) {
+    const result = await useCases.setTermStatus(req.params.id, req.body.status_term);
+    return respond.ok(res, result);
+}
+
+/**
  * DELETE /gapp/asset-term/:id
  * Remove o termo e libera o arquivo, se nenhum outro termo o usar.
  */
@@ -53,4 +63,4 @@ async function deleteAssetTerm(req, res) {
     return respond.message(res, 'Termo excluído com sucesso');
 }
 
-module.exports = { listAssetTerms, getAssetTermById, createAssetTerm, updateAssetTerm, deleteAssetTerm };
+module.exports = { listAssetTerms, getAssetTermById, createAssetTerm, updateAssetTerm, setAssetTermStatus, deleteAssetTerm };
