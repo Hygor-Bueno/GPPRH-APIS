@@ -46,6 +46,7 @@ const eppStockController = require('./controllers/epp-stock.controller');
 const bpppProductController = require('./controllers/bppp-product.controller');
 const shopController = require('./controllers/shop.controller');
 const gappActiveController = require('./controllers/gapp-active.controller');
+const gappActiveIdentifierController = require('./controllers/gapp-active-identifier.controller');
 const gappInsuranceController = require('./controllers/gapp-insurance.controller');
 const gappVehicleController = require('./controllers/gapp-vehicle.controller');
 const gappLookupController = require('./controllers/gapp-lookup.controller');
@@ -99,7 +100,7 @@ const {
     postEcommerceOrderSchema,
 } = require('../../schemas/epp.schema');
 const {
-    createActiveSchema, updateActiveSchema, validateVehicleAndInsurancePayload,
+    createActiveSchema, updateActiveSchema, validateVehicleAndInsurancePayload, createActiveIdentifierSchema,
     createInsuranceSchema, updateInsuranceSchema,
     listActiveQuerySchema, listVehicleQuerySchema, listInsuranceQuerySchema,
     createExpenseSchema, updateExpenseSchema,
@@ -2116,6 +2117,52 @@ router.get('/gapp/active/:id',
     authMiddleware,
     canAll(['GAPP_VIEW_ACTIVE']),
     asyncHandler(gappActiveController.getActiveById));
+
+// ─── GAPP — Identificadores do ativo (gapp_active_identifiers) ─────────────────
+// Patrimônio (PATRIMONIO) e número de série (SERIAL). Um identificador pertence a
+// um único ativo; cada ativo tem no máximo um principal. Só ativos do grupo do usuário.
+
+/**
+ * @route GET /gapp/active/:id/identifiers
+ * @description Identificadores do ativo, o principal primeiro.
+ * @access Requer `GAPP_VIEW_ACTIVE`
+ */
+router.get('/gapp/active/:id/identifiers',
+    authMiddleware,
+    canAll(['GAPP_VIEW_ACTIVE']),
+    asyncHandler(gappActiveIdentifierController.listIdentifiers));
+
+/**
+ * @route POST /gapp/active/:id/identifiers
+ * @description Cadastra um identificador. Body: { identifier_type, identifier_value, is_primary? }.
+ * O primeiro do ativo já nasce principal. Devolve a lista atualizada.
+ * @access Requer `GAPP_UPDATE_ACTIVE`
+ */
+router.post('/gapp/active/:id/identifiers',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_ACTIVE']),
+    validate(createActiveIdentifierSchema),
+    asyncHandler(gappActiveIdentifierController.createIdentifier));
+
+/**
+ * @route PATCH /gapp/active/:id/identifiers/:identifierId/primary
+ * @description Torna o identificador o principal do ativo (os outros deixam de ser).
+ * @access Requer `GAPP_UPDATE_ACTIVE`
+ */
+router.patch('/gapp/active/:id/identifiers/:identifierId/primary',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_ACTIVE']),
+    asyncHandler(gappActiveIdentifierController.setPrimaryIdentifier));
+
+/**
+ * @route DELETE /gapp/active/:id/identifiers/:identifierId
+ * @description Remove o identificador; se era o principal, o mais antigo assume.
+ * @access Requer `GAPP_UPDATE_ACTIVE`
+ */
+router.delete('/gapp/active/:id/identifiers/:identifierId',
+    authMiddleware,
+    canAll(['GAPP_UPDATE_ACTIVE']),
+    asyncHandler(gappActiveIdentifierController.deleteIdentifier));
 
 /**
  * @route GET /gapp/vehicle

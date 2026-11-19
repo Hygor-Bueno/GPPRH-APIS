@@ -15,11 +15,35 @@ class GappActiveUseCases {
      * @param {import('./ports/active-repository.port').ActiveRepositoryPort} deps.repository
      * @param {import('../ports/gapp-user-repository.port').GappUserRepositoryPort} deps.userRepository
      * @param {import('../ports/gapp-insurance-repository.port').GappInsuranceRepositoryPort} deps.insuranceRepository
+     * @param {import('../active-identifier/gapp-active-identifier.use-cases').GappActiveIdentifierUseCases} [deps.identifierUseCases]
+     *        identificadores enviados junto com o cadastro do ativo novo (`identifiers`)
      */
-    constructor({ repository, userRepository, insuranceRepository }) {
+    constructor({ repository, userRepository, insuranceRepository, identifierUseCases }) {
         this.repository = repository;
         this.userRepository = userRepository;
         this.insuranceRepository = insuranceRepository;
+        this.identifierUseCases = identifierUseCases;
+    }
+
+    /**
+     * Grava o ativo. No cadastro (sem `active_id`), os `identifiers` do body são
+     * validados ANTES e gravados DEPOIS (precisam do id). Se a gravação deles
+     * falhar com o ativo já criado, o cadastro não é desfeito: volta 201 com
+     * `identifiers_warning`, para a tela não reenviar e duplicar o ativo.
+     */
+    async _persist(payload, data) {
+        const isNew = !data.active_id && this.identifierUseCases;
+        const identifiers = isNew ? await this.identifierUseCases.prepareForNewAsset(data.identifiers) : [];
+        const { identifiers: _ignored, ...activePayload } = payload;
+        const saved = await this.repository.saveActive(activePayload);
+        if (!identifiers.length) return saved;
+        try {
+            await this.identifierUseCases.addToNewAsset(saved.id, identifiers);
+            return saved;
+        } catch (error) {
+            const reason = error?.message || 'erro ao gravar';
+            return { ...saved, identifiers_warning: `Ativo #${saved.id} registrado, mas os identificadores não foram gravados (${reason}). Cadastre-os editando o ativo.` };
+        }
     }
 
     /**
@@ -63,7 +87,7 @@ class GappActiveUseCases {
             throw new AppError("Não foi possivel realizar ação, o ativo esta desabilitado.", 400)
         }
 
-        return this.repository.saveActive(payload);
+        return this._persist(payload, data);
     }
 
     /**

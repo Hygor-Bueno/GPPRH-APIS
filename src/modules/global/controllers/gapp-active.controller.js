@@ -2,15 +2,21 @@ const { GappActiveUseCases } = require('../application/gapp/active/gapp-active.u
 const { MysqlActiveRepository } = require('../infrastructure/gapp/mysql-active.repository');
 const { MysqlGappUserRepository } = require('../infrastructure/gapp/mysql-gapp-user.repository');
 const { MysqlGappInsuranceRepository } = require('../infrastructure/gapp/mysql-gapp-insurance.repository');
+const { GappActiveIdentifierUseCases } = require('../application/gapp/active-identifier/gapp-active-identifier.use-cases');
+const { MysqlActiveIdentifierRepository } = require('../infrastructure/gapp/mysql-active-identifier.repository');
 const { respond } = require('../../../utils/respond');
 
 const useCases = new GappActiveUseCases({
     repository: new MysqlActiveRepository(),
     userRepository: new MysqlGappUserRepository(),
     insuranceRepository: new MysqlGappInsuranceRepository(),
+    identifierUseCases: new GappActiveIdentifierUseCases({
+        repository: new MysqlActiveIdentifierRepository(),
+        userRepository: new MysqlGappUserRepository(),
+    }),
 });
 
-// 🔹 CREATE ACTIVE (+ vehicle + seguro, atômico)
+// 🔹 CREATE ACTIVE (+ vehicle + seguro, atômico; `identifiers` opcionais gravados logo após)
 async function createActive(req, res) {
   const result = await useCases.save(req.body, req.user);
   return respond.created(res, result);

@@ -33,6 +33,14 @@ const activeFieldsSchema = {
 
 const createActiveSchema = { ...activeFieldsSchema };
 
+// Identificador do ativo (gapp_active_identifiers). Valores aceitos e espaços
+// nas pontas são conferidos no use-case.
+const createActiveIdentifierSchema = {
+    identifier_type:  { type: 'string', required: true, enum: ['PATRIMONIO', 'SERIAL'] },
+    identifier_value: { type: 'string', required: true, maxLength: 150 },
+    is_primary:       { type: 'number', enum: [0, 1] },
+};
+
 // No update, `is_vehicle` é opcional — se não vier, o service mantém o valor
 // atual do ativo (resolvido no banco), em vez de exigir reenvio a cada PUT.
 const updateActiveSchema = {
@@ -513,6 +521,7 @@ const listActiveAuditQuerySchema = {
 
 module.exports = {
     createActiveSchema,
+    createActiveIdentifierSchema,
     updateActiveSchema,
     validateVehicleAndInsurancePayload,
     createInsuranceSchema,
