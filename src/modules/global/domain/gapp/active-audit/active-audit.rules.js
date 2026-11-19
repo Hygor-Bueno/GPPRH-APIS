@@ -46,7 +46,22 @@ const DIVERGENCE_TYPE = Object.freeze({
     DUPLICATE_IDENTIFIER: 'DUPLICATE_IDENTIFIER', // mesmo identificador em 2+ ativos da auditoria
     IDENTIFIER_CONFLICT: 'IDENTIFIER_CONFLICT',   // identificador já registrado para outro ativo em auditoria finalizada
     TRANSFERRED: 'TRANSFERRED',                   // ativo encontrado como transferido (destino registrado na conferência)
+    UNEXPECTED: 'UNEXPECTED',                     // ativo não previsto, incluído durante a conferência pelo identificador
 });
+
+/** Ativo incluído durante a conferência (não estava na abertura). */
+const isUnexpectedAsset = asset => asset?.is_expected === false;
+
+/**
+ * Fotografia do ativo não previsto, acrescentada a `initial_data.assets` com
+ * quem incluiu e quando — a partir daí ele é conferido como qualquer outro.
+ */
+function toUnexpectedAsset(row, userId) {
+    return { ...toSnapshotAsset(row), is_expected: false, added_by: userId, added_at: new Date().toISOString() };
+}
+
+/** `initial_data` com o ativo não previsto no fim da lista. */
+const appendUnexpectedAsset = (initialData, asset) => ({ ...initialData, assets: [...(initialData?.assets ?? []), asset] });
 
 const MAX_ACTIVES_PER_AUDIT = 1000;
 const MAX_IDENTIFIER_LENGTH = 150;
@@ -426,6 +441,7 @@ function buildReview(initialData, items, history = []) {
     const assets = initialData?.assets ?? [];
     const registered = new Set(items.map(item => Number(item.active_id_fk)));
 
+    const unexpected = assets.filter(isUnexpectedAsset);
     const pending = assets
         .filter(asset => !registered.has(Number(asset.active_id)))
         .map(asset => ({ active_id: asset.active_id, brand: asset.brand, model: asset.model }));
@@ -460,10 +476,16 @@ function buildReview(initialData, items, history = []) {
             active_id: Number(item.active_id_fk),
             message: 'Ativo transferido para outra unidade/setor.',
         })),
+        ...unexpected.map(asset => ({
+            type: DIVERGENCE_TYPE.UNEXPECTED,
+            active_id: Number(asset.active_id),
+            message: 'Ativo não previsto na abertura, incluído durante a conferência.',
+        })),
     ];
 
     return {
-        quantity_expected: assets.length,
+        quantity_expected: assets.length - unexpected.length,
+        quantity_unexpected: unexpected.length,
         quantity_found: registered.size,
         quantity_pending: pending.length,
         quantity_transferred: transferred.length,
@@ -485,6 +507,7 @@ function buildFinalData(auditId, initialData, items, history = []) {
     return {
         audit_id: Number(auditId),
         quantity_expected: review.quantity_expected,
+        quantity_unexpected: review.quantity_unexpected,
         quantity_found: review.quantity_found,
         quantity_pending: review.quantity_pending,
         quantity_transferred: review.quantity_transferred,
@@ -616,6 +639,9 @@ module.exports = {
     MAX_ACTIVES_PER_AUDIT,
     TRANSFER_COLUMNS,
     isEditableStatus,
+    isUnexpectedAsset,
+    toUnexpectedAsset,
+    appendUnexpectedAsset,
     lockedStatusMessage,
     normalizeActiveIds,
     normalizeOpenAudit,

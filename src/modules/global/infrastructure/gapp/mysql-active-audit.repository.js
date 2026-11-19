@@ -20,7 +20,7 @@ const {
     sqlIdentifierHistory, sqlLockAudit, sqlGetAuditItem, sqlGetActiveLocation, sqlFindItemByIdentifier, buildFindItemByIdentifierParams,
     sqlInsertAuditItem, buildInsertAuditItemParams,
     sqlUpdateAuditItem, buildUpdateAuditItemParams,
-    sqlUpdateAuditStatus, sqlCloseAudit, sqlGetFinalData, sqlDeleteAuditItems,
+    sqlUpdateAuditStatus, sqlCloseAudit, sqlGetFinalData, sqlDeleteAuditItems, sqlUpdateInitialData,
 } = require('../../repositories/mysql/gapp-active-audit.queries');
 
 /** O mysql2 já devolve coluna JSON como objeto; o parse cobre driver/config que devolva texto. */
@@ -204,6 +204,12 @@ class MysqlActiveAuditRepository extends ActiveAuditRepositoryPort {
 
             async closeAudit({ finalData, userId, status }) {
                 const [result] = await conn.query(sqlCloseAudit(), [JSON.stringify(finalData), userId, status, auditId]);
+                return { updated: result.affectedRows };
+            },
+
+            async updateInitialData(initialData) {
+                const params = [JSON.stringify(initialData), initialData.assets.length, auditId];
+                const [result] = await conn.query(sqlUpdateInitialData(), params);
                 return { updated: result.affectedRows };
             },
 

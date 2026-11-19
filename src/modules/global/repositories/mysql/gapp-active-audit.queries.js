@@ -338,6 +338,11 @@ function sqlCloseAudit() {
     `;
 }
 
+/** Ativo não previsto incluído: nova fotografia e quantidade. Params: [initial_data, quantity_active, audit_id] */
+function sqlUpdateInitialData() {
+    return 'UPDATE global.gapp_active_audit SET initial_data = ?, quantity_active = ? WHERE audit_id = ? AND status_audit IN (0, 1)';
+}
+
 /** Relê o que foi gravado (mesma transação) para conferir antes de limpar a temporária. */
 function sqlGetFinalData() {
     return 'SELECT status_audit, final_data FROM global.gapp_active_audit WHERE audit_id = ?';
@@ -374,5 +379,6 @@ module.exports = {
     sqlUpdateAuditStatus,
     sqlCloseAudit,
     sqlGetFinalData,
+    sqlUpdateInitialData,
     sqlDeleteAuditItems,
 };

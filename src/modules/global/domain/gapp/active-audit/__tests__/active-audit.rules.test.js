@@ -180,6 +180,14 @@ describe('active-audit.rules', () => {
         });
     });
 
+    test('ativo não previsto: fica pendente até conferir, vira divergência e não conta como previsto', () => {
+        const { appendUnexpectedAsset, toUnexpectedAsset } = require('../active-audit.rules');
+        const initial = appendUnexpectedAsset(INITIAL, toUnexpectedAsset({ active_id: 300, brand: 'HP' }, 10));
+        const review = buildReview(initial, [item(300)]);
+        expect(review).toMatchObject({ quantity_expected: 3, quantity_unexpected: 1, quantity_pending: 3 });
+        expect(review.divergences).toContainEqual(expect.objectContaining({ type: 'UNEXPECTED', active_id: 300 }));
+    });
+
     test('revisão conta o ciclo de vida', () => {
         const review = buildReview(INITIAL, [item(120), item(121, { lifecycle_status: 'IN_MAINTENANCE' })]);
         expect(review.lifecycles).toEqual({ IN_USE: 1, IN_STOCK: 0, IN_MAINTENANCE: 1, DISCARDED: 0 });

@@ -62,7 +62,8 @@ class ActiveAuditRepositoryPort {
      * auditorias abertas e finalizadas e devolve `{ active_id_fk, audit_id_fk }`.
      * `tx` expõe: findItem, findActiveLocation, findRefs, findItemByIdentifier,
      * insertItem, updateItem, updateStatus, listItems, findIdentifierHistory,
-     * closeAudit, getFinalData (relê final_data) e deleteItems (limpa a temporária).
+     * closeAudit, getFinalData (relê final_data), deleteItems (limpa a temporária)
+     * e updateInitialData (inclui ativo não previsto; atualiza quantity_active).
      *
      * @template T
      * @param {number} auditId

@@ -503,6 +503,16 @@ const registerActiveAuditItemSchema = {
 
 const updateActiveAuditItemSchema = { ...activeAuditItemFieldsSchema };
 
+// Conferência pelo identificador (valores e espaços conferidos no use-case)
+const identifyActiveAuditQuerySchema = {
+    identifier_type:  { type: 'string', required: true, enum: ['PATRIMONIO', 'SERIAL'] },
+    identifier_value: { type: 'string', required: true, maxLength: 150 },
+};
+
+const addActiveAuditAssetSchema = {
+    active_id: { type: 'number', required: true, min: 1 },
+};
+
 const cancelActiveAuditSchema = {
     reason: { type: 'string', maxLength: 500 },
 };
@@ -563,5 +573,7 @@ module.exports = {
     registerActiveAuditItemSchema,
     updateActiveAuditItemSchema,
     cancelActiveAuditSchema,
+    identifyActiveAuditQuerySchema,
+    addActiveAuditAssetSchema,
     listActiveAuditQuerySchema
 };

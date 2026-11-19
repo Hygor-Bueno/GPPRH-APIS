@@ -121,6 +121,8 @@ const {
     registerActiveAuditItemSchema,
     updateActiveAuditItemSchema,
     cancelActiveAuditSchema,
+    identifyActiveAuditQuerySchema,
+    addActiveAuditAssetSchema,
     listActiveAuditQuerySchema
 } = require('../../schemas/gapp.schema');
 const {
@@ -2905,6 +2907,31 @@ router.post('/gapp/active-audit',
     canAll(['GAPP_CREATE_ACTIVE_AUDIT']),
     validate(openActiveAuditSchema),
     asyncHandler(gappActiveAuditController.openAudit));
+
+/**
+ * @route GET /gapp/active-audit/:id/identify
+ * @description Conferência pelo identificador: ?identifier_type (PATRIMONIO|SERIAL)&identifier_value.
+ * Devolve { in_audit, asset, identifier }. 404 se o identificador não estiver cadastrado em
+ * gapp_active_identifiers ou se o ativo for de outro grupo.
+ * @access Requer `GAPP_REGISTER_ACTIVE_AUDIT`
+ */
+router.get('/gapp/active-audit/:id/identify',
+    authMiddleware,
+    canAll(['GAPP_REGISTER_ACTIVE_AUDIT']),
+    validate(identifyActiveAuditQuerySchema, 'query'),
+    asyncHandler(gappActiveAuditController.identifyAsset));
+
+/**
+ * @route POST /gapp/active-audit/:id/assets
+ * @description Inclui um ativo não previsto na auditoria (aberta/em andamento). Body: { active_id }.
+ * Entra em initial_data.assets com is_expected = false e vira divergência UNEXPECTED.
+ * @access Requer `GAPP_REGISTER_ACTIVE_AUDIT`
+ */
+router.post('/gapp/active-audit/:id/assets',
+    authMiddleware,
+    canAll(['GAPP_REGISTER_ACTIVE_AUDIT']),
+    validate(addActiveAuditAssetSchema),
+    asyncHandler(gappActiveAuditController.addUnexpectedAsset));
 
 /**
  * @route POST /gapp/active-audit/:id/items

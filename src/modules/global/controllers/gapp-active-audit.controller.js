@@ -1,12 +1,35 @@
 const { GappActiveAuditUseCases } = require('../application/gapp/active-audit/gapp-active-audit.use-cases');
 const { MysqlActiveAuditRepository } = require('../infrastructure/gapp/mysql-active-audit.repository');
 const { MysqlGappUserRepository } = require('../infrastructure/gapp/mysql-gapp-user.repository');
+const { GappActiveAuditIdentifyUseCases } = require('../application/gapp/active-audit/gapp-active-audit-identify.use-cases');
+const { MysqlActiveIdentifierRepository } = require('../infrastructure/gapp/mysql-active-identifier.repository');
 const { respond } = require('../../../utils/respond');
 
 const useCases = new GappActiveAuditUseCases({
     repository: new MysqlActiveAuditRepository(),
     userRepository: new MysqlGappUserRepository(),
 });
+
+const identifyUseCases = new GappActiveAuditIdentifyUseCases({
+    repository: new MysqlActiveAuditRepository(),
+    identifierRepository: new MysqlActiveIdentifierRepository(),
+    userRepository: new MysqlGappUserRepository(),
+});
+
+/**
+ * GET /gapp/active-audit/:id/identify?identifier_type&identifier_value
+ * Ativo do identificador e se ele faz parte da auditoria: { in_audit, asset, identifier }.
+ */
+async function identifyAsset(req, res) {
+    const result = await identifyUseCases.identify(req.params.id, req.query, req.user);
+    return respond.ok(res, result);
+}
+
+/** POST /gapp/active-audit/:id/assets — Body: { active_id } — inclui o ativo como não previsto. */
+async function addUnexpectedAsset(req, res) {
+    const result = await identifyUseCases.addUnexpected(req.params.id, req.body?.active_id, req.user);
+    return respond.created(res, result);
+}
 
 /**
  * GET /gapp/active-audit
@@ -69,4 +92,5 @@ async function cancelAudit(req, res) {
 module.exports = {
     listAudits, getAuditById, getReview, openAudit,
     registerItem, updateItem, finishAudit, cancelAudit,
+    identifyAsset, addUnexpectedAsset,
 };
