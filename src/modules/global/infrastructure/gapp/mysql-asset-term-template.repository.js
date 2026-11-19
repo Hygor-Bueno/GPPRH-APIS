@@ -11,6 +11,7 @@ const {
     sqlListTemplates, sqlGetTemplateById, sqlCheckTemplateName,
     sqlInsertTemplate, buildInsertTemplateParams,
     sqlUpdateTemplate, buildUpdateTemplateParams,
+    sqlUpdateTemplateLogo,
 } = require('../../repositories/mysql/gapp-asset-term-template.queries');
 
 class MysqlAssetTermTemplateRepository extends AssetTermTemplateRepositoryPort {
@@ -50,6 +51,11 @@ class MysqlAssetTermTemplateRepository extends AssetTermTemplateRepositoryPort {
 
     async update(id, fields) {
         const [result] = await this._query(sqlUpdateTemplate(), buildUpdateTemplateParams(fields, id));
+        return { updated: result.affectedRows };
+    }
+
+    async setLogo(id, fileId, userId) {
+        const [result] = await this._query(sqlUpdateTemplateLogo(), [fileId, userId, id]);
         return { updated: result.affectedRows };
     }
 }

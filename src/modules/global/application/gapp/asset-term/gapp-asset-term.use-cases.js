@@ -5,6 +5,9 @@
  * - Tudo que pode recusar a operação (termo/ativo inexistente, arquivo ausente)
  *   é validado ANTES de gravar o arquivo.
  * - Troca de arquivo: o termo passa a apontar para o novo e só então o antigo é liberado.
+ * - Vínculo: o termo novo nasce vinculado (`status_term = 1`) e não mexe nos
+ *   outros — um ativo pode ter vários colaboradores vinculados ao mesmo tempo.
+ *   Desvincular (ou vincular de novo) é decisão do usuário, termo a termo.
  * - Exclusão: a linha sai primeiro e só então o arquivo é liberado — nunca existe
  *   termo apontando para arquivo removido.
  * - O `FileService` deduplica por hash: o mesmo arquivo pode estar em mais de um
@@ -14,6 +17,9 @@
  */
 
 const { AppError } = require('../../../../../errors/app.error');
+
+/** `status_term`: 1 = termo ativo (colaborador vinculado ao ativo agora), 0 = inativo. */
+const STATUS_ACTIVE = 1;
 
 class GappAssetTermUseCases {
     /**
@@ -42,6 +48,8 @@ class GappAssetTermUseCases {
         const stored = await this.storage.save(file, userId);
         const { insertId } = await this.repository.insert({
             reponsible_name: data.reponsible_name,
+            reponsible_registration: data.reponsible_registration ?? null,
+            status_term: STATUS_ACTIVE,
             created_by: userId,
             active_id_fk: data.active_id_fk,
             file_id_fk: stored.fileId,
@@ -58,6 +66,7 @@ class GappAssetTermUseCases {
         const stored = file ? await this.storage.save(file, userId) : null;
         await this.repository.update(current.asset_term_id, {
             reponsible_name: data.reponsible_name ?? current.reponsible_name,
+            reponsible_registration: data.reponsible_registration ?? current.reponsible_registration,
             active_id_fk: data.active_id_fk ?? current.active_id_fk,
             file_id_fk: stored?.fileId ?? current.file_id_fk,
             file_name: stored?.fileName ?? current.file_name,
@@ -67,6 +76,14 @@ class GappAssetTermUseCases {
             await this._releaseFile(current.file_id_fk, current.asset_term_id, userId);
         }
         return this.getAssetTermById(current.asset_term_id);
+    }
+
+    /** Vincula (1) ou desvincula (0) o colaborador de um termo; os demais termos do ativo não mudam. */
+    async setTermStatus(id, status) {
+        const term = await this.getAssetTermById(id);
+        const next = Number(status) === STATUS_ACTIVE ? STATUS_ACTIVE : 0;
+        if (Number(term.status_term) !== next) await this.repository.setStatus(term.asset_term_id, next);
+        return this.getAssetTermById(term.asset_term_id);
     }
 
     async deleteAssetTerm(id, userId) {

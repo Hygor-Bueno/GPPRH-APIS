@@ -29,7 +29,7 @@ function buildTemplateFilters(filters = {}) {
 }
 
 const TEMPLATE_COLUMNS = `
-    t.asset_term_template_id, t.name, t.asset_type, t.status_template,
+    t.asset_term_template_id, t.name, t.asset_type, t.status_template, t.logo_file_id_fk,
     t.created_by, t.updated_by, t.created_at, t.updated_at
 `;
 
@@ -88,8 +88,18 @@ function buildUpdateTemplateParams(data, templateId) {
     return [data.name, data.asset_type, data.content, data.status_template, data.user_id, templateId];
 }
 
+/** Logo do molde (imagem no alto, à esquerda, como nos termos originais). `NULL` tira. */
+function sqlUpdateTemplateLogo() {
+    return `
+        UPDATE global.gapp_asset_term_template
+        SET logo_file_id_fk = ?, updated_by = ?, updated_at = NOW()
+        WHERE asset_term_template_id = ?
+    `;
+}
+
 module.exports = {
     sqlListTemplates, sqlGetTemplateById, sqlCheckTemplateName,
     sqlInsertTemplate, buildInsertTemplateParams,
     sqlUpdateTemplate, buildUpdateTemplateParams,
+    sqlUpdateTemplateLogo,
 };
