@@ -29,6 +29,9 @@ class AssetTermRepositoryPort {
 
     /** @returns {Promise<{ deleted: number }>} */
     async delete(id) { throw new Error('AssetTermRepositoryPort.delete não implementado'); }
+
+    /** Vincula (1) ou desvincula (0) o colaborador de um termo. @returns {Promise<{ updated: number }>} */
+    async setStatus(id, status) { throw new Error('AssetTermRepositoryPort.setStatus não implementado'); }
 }
 
 class AssetTermStoragePort {

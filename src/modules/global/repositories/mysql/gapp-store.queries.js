@@ -13,6 +13,7 @@ const STORE_FILTER_CLAUSES = {
     city: 'city LIKE ?',
     state: 'state = ?',
     status_store: 'status_store = ?',
+    active_type_id_fk: 'active_type_id_fk = ?'
 };
 
 const STORE_LIKE_FIELDS = new Set(['name', 'city']);
@@ -38,7 +39,7 @@ function sqlListStores(filters = {}) {
     const offset = (page - 1) * limit;
 
     const sql = `
-        SELECT store_id, cnpj, name, street, district, city, state, number, zip_code, complement, status_store
+        SELECT store_id, cnpj, name, street, district, city, state, number, zip_code, complement, status_store, active_type_id_fk
         FROM global.gapp_store
         ${where}
         ORDER BY name
@@ -54,7 +55,7 @@ function sqlCountStores(filters = {}) {
 
 function sqlGetStoreById() {
     return `
-        SELECT store_id, cnpj, name, street, district, city, state, number, zip_code, complement, status_store
+        SELECT store_id, cnpj, name, street, district, city, state, number, zip_code, complement, status_store, active_type_id_fk
         FROM global.gapp_store
         WHERE store_id = ?
     `;
@@ -67,8 +68,8 @@ function sqlCheckStoreExists() {
 function sqlInsertStore() {
     return `
         INSERT INTO global.gapp_store
-            (cnpj, name, street, district, city, state, number, zip_code, complement, status_store)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (cnpj, name, street, district, city, state, number, zip_code, complement, status_store, active_type_id_fk)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 }
 
@@ -84,6 +85,7 @@ function buildInsertStoreParams(data) {
         data.zip_code,
         data.complement ?? null,
         data.status_store ?? 1,
+        data.active_type_id_fk ?? null,
     ];
 }
 
@@ -91,7 +93,7 @@ function sqlUpdateStore() {
     return `
         UPDATE global.gapp_store
         SET cnpj = ?, name = ?, street = ?, district = ?, city = ?, state = ?,
-            number = ?, zip_code = ?, complement = ?, status_store = ?
+            number = ?, zip_code = ?, complement = ?, status_store = ?, active_type_id_fk = ?
         WHERE store_id = ?
     `;
 }
@@ -108,6 +110,7 @@ function buildUpdateStoreParams(data, storeId) {
         data.zip_code,
         data.complement ?? null,
         data.status_store ?? 1,
+        data.active_type_id_fk ?? null,
         storeId,
     ];
 }

@@ -12,9 +12,11 @@ function makeDeps(overrides = {}) {
         nameExists: jest.fn().mockResolvedValue(false),
         insert: jest.fn().mockResolvedValue({ insertId: 3 }),
         update: jest.fn().mockResolvedValue({ updated: 1 }),
+        setLogo: jest.fn().mockResolvedValue({ updated: 1 }),
         ...overrides,
     };
-    return { repository, useCases: new GappAssetTermTemplateUseCases({ repository }) };
+    const storage = { save: jest.fn().mockResolvedValue({ fileId: 55, fileName: 'logo.webp' }) };
+    return { repository, storage, useCases: new GappAssetTermTemplateUseCases({ repository, storage }) };
 }
 
 describe('GappAssetTermTemplateUseCases', () => {
@@ -79,6 +81,34 @@ describe('GappAssetTermTemplateUseCases', () => {
             const { useCases, repository } = makeDeps();
             await expect(useCases.updateTemplate(3, { asset_type: 'vehicle' }, 9)).rejects.toMatchObject({ statusCode: 400 });
             expect(repository.update).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('logo', () => {
+        const IMAGE = { originalname: 'logo.png', mimetype: 'image/png', buffer: Buffer.from('x') };
+
+        test('grava a imagem e liga ao molde', async () => {
+            const { useCases, repository, storage } = makeDeps();
+            await useCases.setLogo(3, IMAGE, 9);
+            expect(storage.save).toHaveBeenCalledWith(IMAGE, 9);
+            expect(repository.setLogo).toHaveBeenCalledWith(3, 55, 9);
+        });
+
+        test('arquivo que não é imagem: 400 sem gravar', async () => {
+            const { useCases, storage } = makeDeps();
+            await expect(useCases.setLogo(3, { ...IMAGE, mimetype: 'application/pdf' }, 9)).rejects.toMatchObject({ statusCode: 400 });
+            expect(storage.save).not.toHaveBeenCalled();
+        });
+
+        test('remover tira o logo do molde', async () => {
+            const { useCases, repository } = makeDeps();
+            await useCases.removeLogo(3, 9);
+            expect(repository.setLogo).toHaveBeenCalledWith(3, null, 9);
+        });
+
+        test('molde inexistente: 404', async () => {
+            const { useCases } = makeDeps({ findById: jest.fn().mockResolvedValue(null) });
+            await expect(useCases.setLogo(9, IMAGE, 1)).rejects.toMatchObject({ statusCode: 404 });
         });
     });
 });

@@ -92,14 +92,19 @@ class GappActiveUseCases {
 
         active.insurance = await this.insuranceRepository.findActiveInsuranceByActiveId(active.active_id) || null;
 
-        if (active.id_active_class_fk === 17) {
+        /** 
+        * Realiza a busca pelo tipo, permitindo criar novas classes derivadas das existentes 
+        */
+        const typeId = await this.repository.findTypeActiveById(active.id_active_class_fk)
+
+        if (typeId.active_type_id === 5) {
             const smartphone = await this.repository.findSmartphoneByActiveId(id)
             const numbers = smartphone.sim_biding_id_fk ? await this.repository.findNumbersById(smartphone.sim_biding_id_fk) : null;
             active.smartphone = { ...smartphone, numbers: numbers }
         }
 
-        if (active.id_active_class_fk === 18) {
-            const sim = await this.repository.findSimByActiveId(id)
+        if (typeId.active_type_id === 11) {
+            const sim = await this.repository.findSimByActiveId(id);
             active.sim = sim
         }
 
