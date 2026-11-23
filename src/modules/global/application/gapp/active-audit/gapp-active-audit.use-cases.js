@@ -4,9 +4,10 @@
  * - Usuários (`user_open_id_fk`, `user_register_id_fk`, `user_finish_id_fk`)
  *   são sempre o `gapp_user.user_id` do usuário autenticado — nunca do body.
  * - Escopo: só ativos e auditorias do `work_group_fk` do usuário.
- * - Abertura: unidade obrigatória, setor/classe/tipo opcionais. Com
- *   `active_ids` só os escolhidos (precisam estar no escopo); sem, todos os
- *   ativos do escopo entram automaticamente.
+ * - Abertura: unidade obrigatória e setor opcional dizem onde a auditoria
+ *   acontece, mas NÃO filtram ativos; só classe/tipo filtram. Com
+ *   `active_ids` só os escolhidos (precisam ser da classe/tipo); sem, todos
+ *   os ativos do grupo na classe/tipo entram automaticamente.
  * - O cadastro original (`gapp_active`) nunca é alterado pela auditoria; a
  *   origem da transferência é lida dele.
  * - Depois da abertura, toda escrita roda em `repository.runLocked`
@@ -22,7 +23,7 @@ const { AppError } = require('../../../../../errors/app.error');
 const {
     AUDIT_STATUS, AUDIT_STATUS_LABEL, MAX_ACTIVES_PER_AUDIT,
     lockedStatusMessage, normalizeOpenAudit, validateAuditScope, validateTransferDestination,
-    isSameLocation, toSnapshotAsset,
+    isSameDepartment, toSnapshotAsset,
     normalizeRegistration, findDuplicateIdentifiers,
     buildReview, buildFinalData, buildCanceledData, verifyFinalData, itemsFromFinalData,
 } = require('../../../domain/gapp/active-audit/active-audit.rules');
@@ -35,7 +36,7 @@ const identifierPairs = items => items
 /** Campos que a edição pode trocar; o que não vier mantém o valor atual (inclusive a transferência). */
 const EDITABLE_ITEM_FIELDS = [
     'identifier_type', 'identifier_value', 'asset_condition', 'lifecycle_status', 'additional_items', 'observations',
-    'is_transfer', 'transfer_reason', 'transfer_unit_id_fk', 'transfer_dep_id_fk',
+    'is_transfer', 'transfer_reason', 'transfer_dep_id_fk',
 ];
 const mergeItem = (current, data) =>
     Object.fromEntries(EDITABLE_ITEM_FIELDS.map(field => [field, data[field] !== undefined ? data[field] : current[field]]));
@@ -121,20 +122,20 @@ class GappActiveAuditUseCases {
             const missing = activeIds.filter(id => !found.has(id));
             if (missing.length) {
                 throw new AppError(
-                    `Ativo(s) não encontrado(s) ou fora da unidade/setor/classe/tipo selecionados: ${missing.join(', ')}.`,
+                    `Ativo(s) não encontrado(s) ou fora do tipo/classe selecionados: ${missing.join(', ')}.`,
                     404,
                     { code: 'GAPP_AUDIT_ACTIVE_NOT_FOUND', details: { active_ids: missing } }
                 );
             }
         } else {
             if (!rows.length) {
-                throw new AppError('Nenhum ativo encontrado para a unidade/setor/classe/tipo selecionados.', 404, {
+                throw new AppError('Nenhum ativo encontrado para o tipo/classe selecionados.', 404, {
                     code: 'GAPP_AUDIT_NO_ACTIVES',
                 });
             }
             if (rows.length > MAX_ACTIVES_PER_AUDIT) {
                 throw new AppError(
-                    `O escopo selecionado tem mais de ${MAX_ACTIVES_PER_AUDIT} ativos. Refine por setor, classe ou tipo.`,
+                    `A seleção tem mais de ${MAX_ACTIVES_PER_AUDIT} ativos. Refine por tipo ou classe, ou escolha os ativos.`,
                     400,
                     { code: 'GAPP_AUDIT_TOO_MANY_ACTIVES' }
                 );
@@ -274,31 +275,29 @@ class GappActiveAuditUseCases {
 
     /**
      * @private Completa a transferência em `value` (mutando-o):
-     * - destino existe e o setor é da unidade;
-     * - origem = unidade/setor do ativo em gapp_active (mantém a já gravada numa edição);
+     * - setor de destino existe (ele já diz empresa e unidade);
+     * - origem = setor do ativo em gapp_active.used_in (mantém a já gravada numa edição);
      * - destino precisa ser diferente da origem.
      */
     async _resolveTransfer(tx, activeId, current, value) {
-        const refs = await tx.findRefs({ unit_id_fk: value.transfer_unit_id_fk, dep_id_fk: value.transfer_dep_id_fk });
+        const refs = await tx.findRefs({ dep_id_fk: value.transfer_dep_id_fk });
         const destinationError = validateTransferDestination(value, refs);
         if (destinationError) throw new AppError(destinationError, 400, { code: 'GAPP_AUDIT_INVALID_TRANSFER' });
+        value.transfer_origin_dep_id_fk = await this._transferOrigin(tx, activeId, current);
 
-        if (current && Number(current.is_transfer) === 1) {
-            value.transfer_origin_unit_id_fk = current.transfer_origin_unit_id_fk ?? null;
-            value.transfer_origin_dep_id_fk = current.transfer_origin_dep_id_fk ?? null;
-        } else {
-            const origin = await tx.findActiveLocation(activeId);
-            if (!origin) throw new AppError('Ativo não encontrado no cadastro.', 404);
-            value.transfer_origin_unit_id_fk = origin.units_id_fk ?? null;
-            value.transfer_origin_dep_id_fk = origin.used_in ?? null;
-        }
-
-        if (isSameLocation(value.transfer_unit_id_fk, value.transfer_dep_id_fk,
-            value.transfer_origin_unit_id_fk, value.transfer_origin_dep_id_fk)) {
-            throw new AppError('O destino da transferência é igual à unidade/setor atual do ativo.', 400, {
+        if (isSameDepartment(value.transfer_dep_id_fk, value.transfer_origin_dep_id_fk)) {
+            throw new AppError('O setor de destino é o mesmo em que o ativo já está.', 400, {
                 code: 'GAPP_AUDIT_INVALID_TRANSFER',
             });
         }
+    }
+
+    /** @private Setor de origem: o já gravado numa transferência existente; senão, `gapp_active.used_in`. */
+    async _transferOrigin(tx, activeId, current) {
+        if (current && Number(current.is_transfer) === 1) return current.transfer_origin_dep_id_fk ?? null;
+        const origin = await tx.findActiveLocation(activeId);
+        if (!origin) throw new AppError('Ativo não encontrado no cadastro.', 404);
+        return origin.used_in ?? null;
     }
 
     // ─── Etapa 4 — Finalização ──────────────────────────────────────

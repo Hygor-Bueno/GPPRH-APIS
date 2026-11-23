@@ -485,11 +485,10 @@ const activeAuditItemFieldsSchema = {
     asset_condition:  { type: 'string', maxLength: 50 },
     lifecycle_status: { type: 'string', maxLength: 30 },
     observations:     { type: 'string', maxLength: 5000 },
-    // Transferência GAPP: motivo e unidade de destino obrigatórios quando
-    // is_transfer = 1 (conferido no domínio). A origem vem de gapp_active.
+    // Transferência GAPP: motivo e setor de destino obrigatórios quando
+    // is_transfer = 1 (conferido no domínio). A origem vem de gapp_active.used_in.
     is_transfer:         { type: 'number', enum: [0, 1] },
     transfer_reason:     { type: 'string', maxLength: 500 },
-    transfer_unit_id_fk: { type: 'number', min: 1 },
     transfer_dep_id_fk:  { type: 'number', min: 1 },
 };
 

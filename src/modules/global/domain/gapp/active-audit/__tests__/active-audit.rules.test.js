@@ -1,6 +1,6 @@
 const {
     AUDIT_STATUS, lockedStatusMessage, normalizeActiveIds, normalizeOpenAudit, validateAuditScope,
-    validateTransferDestination, isSameLocation, normalizeRegistration,
+    validateTransferDestination, isSameDepartment, normalizeRegistration,
     findDuplicateIdentifiers, findIdentifierConflicts, buildReview, buildFinalData, buildCanceledData,
     verifyFinalData, itemsFromFinalData,
 } = require('../active-audit.rules');
@@ -131,46 +131,45 @@ describe('active-audit.rules', () => {
     describe('transferência', () => {
         const base = { identifier_type: 'PATRIMONIO', identifier_value: 'P1', asset_condition: 'GOOD', lifecycle_status: 'IN_USE' };
 
-        test('exige motivo e unidade de destino; origem nunca vem do body', () => {
-            expect(normalizeRegistration({ ...base, is_transfer: 1, transfer_reason: '  ', transfer_unit_id_fk: 4 }).error).toMatch(/motivo/);
-            expect(normalizeRegistration({ ...base, is_transfer: 1, transfer_reason: 'x' }).error).toMatch(/unidade de destino/);
+        test('exige motivo e setor de destino; origem nunca vem do body e não há unidade', () => {
+            expect(normalizeRegistration({ ...base, is_transfer: 1, transfer_reason: '  ', transfer_dep_id_fk: 40 }).error).toMatch(/motivo/);
+            expect(normalizeRegistration({ ...base, is_transfer: 1, transfer_reason: 'x', transfer_unit_id_fk: 4 }).error).toMatch(/setor de destino/);
             const { value } = normalizeRegistration({
-                ...base, is_transfer: 1, transfer_reason: ' Mudou de loja ', transfer_unit_id_fk: '4',
-                transfer_origin_unit_id_fk: 999,
+                ...base, is_transfer: 1, transfer_reason: ' Mudou de loja ', transfer_dep_id_fk: '40',
+                transfer_unit_id_fk: 999, transfer_origin_unit_id_fk: 999,
             });
             expect(value).toEqual(expect.objectContaining({
-                is_transfer: 1, transfer_reason: 'Mudou de loja', transfer_unit_id_fk: 4, transfer_dep_id_fk: null,
-                transfer_origin_unit_id_fk: null, transfer_origin_dep_id_fk: null,
+                is_transfer: 1, transfer_reason: 'Mudou de loja', transfer_dep_id_fk: 40, transfer_origin_dep_id_fk: null,
             }));
-            expect(value).not.toHaveProperty('transfer_branch_code');
+            expect(value).not.toHaveProperty('transfer_unit_id_fk');
+            expect(value).not.toHaveProperty('transfer_origin_unit_id_fk');
         });
 
         test('sem transferência, motivo, origem e destino ficam nulos', () => {
             const { value } = normalizeRegistration({ ...base, is_transfer: 0, transfer_reason: 'x', transfer_unit_id_fk: 4 });
-            expect(value).toMatchObject({ is_transfer: 0, transfer_reason: null, transfer_unit_id_fk: null, transfer_origin_unit_id_fk: null });
+            expect(value).toMatchObject({ is_transfer: 0, transfer_reason: null, transfer_dep_id_fk: null, transfer_origin_dep_id_fk: null });
         });
 
-        test('destino: unidade existe e setor é dela; igualdade de local considera setor nulo', () => {
-            const value = { is_transfer: 1, transfer_unit_id_fk: 4, transfer_dep_id_fk: 40 };
-            expect(validateTransferDestination(value, { unit: {}, department: { unit_id_fk: 4 } })).toBeNull();
-            expect(validateTransferDestination(value, { unit: null })).toMatch(/Unidade/);
-            expect(validateTransferDestination(value, { unit: {}, department: { unit_id_fk: 5 } })).toMatch(/setor/);
-            expect(isSameLocation(4, null, 4, null)).toBe(true);
-            expect(isSameLocation(4, null, 4, 40)).toBe(false);
-            expect(isSameLocation(4, 40, '4', '40')).toBe(true);
+        test('destino: setor existe; igualdade de local é só pelo setor (nulo = nulo)', () => {
+            const value = { is_transfer: 1, transfer_dep_id_fk: 40 };
+            expect(validateTransferDestination(value, { department: { dep_id: 40 } })).toBeNull();
+            expect(validateTransferDestination(value, { department: null })).toMatch(/Setor de destino não encontrado/);
+            expect(isSameDepartment(null, null)).toBe(true);
+            expect(isSameDepartment(40, null)).toBe(false);
+            expect(isSameDepartment(40, '40')).toBe(true);
         });
 
         test('final_data traz origem × destino GAPP com nomes e conta como divergência', () => {
             const final = buildFinalData(1, INITIAL, [item(120, {
                 is_transfer: 1, transfer_reason: 'Mudou',
-                transfer_origin_unit_id_fk: 3, transfer_origin_unit_name: 'Matriz', transfer_origin_dep_id_fk: 30, transfer_origin_dep_name: 'TI',
-                transfer_unit_id_fk: 4, transfer_unit_name: 'Filial', transfer_dep_id_fk: null, transfer_dep_name: null,
+                transfer_origin_dep_id_fk: 30, transfer_origin_dep_name: 'TI', transfer_origin_dep_path: 'Frugal > Matriz > TI',
+                transfer_dep_id_fk: 40, transfer_dep_name: 'Caixa', transfer_dep_path: 'Frugal > Filial > Caixa',
             })]);
             expect(final.quantity_transferred).toBe(1);
             expect(final.items[0].transfer).toEqual({
                 reason: 'Mudou',
-                origin: { unit_id: 3, unit_name: 'Matriz', dep_id: 30, dep_name: 'TI' },
-                destination: { unit_id: 4, unit_name: 'Filial', dep_id: null, dep_name: null },
+                origin: { dep_id: 30, dep_name: 'TI', dep_path: 'Frugal > Matriz > TI' },
+                destination: { dep_id: 40, dep_name: 'Caixa', dep_path: 'Frugal > Filial > Caixa' },
             });
             expect(final.divergences).toContainEqual(expect.objectContaining({ type: 'TRANSFERRED', active_id: 120 }));
         });
@@ -196,7 +195,7 @@ describe('active-audit.rules', () => {
     describe('limpeza da temporária', () => {
         const items = [
             item(120, { user_register_id_fk: 10, user_register_name: 'Ana' }),
-            item(121, { is_transfer: 1, transfer_reason: 'x', transfer_unit_id_fk: 4, transfer_dep_id_fk: 40 }),
+            item(121, { is_transfer: 1, transfer_reason: 'x', transfer_dep_id_fk: 40, transfer_dep_path: 'Frugal > Filial > Caixa' }),
         ];
         const roundTrip = value => JSON.parse(JSON.stringify(value));
 
@@ -221,20 +220,9 @@ describe('active-audit.rules', () => {
             const rows = itemsFromFinalData(1, roundTrip(buildFinalData(1, INITIAL, items)));
             expect(rows[0]).toMatchObject({
                 audit_temp_id: null, audit_id_fk: 1, active_id_fk: 120, user_register_name: 'Ana',
-                asset_condition: 'GOOD', lifecycle_status: 'IN_USE', is_transfer: 0, legacy_transfer: null,
+                asset_condition: 'GOOD', lifecycle_status: 'IN_USE', is_transfer: 0,
             });
-            expect(rows[1]).toMatchObject({ is_transfer: 1, transfer_unit_id_fk: 4, transfer_dep_id_fk: 40 });
-        });
-
-        test('final_data antigo (destino Protheus) vira legacy_transfer', () => {
-            const [row] = itemsFromFinalData(1, { items: [{
-                active_id: 5, identifier_type: 'SEM_IDENTIFICACAO', condition: 'GOOD',
-                transfer: { reason: 'r', origin: { unit_id: 3, unit_name: 'M' }, destination: { branch_code: '0101', costcenter_code: '1' }, responsible_registration: '000123' },
-            }] });
-            expect(row).toMatchObject({
-                is_transfer: 1, transfer_origin_unit_id_fk: 3, transfer_unit_id_fk: null, lifecycle_status: null,
-                legacy_transfer: { branch_code: '0101', costcenter_code: '1', responsible_registration: '000123' },
-            });
+            expect(rows[1]).toMatchObject({ is_transfer: 1, transfer_dep_id_fk: 40, transfer_dep_path: 'Frugal > Filial > Caixa' });
         });
     });
 

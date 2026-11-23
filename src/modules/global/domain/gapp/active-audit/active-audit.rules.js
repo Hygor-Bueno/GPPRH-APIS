@@ -164,28 +164,20 @@ function validateAuditScope(scope, refs) {
 }
 
 /**
- * Destino da transferência lido do banco: unidade existe e o setor é dela.
- * `refs` = { unit, department }.
+ * Destino da transferência lido do banco: o setor existe. `refs` = { department }.
  * @returns {string|null}
  */
 function validateTransferDestination(value, refs) {
     if (!Number(value.is_transfer)) return null;
-    if (!refs.unit) return 'Unidade de destino não encontrada.';
-    if (value.transfer_dep_id_fk) {
-        if (!refs.department) return 'Setor de destino não encontrado.';
-        if (Number(refs.department.unit_id_fk) !== Number(value.transfer_unit_id_fk)) {
-            return 'O setor de destino não pertence à unidade de destino.';
-        }
-    }
-    return null;
+    return refs.department ? null : 'Setor de destino não encontrado.';
 }
 
-/** Mesma unidade e mesmo setor (NULL = NULL), como o `<=>` do CHECK. */
-const isSameLocation = (unitA, depA, unitB, depB) =>
-    (unitA ?? null) == (unitB ?? null) && (depA ?? null) == (depB ?? null); // eslint-disable-line eqeqeq
+/** Mesmo setor (NULL = NULL), como o `<=>` do CHECK. O setor já diz empresa e unidade. */
+const isSameDepartment = (depA, depB) => (depA ?? null) == (depB ?? null); // eslint-disable-line eqeqeq
 
 /**
  * Fotografia do ativo guardada em `initial_data` — só o que vem do cadastro.
+ * Local = setor (`used_in`) e o caminho dele; `units_id_fk` (loja de compra) não entra.
  */
 function toSnapshotAsset(row) {
     return {
@@ -201,10 +193,9 @@ function toSnapshotAsset(row) {
         desc_active_class: row.desc_active_class ?? null,
         active_type_id_fk: row.active_type_id_fk ?? null,
         desc_active_type: row.desc_active_type ?? null,
-        units_id_fk: row.units_id_fk ?? null,
-        unit_name: row.unit_name ?? null,
         used_in: row.used_in ?? null,
         dep_name: row.dep_name ?? null,
+        dep_path: row.dep_path ?? null,
         work_group_fk: row.work_group_fk ?? null,
     };
 }
@@ -247,15 +238,13 @@ const trimOrNull = value => (value == null ? null : String(value).trim() || null
 
 /** Colunas de transferência gravadas na conferência (origem é preenchida pelo use-case). */
 const TRANSFER_COLUMNS = Object.freeze([
-    'transfer_reason',
-    'transfer_origin_unit_id_fk', 'transfer_origin_dep_id_fk',
-    'transfer_unit_id_fk', 'transfer_dep_id_fk',
+    'transfer_reason', 'transfer_origin_dep_id_fk', 'transfer_dep_id_fk',
 ]);
 
 /**
- * Transferência GAPP: `is_transfer` 1 exige motivo e unidade de destino (setor
- * opcional); 0 limpa tudo. A origem NÃO vem do cliente — o use-case a lê de
- * `gapp_active` (unidade e setor atuais do ativo).
+ * Transferência GAPP: `is_transfer` 1 exige motivo e setor de destino; 0 limpa
+ * tudo. A origem NÃO vem do cliente — o use-case lê o setor atual do ativo
+ * (`gapp_active.used_in`). Não há unidade: o setor já diz empresa e unidade.
  * @returns {{ value?: object, error?: string }}
  */
 function normalizeTransfer(data) {
@@ -270,18 +259,14 @@ function normalizeTransfer(data) {
         return { error: `O motivo da transferência deve ter no máximo ${MAX_TRANSFER_REASON} caracteres.` };
     }
 
-    const unitId = positiveIntOrNull(data.transfer_unit_id_fk);
-    if (!unitId) return { error: 'Informe a unidade de destino da transferência.' };
     const depId = positiveIntOrNull(data.transfer_dep_id_fk);
-    if (depId === undefined) return { error: "O campo 'transfer_dep_id_fk' deve ser um id válido." };
+    if (!depId) return { error: 'Selecione o setor de destino da transferência.' };
 
     return {
         value: {
             is_transfer: 1,
             transfer_reason: reason,
-            transfer_origin_unit_id_fk: null,
             transfer_origin_dep_id_fk: null,
-            transfer_unit_id_fk: unitId,
             transfer_dep_id_fk: depId,
         },
     };
@@ -379,9 +364,7 @@ function findIdentifierConflicts(items, history = []) {
     return conflicts;
 }
 
-const location = (unitId, unitName, depId, depName) => ({
-    unit_id: unitId ?? null, unit_name: unitName ?? null, dep_id: depId ?? null, dep_name: depName ?? null,
-});
+const location = (depId, depName, depPath) => ({ dep_id: depId ?? null, dep_name: depName ?? null, dep_path: depPath ?? null });
 
 /**
  * Transferência consolidada: origem (cadastro do ativo em gapp_active no
@@ -391,10 +374,8 @@ function toTransfer(item) {
     if (!Number(item.is_transfer)) return null;
     return {
         reason: item.transfer_reason ?? null,
-        origin: location(item.transfer_origin_unit_id_fk, item.transfer_origin_unit_name,
-            item.transfer_origin_dep_id_fk, item.transfer_origin_dep_name),
-        destination: location(item.transfer_unit_id_fk, item.transfer_unit_name,
-            item.transfer_dep_id_fk, item.transfer_dep_name),
+        origin: location(item.transfer_origin_dep_id_fk, item.transfer_origin_dep_name, item.transfer_origin_dep_path),
+        destination: location(item.transfer_dep_id_fk, item.transfer_dep_name, item.transfer_dep_path),
     };
 }
 
@@ -474,7 +455,7 @@ function buildReview(initialData, items, history = []) {
         ...transferred.map(item => ({
             type: DIVERGENCE_TYPE.TRANSFERRED,
             active_id: Number(item.active_id_fk),
-            message: 'Ativo transferido para outra unidade/setor.',
+            message: 'Ativo transferido para outro setor.',
         })),
         ...unexpected.map(asset => ({
             type: DIVERGENCE_TYPE.UNEXPECTED,
@@ -572,7 +553,6 @@ function verifyFinalData(saved, items) {
             ['asset_condition', entry.condition, item.asset_condition],
             ['lifecycle_status', entry.lifecycle_status, item.lifecycle_status],
             ['is_transfer', transfer ? 1 : 0, Number(item.is_transfer) ? 1 : 0],
-            ['transfer_unit_id_fk', transfer?.destination?.unit_id, Number(item.is_transfer) ? item.transfer_unit_id_fk : null],
             ['transfer_dep_id_fk', transfer?.destination?.dep_id, Number(item.is_transfer) ? item.transfer_dep_id_fk : null],
         ];
         for (const [field, savedValue, currentValue] of pairs) {
@@ -587,14 +567,12 @@ function verifyFinalData(saved, items) {
 /**
  * Conferências de uma auditoria encerrada, lidas do `final_data` no mesmo
  * formato das linhas de gapp_active_audit_temp (a temporária já foi limpa).
- * Aceita o formato antigo (destino do Protheus), devolvido em `legacy_transfer`.
  */
 function itemsFromFinalData(auditId, finalData) {
     return (finalData?.items ?? []).map(entry => {
         const transfer = entry.transfer ?? null;
         const origin = transfer?.origin ?? {};
         const destination = transfer?.destination ?? {};
-        const legacy = transfer && ('branch_code' in destination || 'responsible_registration' in transfer);
         return {
             audit_temp_id: null,
             audit_id_fk: Number(auditId),
@@ -610,19 +588,12 @@ function itemsFromFinalData(auditId, finalData) {
             date_register: entry.date_register ?? null,
             is_transfer: transfer ? 1 : 0,
             transfer_reason: transfer?.reason ?? null,
-            transfer_origin_unit_id_fk: origin.unit_id ?? null,
-            transfer_origin_unit_name: origin.unit_name ?? null,
             transfer_origin_dep_id_fk: origin.dep_id ?? null,
             transfer_origin_dep_name: origin.dep_name ?? null,
-            transfer_unit_id_fk: legacy ? null : destination.unit_id ?? null,
-            transfer_unit_name: legacy ? null : destination.unit_name ?? null,
-            transfer_dep_id_fk: legacy ? null : destination.dep_id ?? null,
-            transfer_dep_name: legacy ? null : destination.dep_name ?? null,
-            legacy_transfer: legacy ? {
-                branch_code: destination.branch_code ?? null,
-                costcenter_code: destination.costcenter_code ?? null,
-                responsible_registration: transfer.responsible_registration ?? null,
-            } : null,
+            transfer_origin_dep_path: origin.dep_path ?? null,
+            transfer_dep_id_fk: destination.dep_id ?? null,
+            transfer_dep_name: destination.dep_name ?? null,
+            transfer_dep_path: destination.dep_path ?? null,
         };
     });
 }
@@ -647,7 +618,7 @@ module.exports = {
     normalizeOpenAudit,
     validateAuditScope,
     validateTransferDestination,
-    isSameLocation,
+    isSameDepartment,
     toSnapshotAsset,
     identifierKey,
     normalizeRegistration,

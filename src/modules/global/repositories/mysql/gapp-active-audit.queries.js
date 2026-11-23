@@ -16,9 +16,20 @@
 
 // ─── Abertura ───────────────────────────────────────────────────────
 
-/** Filtros do escopo da abertura sobre gapp_active (a = ativo, ac = classe). */
+/**
+ * Local do ativo = setor (`gapp_active.used_in`), com o caminho
+ * "Empresa > Unidade > Setor". `gapp_active.units_id_fk` é a loja que COMPROU
+ * o ativo, não onde ele está — não serve para local.
+ */
+const depJoin = (alias, column) => `
+        LEFT JOIN global.gapp_departaments ${alias} ON ${alias}.dep_id = ${column}
+        LEFT JOIN global.gapp_units ${alias}_u ON ${alias}_u.unit_id = ${alias}.unit_id_fk
+        LEFT JOIN global.gapp_company ${alias}_c ON ${alias}_c.comp_id = ${alias}_u.comp_id_fk`;
+const depPath = alias => `CONCAT_WS(' > ', ${alias}_c.fantasy_name, ${alias}_u.unit_name, ${alias}.dep_name)`;
+
+/** Filtros do escopo da abertura (a = ativo, ac = classe, d = setor do ativo). A unidade é a do setor. */
 const ACTIVE_SCOPE_CLAUSES = {
-    unit_id_fk: 'a.units_id_fk = ?',
+    unit_id_fk: 'd.unit_id_fk = ?',
     dep_id_fk: 'a.used_in = ?',
     id_active_class_fk: 'a.id_active_class_fk = ?',
     active_type_id_fk: 'ac.active_type_id_fk = ?',
@@ -51,15 +62,13 @@ function sqlListActivesForAudit(scope, workGroupFk, activeIds, limit) {
 
     const sql = `
         SELECT a.active_id, a.brand, a.model, a.number_nf, a.date_purchase, a.value_purchase,
-               a.status_active, a.is_vehicle, a.id_active_class_fk, a.units_id_fk,
+               a.status_active, a.is_vehicle, a.id_active_class_fk,
                a.used_in, a.work_group_fk,
                ac.desc_active_class, ac.active_type_id_fk, aty.desc_active_type,
-               u.unit_name, d.dep_name
+               d.dep_name, ${depPath('d')} AS dep_path
         FROM global.gapp_active a
         LEFT JOIN global.gapp_active_class ac ON ac.id_active_class = a.id_active_class_fk
-        LEFT JOIN global.gapp_active_type aty ON aty.active_type_id = ac.active_type_id_fk
-        LEFT JOIN global.gapp_units u         ON u.unit_id = a.units_id_fk
-        LEFT JOIN global.gapp_departaments d  ON d.dep_id = a.used_in
+        LEFT JOIN global.gapp_active_type aty ON aty.active_type_id = ac.active_type_id_fk${depJoin('d', 'a.used_in')}
         WHERE ${conditions.join(' AND ')}
         ORDER BY a.active_id
         LIMIT ?
@@ -158,7 +167,7 @@ function sqlListAudits(filters = {}) {
         SELECT ${AUDIT_SUMMARY_COLUMNS}
         ${AUDIT_FROM}
         ${where}
-        ORDER BY au.date_open DESC, au.audit_id DESC
+        ORDER BY au.status_audit, au.date_open DESC
         LIMIT ? OFFSET ?
     `;
     return { sql, params: [...params, limit, offset] };
@@ -186,16 +195,10 @@ function sqlListAuditItems() {
                t.identifier_type, t.identifier_value, t.asset_condition, t.lifecycle_status,
                t.additional_items, t.observations, t.date_register,
                t.is_transfer, t.transfer_reason,
-               t.transfer_origin_unit_id_fk, uor.unit_name AS transfer_origin_unit_name,
-               t.transfer_origin_dep_id_fk,  dor.dep_name  AS transfer_origin_dep_name,
-               t.transfer_unit_id_fk,        ude.unit_name AS transfer_unit_name,
-               t.transfer_dep_id_fk,         dde.dep_name  AS transfer_dep_name
+               t.transfer_origin_dep_id_fk, dor.dep_name AS transfer_origin_dep_name, ${depPath('dor')} AS transfer_origin_dep_path,
+               t.transfer_dep_id_fk,        dde.dep_name AS transfer_dep_name,        ${depPath('dde')} AS transfer_dep_path
         FROM global.gapp_active_audit_temp t
-        LEFT JOIN global.gapp_user ur          ON ur.user_id  = t.user_register_id_fk
-        LEFT JOIN global.gapp_units uor        ON uor.unit_id = t.transfer_origin_unit_id_fk
-        LEFT JOIN global.gapp_departaments dor ON dor.dep_id  = t.transfer_origin_dep_id_fk
-        LEFT JOIN global.gapp_units ude        ON ude.unit_id = t.transfer_unit_id_fk
-        LEFT JOIN global.gapp_departaments dde ON dde.dep_id  = t.transfer_dep_id_fk
+        LEFT JOIN global.gapp_user ur ON ur.user_id = t.user_register_id_fk${depJoin('dor', 't.transfer_origin_dep_id_fk')}${depJoin('dde', 't.transfer_dep_id_fk')}
         WHERE t.audit_id_fk = ?
         ORDER BY t.date_register, t.audit_temp_id
     `;
@@ -245,9 +248,9 @@ function sqlGetAuditItem() {
     return 'SELECT * FROM global.gapp_active_audit_temp WHERE audit_id_fk = ? AND active_id_fk = ?';
 }
 
-/** Unidade e setor atuais do ativo — origem da transferência. */
+/** Setor atual do ativo — origem da transferência. */
 function sqlGetActiveLocation() {
-    return 'SELECT active_id, units_id_fk, used_in FROM global.gapp_active WHERE active_id = ?';
+    return 'SELECT active_id, used_in FROM global.gapp_active WHERE active_id = ?';
 }
 
 /** Outro ativo da mesma auditoria com o mesmo identificador (valores gravados já sem espaços nas pontas). */
@@ -287,8 +290,7 @@ const ITEM_COLUMNS = [
     'identifier_type', 'identifier_value', 'asset_condition', 'lifecycle_status',
     'additional_items', 'observations',
     'is_transfer', 'transfer_reason',
-    'transfer_origin_unit_id_fk', 'transfer_origin_dep_id_fk',
-    'transfer_unit_id_fk', 'transfer_dep_id_fk',
+    'transfer_origin_dep_id_fk', 'transfer_dep_id_fk',
 ];
 
 function itemParams(data) {

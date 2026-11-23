@@ -217,7 +217,7 @@ describe('GappActiveAuditUseCases', () => {
         test('mantém a transferência registrada (e a origem gravada) quando a edição não a envia', async () => {
             const transferred = {
                 ...ITEM, is_transfer: 1, transfer_reason: 'Mudou',
-                transfer_origin_unit_id_fk: 3, transfer_origin_dep_id_fk: 30, transfer_unit_id_fk: 4, transfer_dep_id_fk: 40,
+                transfer_origin_dep_id_fk: 30, transfer_dep_id_fk: 40,
             };
             const tx = makeTx({ findItem: jest.fn().mockResolvedValue(transferred) });
             const { useCases } = makeDeps({ tx });
@@ -225,43 +225,44 @@ describe('GappActiveAuditUseCases', () => {
             expect(tx.findActiveLocation).not.toHaveBeenCalled();
             expect(tx.updateItem).toHaveBeenCalledWith(expect.objectContaining({
                 is_transfer: 1, transfer_reason: 'Mudou', observations: 'ok',
-                transfer_origin_unit_id_fk: 3, transfer_origin_dep_id_fk: 30, transfer_unit_id_fk: 4, transfer_dep_id_fk: 40,
+                transfer_origin_dep_id_fk: 30, transfer_dep_id_fk: 40,
             }));
         });
 
         test('transferência sem motivo → 400', async () => {
             const { useCases, tx } = makeDeps();
-            await expect(useCases.registerItem(15, { ...ITEM, is_transfer: 1, transfer_unit_id_fk: 4 }, CURRENT_USER)).rejects.toMatchObject({ statusCode: 400 });
+            await expect(useCases.registerItem(15, { ...ITEM, is_transfer: 1, transfer_dep_id_fk: 40 }, CURRENT_USER)).rejects.toMatchObject({ statusCode: 400 });
             expect(tx.insertItem).not.toHaveBeenCalled();
         });
 
-        test('nova transferência: origem vem de gapp_active, nunca do body', async () => {
+        test('nova transferência: origem = gapp_active.used_in, nunca do body; sem unidade', async () => {
             const { useCases, tx } = makeDeps();
             await useCases.registerItem(15, {
-                ...ITEM, is_transfer: 1, transfer_reason: 'Mudou', transfer_unit_id_fk: 4, transfer_dep_id_fk: 40,
+                ...ITEM, is_transfer: 1, transfer_reason: 'Mudou', transfer_unit_id_fk: 999, transfer_dep_id_fk: 40,
                 transfer_origin_unit_id_fk: 999,
             }, CURRENT_USER);
+            expect(tx.findRefs).toHaveBeenCalledWith({ dep_id_fk: 40 });
             expect(tx.findActiveLocation).toHaveBeenCalledWith(120);
-            expect(tx.insertItem).toHaveBeenCalledWith(expect.objectContaining({
-                transfer_origin_unit_id_fk: 3, transfer_origin_dep_id_fk: 30, transfer_unit_id_fk: 4, transfer_dep_id_fk: 40,
-            }));
+            expect(tx.insertItem).toHaveBeenCalledWith(expect.objectContaining({ transfer_origin_dep_id_fk: 30, transfer_dep_id_fk: 40 }));
+            expect(tx.insertItem.mock.calls[0][0]).not.toHaveProperty('transfer_unit_id_fk');
         });
 
         test('destino igual à origem → 400', async () => {
-            const tx = makeTx({ findRefs: jest.fn().mockResolvedValue({ unit: { unit_id: 3 }, department: { dep_id: 30, unit_id_fk: 3 } }) });
+            const tx = makeTx({ findRefs: jest.fn().mockResolvedValue({ department: { dep_id: 30, unit_id_fk: 3 } }) });
             const { useCases } = makeDeps({ tx });
             await expect(useCases.registerItem(15, {
-                ...ITEM, is_transfer: 1, transfer_reason: 'x', transfer_unit_id_fk: 3, transfer_dep_id_fk: 30,
+                ...ITEM, is_transfer: 1, transfer_reason: 'x', transfer_dep_id_fk: 30,
             }, CURRENT_USER)).rejects.toMatchObject({ statusCode: 400, code: 'GAPP_AUDIT_INVALID_TRANSFER' });
             expect(tx.insertItem).not.toHaveBeenCalled();
         });
 
-        test('setor de destino de outra unidade → 400', async () => {
-            const tx = makeTx({ findRefs: jest.fn().mockResolvedValue({ unit: { unit_id: 4 }, department: { dep_id: 50, unit_id_fk: 5 } }) });
+        test('setor de destino inexistente → 400', async () => {
+            const tx = makeTx({ findRefs: jest.fn().mockResolvedValue({ department: null }) });
             const { useCases } = makeDeps({ tx });
             await expect(useCases.registerItem(15, {
-                ...ITEM, is_transfer: 1, transfer_reason: 'x', transfer_unit_id_fk: 4, transfer_dep_id_fk: 50,
+                ...ITEM, is_transfer: 1, transfer_reason: 'x', transfer_dep_id_fk: 50,
             }, CURRENT_USER)).rejects.toMatchObject({ statusCode: 400, code: 'GAPP_AUDIT_INVALID_TRANSFER' });
+            expect(tx.insertItem).not.toHaveBeenCalled();
         });
 
         test('sem ciclo de vida → 400', async () => {
