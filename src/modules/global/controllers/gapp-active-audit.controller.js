@@ -3,6 +3,8 @@ const { MysqlActiveAuditRepository } = require('../infrastructure/gapp/mysql-act
 const { MysqlGappUserRepository } = require('../infrastructure/gapp/mysql-gapp-user.repository');
 const { GappActiveAuditIdentifyUseCases } = require('../application/gapp/active-audit/gapp-active-audit-identify.use-cases');
 const { MysqlActiveIdentifierRepository } = require('../infrastructure/gapp/mysql-active-identifier.repository');
+const { GappActiveAuditReportUseCases } = require('../application/gapp/active-audit/gapp-active-audit-report.use-cases');
+const { PuppeteerTaskDossierRenderer } = require('../infrastructure/gtpp/puppeteer-task-dossier.renderer');
 const { respond } = require('../../../utils/respond');
 
 const useCases = new GappActiveAuditUseCases({
@@ -15,6 +17,30 @@ const identifyUseCases = new GappActiveAuditIdentifyUseCases({
     identifierRepository: new MysqlActiveIdentifierRepository(),
     userRepository: new MysqlGappUserRepository(),
 });
+
+// Mesmo renderizador do dossiê do GTPP, com fila e mensagens próprias.
+const reportUseCases = new GappActiveAuditReportUseCases({
+    auditUseCases: useCases,
+    repository: new MysqlActiveAuditRepository(),
+    userRepository: new MysqlGappUserRepository(),
+    renderer: new PuppeteerTaskDossierRenderer({
+        errors: {
+            busy: { message: 'Há muitos relatórios sendo gerados agora. Tente novamente em instantes.', code: 'GAPP_AUDIT_REPORT_BUSY' },
+            failed: { message: 'Não foi possível gerar o relatório da auditoria.', code: 'GAPP_AUDIT_REPORT_FAILED' },
+        },
+    }),
+});
+
+/** GET /gapp/active-audit/:id/report — relatório da auditoria em PDF (download para imprimir). */
+async function downloadAuditReport(req, res) {
+    const { buffer, fileName } = await reportUseCases.generateReport(req.params.id, req.user);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    return res.send(buffer);
+}
 
 /**
  * GET /gapp/active-audit/:id/identify?identifier_type&identifier_value
@@ -64,7 +90,7 @@ async function openAudit(req, res) {
 /**
  * POST /gapp/active-audit/:id/items
  * Body: { active_id_fk, identifier_type, identifier_value?, asset_condition, lifecycle_status,
- *         additional_items?, observations?, is_transfer?, transfer_reason?, transfer_unit_id_fk?, transfer_dep_id_fk? }
+ *         additional_items?, observations?, is_transfer?, transfer_reason?, transfer_dep_id_fk? }
  */
 async function registerItem(req, res) {
     const result = await useCases.registerItem(req.params.id, req.body ?? {}, req.user);
@@ -92,5 +118,5 @@ async function cancelAudit(req, res) {
 module.exports = {
     listAudits, getAuditById, getReview, openAudit,
     registerItem, updateItem, finishAudit, cancelAudit,
-    identifyAsset, addUnexpectedAsset,
+    identifyAsset, addUnexpectedAsset, downloadAuditReport,
 };

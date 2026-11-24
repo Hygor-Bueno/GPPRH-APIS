@@ -10,6 +10,13 @@ class DossierPdfRendererPort {
      * @throws {AppError} 503 (`GTPP_DOSSIER_BUSY`) quando a fila de geração está cheia.
      */
     render(dossier) { throw new Error('Not implemented'); }
+
+    /**
+     * HTML pronto → PDF (reuso fora do dossiê, ex.: relatório de auditoria do GAPP).
+     * @param {{ html: string, headerTemplate: string, footerTemplate: string }} input
+     * @returns {Promise<Buffer>}
+     */
+    renderPdf(input) { throw new Error('Not implemented'); }
 }
 
 module.exports = { DossierPdfRendererPort };

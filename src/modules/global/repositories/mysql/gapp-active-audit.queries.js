@@ -27,18 +27,20 @@ const depJoin = (alias, column) => `
         LEFT JOIN global.gapp_company ${alias}_c ON ${alias}_c.comp_id = ${alias}_u.comp_id_fk`;
 const depPath = alias => `CONCAT_WS(' > ', ${alias}_c.fantasy_name, ${alias}_u.unit_name, ${alias}.dep_name)`;
 
-/** Filtros do escopo da abertura (a = ativo, ac = classe, d = setor do ativo). A unidade é a do setor. */
+/**
+ * Filtros dos ativos da abertura (a = ativo, ac = classe): só tipo e classe.
+ * Unidade e setor dizem ONDE a auditoria acontece (gravados em
+ * gapp_active_audit), mas não filtram os ativos.
+ */
 const ACTIVE_SCOPE_CLAUSES = {
-    unit_id_fk: 'd.unit_id_fk = ?',
-    dep_id_fk: 'a.used_in = ?',
     id_active_class_fk: 'a.id_active_class_fk = ?',
     active_type_id_fk: 'ac.active_type_id_fk = ?',
 };
 
 /**
- * Ativos do grupo do usuário dentro do escopo (unidade obrigatória; setor,
- * classe e tipo opcionais). Com `activeIds` → só os escolhidos (MANUAL);
- * sem → todos do escopo (AUTO), limitado a `limit` linhas.
+ * Ativos do grupo do usuário, filtrados por classe e tipo (opcionais).
+ * Com `activeIds` → só os escolhidos (MANUAL); sem → todos (AUTO), limitado
+ * a `limit` linhas.
  *
  * @param {{ unit_id_fk: number, dep_id_fk?: number, id_active_class_fk?: number, active_type_id_fk?: number }} scope
  * @param {number} workGroupFk

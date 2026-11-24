@@ -2895,6 +2895,18 @@ router.get('/gapp/active-audit/:id/review',
     asyncHandler(gappActiveAuditController.getReview));
 
 /**
+ * @route GET /gapp/active-audit/:id/report
+ * @description Relatório da auditoria em PDF (cabeçalho, totais, resumo, divergências e
+ * ativos), gerado pelo mesmo renderizador Puppeteer do dossiê do GTPP. 503
+ * `GAPP_AUDIT_REPORT_BUSY` com a fila de geração cheia.
+ * @access Requer `GAPP_VIEW_ACTIVE_AUDIT`
+ */
+router.get('/gapp/active-audit/:id/report',
+    authMiddleware,
+    canAll(['GAPP_VIEW_ACTIVE_AUDIT']),
+    asyncHandler(gappActiveAuditController.downloadAuditReport));
+
+/**
  * @route POST /gapp/active-audit
  * @description Abre a auditoria. Body: { unit_id_fk, dep_id_fk?, id_active_class_fk?,
  * active_type_id_fk?, active_ids? }. Com active_ids → só esses (precisam estar no
