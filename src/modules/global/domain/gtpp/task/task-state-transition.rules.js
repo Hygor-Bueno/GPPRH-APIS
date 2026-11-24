@@ -25,12 +25,9 @@ const { TASK_STATE } = require('./task-state.enum');
  */
 function assertStructurallyAllowed(newStateId, currentStateId) {
     if (newStateId === TASK_STATE.DONE && currentStateId !== TASK_STATE.VALIDATE) {
-        throw new AppError('A tarefa só pode ser marcada como "Feito" a partir do estado "Validar".', 400);
+        throw new AppError('A tarefa só pode ser marcada como "Concluída" a partir do estado "Aprovando".', 400);
     }
 
-    if (newStateId === TASK_STATE.ARCHIVED && currentStateId !== TASK_STATE.DONE) {
-        throw new AppError('A tarefa só pode ser arquivada a partir do estado "Feito".', 400);
-    }
 }
 
 /**
@@ -48,11 +45,11 @@ function needsItemCountCheck(newStateId) {
  */
 function assertItemCountAllows(newStateId, { total, checked }) {
     if (newStateId === TASK_STATE.TODO && checked > 0) {
-        throw new AppError('Desmarque todos os itens antes de reverter para "Fazer".', 400);
+        throw new AppError('Desmarque todos os itens antes de reverter para "Programada".', 400);
     }
 
     if (newStateId === TASK_STATE.VALIDATE && (total === 0 || checked < total)) {
-        throw new AppError('Marque todos os itens antes de mover para "Validar".', 400);
+        throw new AppError('Marque todos os itens antes de mover para "Aprovando".', 400);
     }
 }
 

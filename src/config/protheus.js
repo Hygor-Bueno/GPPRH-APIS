@@ -13,7 +13,7 @@ const config = {
   },
   // Sem isso, cai no default do driver tedious (15s) — explícito e alinhado
   // com config/sqlserver.js, pra não depender de default que muda entre versões.
-  requestTimeout: 30000,
+  requestTimeout: 60000,
   pool: {
     // 20 por instância x 2 instâncias do PM2 (cluster) = 40 conexões concorrentes,
     // validado empiricamente em 2026-07 (40/40 aceitas em ~112ms, sem recusa).
