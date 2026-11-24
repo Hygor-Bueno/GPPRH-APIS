@@ -42,7 +42,7 @@ const ACTIVE_SCOPE_CLAUSES = {
  * Com `activeIds` → só os escolhidos (MANUAL); sem → todos (AUTO), limitado
  * a `limit` linhas.
  *
- * @param {{ unit_id_fk: number, dep_id_fk?: number, id_active_class_fk?: number, active_type_id_fk?: number }} scope
+ * @param {{ id_active_class_fk?: number, active_type_id_fk?: number }} scope - filtros de ativos
  * @param {number} workGroupFk
  * @param {number[]|null} activeIds
  * @param {number} limit
@@ -87,7 +87,7 @@ const sqlFindActiveType = () => 'SELECT active_type_id, desc_active_type FROM gl
 function sqlInsertAudit() {
     return `
         INSERT INTO global.gapp_active_audit
-            (user_open_id_fk, unit_id_fk, dep_id_fk, id_active_class_fk,
+            (audit_name, date_deadline, user_open_id_fk, id_active_class_fk,
              initial_data, quantity_active, status_audit)
         VALUES (?, ?, ?, ?, ?, ?, 0)
     `;
@@ -95,24 +95,43 @@ function sqlInsertAudit() {
 
 function buildInsertAuditParams(data) {
     return [
+        data.audit_name,
+        data.date_deadline ?? null,
         data.user_open_id_fk,
-        data.unit_id_fk,
-        data.dep_id_fk ?? null,
         data.id_active_class_fk ?? null,
         JSON.stringify(data.initial_data),
         data.quantity_active,
     ];
 }
 
+/** Lojas do escopo (Protheus), num INSERT só. Params: [buildAuditScopeRows(...)] */
+function sqlInsertAuditScope() {
+    return 'INSERT INTO global.gapp_active_audit_scope (audit_id_fk, company_code, branch_code, cost_center_code) VALUES ?';
+}
+
+const buildAuditScopeRows = (auditId, scope) =>
+    scope.map(row => [auditId, row.company_code, row.branch_code, row.cost_center_code ?? null]);
+
+/** Escopo de várias auditorias (página do histórico ou detalhe). Params: [auditIds] */
+function sqlListAuditScopes() {
+    return `
+        SELECT audit_id_fk, company_code, branch_code, cost_center_code
+        FROM global.gapp_active_audit_scope
+        WHERE audit_id_fk IN (?)
+        ORDER BY audit_id_fk, company_code, branch_code, cost_center_code
+    `;
+}
+
 // ─── Consulta ───────────────────────────────────────────────────────
 
+// Usuários são do sistema (_user.id). O grupo de trabalho continua o de quem
+// abriu: _user.id = gapp_user.access_code → gapp_level.group_id_fk.
 const AUDIT_FROM = `
     FROM global.gapp_active_audit au
-    JOIN global.gapp_user uo ON uo.user_id = au.user_open_id_fk
-    JOIN global.gapp_level lo ON lo.level_id = uo.level_id_fk
-    LEFT JOIN global.gapp_user uf          ON uf.user_id = au.user_finish_id_fk
-    LEFT JOIN global.gapp_units un         ON un.unit_id = au.unit_id_fk
-    LEFT JOIN global.gapp_departaments dp  ON dp.dep_id = au.dep_id_fk
+    JOIN global._user uopen        ON uopen.id = au.user_open_id_fk
+    JOIN global.gapp_user uo       ON uo.access_code = au.user_open_id_fk
+    JOIN global.gapp_level lo      ON lo.level_id = uo.level_id_fk
+    LEFT JOIN global._user ufinish ON ufinish.id = au.user_finish_id_fk
     LEFT JOIN global.gapp_active_class acl ON acl.id_active_class = au.id_active_class_fk
     LEFT JOIN global.gapp_active_type aty  ON aty.active_type_id = acl.active_type_id_fk
 `;
@@ -120,11 +139,10 @@ const AUDIT_FROM = `
 // Encerrada (2/3): as conferências estão no final_data; a temporária já foi limpa.
 // O tipo do ativo não é coluna da auditoria: sai da classe (gapp_active_class.active_type_id_fk).
 const AUDIT_SUMMARY_COLUMNS = `
-    au.audit_id, au.user_open_id_fk, uo.name AS user_open_name,
-    au.user_finish_id_fk, uf.name AS user_finish_name,
-    au.unit_id_fk, un.unit_name, au.dep_id_fk, dp.dep_name,
+    au.audit_id, au.audit_name, au.user_open_id_fk, uopen.name AS user_open_name,
+    au.user_finish_id_fk, ufinish.name AS user_finish_name,
     au.id_active_class_fk, acl.desc_active_class, acl.active_type_id_fk, aty.desc_active_type,
-    au.quantity_active, au.date_open, au.date_finish, au.status_audit,
+    au.quantity_active, au.date_open, au.date_deadline, au.date_finish, au.status_audit,
     CASE WHEN au.status_audit IN (2, 3)
          THEN COALESCE(JSON_LENGTH(au.final_data, '$.items'), 0)
          ELSE (SELECT COUNT(*) FROM global.gapp_active_audit_temp t WHERE t.audit_id_fk = au.audit_id)
@@ -134,16 +152,24 @@ const AUDIT_SUMMARY_COLUMNS = `
 // Período sobre `date_open`. `date_end` é inclusivo: pega o dia inteiro.
 const AUDIT_FILTER_CLAUSES = {
     audit_id: 'au.audit_id = ?',
+    audit_name: 'au.audit_name LIKE ?',
     status_audit: 'au.status_audit = ?',
     user_open_id_fk: 'au.user_open_id_fk = ?',
-    unit_id_fk: 'au.unit_id_fk = ?',
-    dep_id_fk: 'au.dep_id_fk = ?',
+    // Auditorias com a filial no escopo (inteira ou algum centro de custo dela)
+    branch_code: 'EXISTS (SELECT 1 FROM global.gapp_active_audit_scope sc WHERE sc.audit_id_fk = au.audit_id AND sc.branch_code = ?)',
     date_start: 'au.date_open >= ?',
     date_end: 'au.date_open < DATE_ADD(?, INTERVAL 1 DAY)',
     // Auditorias que incluíram o ativo (previsto na abertura, conferido ou não)
     // (JSON_CONTAINS não aceita curinga no path — o JSON_EXTRACT devolve o array de ids)
     active_id: "JSON_CONTAINS(JSON_EXTRACT(au.initial_data, '$.assets[*].active_id'), CAST(? AS JSON))",
 };
+
+/** Valor do `?`: id do ativo vira texto JSON; nome busca por trecho. */
+function filterParam(key, value) {
+    if (key === 'active_id') return String(Number(value));
+    if (key === 'audit_name') return `%${String(value).trim()}%`;
+    return value;
+}
 
 /** `work_group_fk` é obrigatório e vem sempre do usuário autenticado. */
 function buildAuditFilters(filters = {}) {
@@ -153,7 +179,7 @@ function buildAuditFilters(filters = {}) {
     for (const [key, clause] of Object.entries(AUDIT_FILTER_CLAUSES)) {
         if (filters[key] != null && filters[key] !== '') {
             conditions.push(clause);
-            params.push(key === 'active_id' ? String(Number(filters[key])) : filters[key]);
+            params.push(filterParam(key, filters[key]));
         }
     }
     return { where: `WHERE ${conditions.join(' AND ')}`, params };
@@ -200,15 +226,15 @@ function sqlListAuditItems() {
                t.transfer_origin_dep_id_fk, dor.dep_name AS transfer_origin_dep_name, ${depPath('dor')} AS transfer_origin_dep_path,
                t.transfer_dep_id_fk,        dde.dep_name AS transfer_dep_name,        ${depPath('dde')} AS transfer_dep_path
         FROM global.gapp_active_audit_temp t
-        LEFT JOIN global.gapp_user ur ON ur.user_id = t.user_register_id_fk${depJoin('dor', 't.transfer_origin_dep_id_fk')}${depJoin('dde', 't.transfer_dep_id_fk')}
+        LEFT JOIN global._user ur ON ur.id = t.user_register_id_fk${depJoin('dor', 't.transfer_origin_dep_id_fk')}${depJoin('dde', 't.transfer_dep_id_fk')}
         WHERE t.audit_id_fk = ?
         ORDER BY t.date_register, t.audit_temp_id
     `;
 }
 
-/** Nomes de usuários (para conferências antigas no final_data, que não guardavam o nome). */
+/** Nomes de usuários do sistema (_user): conferências no final_data e rodapé do relatório. */
 function sqlListUserNames() {
-    return 'SELECT user_id, name FROM global.gapp_user WHERE user_id IN (?)';
+    return 'SELECT id AS user_id, name FROM global._user WHERE id IN (?)';
 }
 
 /**
@@ -365,6 +391,9 @@ module.exports = {
     sqlFindActiveType,
     sqlInsertAudit,
     buildInsertAuditParams,
+    sqlInsertAuditScope,
+    buildAuditScopeRows,
+    sqlListAuditScopes,
     sqlListAudits,
     sqlCountAudits,
     sqlGetAuditById,

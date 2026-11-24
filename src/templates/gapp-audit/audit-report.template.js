@@ -82,14 +82,26 @@ function buildRows(audit) {
 
 const countOf = (rows, test) => rows.filter(test).length;
 
+/** Loja do escopo: "Empresa > Filial > Centro de custo" (nome do Protheus; sem nome, o código). */
+const scopeLabel = row => [row.company_name || row.company_code, row.branch_name || row.branch_code,
+    row.cost_center_code ? (row.cost_center_name || row.cost_center_code) : 'filial inteira'].join(' > ');
+
+/** Prazo: a API já entrega 'AAAA-MM-DD' (DATE, sem fuso) → "dd/mm/aaaa"; vencido marcado. */
+function deadlineLabel(audit) {
+    if (!audit.date_deadline) return 'Sem prazo';
+    const date = String(audit.date_deadline).slice(0, 10).split('-').reverse().join('/');
+    return audit.is_overdue ? `${date} (vencido)` : date;
+}
+
 function renderCover(audit) {
-    const scope = [audit.unit_name, audit.dep_name || 'Unidade inteira'].filter(Boolean).join(' · ');
     const cls = audit.desc_active_class || 'Todas as classes';
+    const scope = (audit.scope ?? []).map(scopeLabel).join('; ') || 'Não informado';
     const closed = audit.date_finish ? ` · encerrada em ${fmtDateTime(audit.date_finish)} por ${audit.user_finish_name ?? '—'}` : '';
     return `<section class="cover">
-<p class="meta">GAPP · Relatório de auditoria de ativos</p>
-<h1>Auditoria nº ${esc(audit.audit_id)} <span class="badge">${esc(STATUS[audit.status_audit] ?? '—')}</span></h1>
-<p class="meta"><b>Local:</b> ${esc(scope || 'Não informado')} · <b>Classe:</b> ${esc(cls)}</p>
+<p class="meta">GAPP · Relatório da auditoria nº ${esc(audit.audit_id)}</p>
+<h1>${esc(audit.audit_name || `Auditoria nº ${audit.audit_id}`)} <span class="badge">${esc(STATUS[audit.status_audit] ?? '—')}</span></h1>
+<p class="meta"><b>Escopo:</b> ${esc(scope)}</p>
+<p class="meta"><b>Classe:</b> ${esc(cls)} · <b>Prazo:</b> ${esc(deadlineLabel(audit))}</p>
 <p class="meta">Aberta em ${esc(fmtDateTime(audit.date_open))} por ${esc(audit.user_open_name ?? '—')}${esc(closed)}</p>
 </section>`;
 }

@@ -1,5 +1,5 @@
 const {
-    AUDIT_STATUS, lockedStatusMessage, normalizeActiveIds, normalizeOpenAudit, validateAuditScope,
+    AUDIT_STATUS, lockedStatusMessage, normalizeActiveIds, validateAuditScope,
     validateTransferDestination, isSameDepartment, normalizeRegistration,
     findDuplicateIdentifiers, findIdentifierConflicts, buildReview, buildFinalData, buildCanceledData,
     verifyFinalData, itemsFromFinalData,
@@ -35,28 +35,13 @@ describe('active-audit.rules', () => {
         });
     });
 
-    describe('abertura', () => {
-        test('unidade é obrigatória', () => {
-            expect(normalizeOpenAudit({ active_ids: [1] }).error).toMatch(/unidade/);
-            expect(normalizeOpenAudit({ unit_id_fk: 'x' }).error).toBeDefined();
-        });
-        test('sem active_ids (ou lista vazia) = todos do escopo; com lista = só os escolhidos', () => {
-            expect(normalizeOpenAudit({ unit_id_fk: 3, active_ids: [] }).value).toEqual({
-                scope: { unit_id_fk: 3, dep_id_fk: null, id_active_class_fk: null, active_type_id_fk: null },
-                active_ids: null,
-            });
-            expect(normalizeOpenAudit({ unit_id_fk: '3', dep_id_fk: 30, active_ids: [5, '5', 6] }).value).toMatchObject({
-                scope: { unit_id_fk: 3, dep_id_fk: 30 }, active_ids: [5, 6],
-            });
-            expect(normalizeOpenAudit({ unit_id_fk: 3, active_ids: 'abc' }).error).toBeDefined();
-        });
-        test('vínculos do escopo: setor ∈ unidade, classe ∈ tipo', () => {
-            const scope = { unit_id_fk: 3, dep_id_fk: 30, id_active_class_fk: 7, active_type_id_fk: 2 };
-            const ok = { unit: {}, department: { unit_id_fk: 3 }, activeClass: { active_type_id_fk: 2 }, activeType: {} };
-            expect(validateAuditScope(scope, ok)).toBeNull();
-            expect(validateAuditScope(scope, { ...ok, unit: null })).toMatch(/Unidade/);
-            expect(validateAuditScope(scope, { ...ok, department: { unit_id_fk: 9 } })).toMatch(/setor/);
-            expect(validateAuditScope(scope, { ...ok, activeClass: { active_type_id_fk: 9 } })).toMatch(/classe/);
+    describe('filtros da abertura (corpo da abertura: audit-opening.rules)', () => {
+        test('classe existe e pertence ao tipo', () => {
+            const filters = { id_active_class_fk: 7, active_type_id_fk: 2 };
+            const ok = { activeClass: { active_type_id_fk: 2 }, activeType: {} };
+            expect(validateAuditScope(filters, ok)).toBeNull();
+            expect(validateAuditScope(filters, { ...ok, activeClass: null })).toMatch(/Classe/);
+            expect(validateAuditScope(filters, { ...ok, activeClass: { active_type_id_fk: 9 } })).toMatch(/classe/);
         });
     });
 

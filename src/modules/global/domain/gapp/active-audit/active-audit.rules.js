@@ -111,48 +111,17 @@ function normalizeActiveIds(input) {
     return { ids };
 }
 
-/**
- * Filtros da abertura sobre gapp_active. Unidade, setor e classe ficam no
- * cabeçalho; o tipo só filtra (vem da classe: gapp_active_class.active_type_id_fk)
- * e fica registrado em `initial_data.scope`.
+/*
+ * Corpo da abertura (nome, prazo, escopo do Protheus, filtros): ver
+ * `audit-opening.rules`.
  */
-const AUDIT_SCOPE_FIELDS = Object.freeze(['unit_id_fk', 'dep_id_fk', 'id_active_class_fk', 'active_type_id_fk']);
 
 /**
- * Corpo da abertura. A unidade é obrigatória; setor, classe e tipo refinam o escopo.
- * Com `active_ids` → só os escolhidos (precisam estar no escopo);
- * sem `active_ids` (ou lista vazia) → `active_ids: null` = todos os ativos do escopo.
- *
- * @returns {{ value?: { scope: object, active_ids: number[]|null }, error?: string }}
- */
-function normalizeOpenAudit(data = {}) {
-    const scope = {};
-    for (const field of AUDIT_SCOPE_FIELDS) {
-        const value = positiveIntOrNull(data[field]);
-        if (value === undefined) return { error: `O campo '${field}' deve ser um id válido.` };
-        scope[field] = value;
-    }
-    if (!scope.unit_id_fk) return { error: 'Informe a unidade onde a auditoria será realizada.' };
-
-    const hasIds = Array.isArray(data.active_ids) ? data.active_ids.length > 0 : data.active_ids != null;
-    if (!hasIds) return { value: { scope, active_ids: null } };
-
-    const { ids, error } = normalizeActiveIds(data.active_ids);
-    if (error) return { error };
-    return { value: { scope, active_ids: ids } };
-}
-
-/**
- * Confere as referências do escopo lidas do banco.
- * `refs` = { unit, department, activeClass, activeType } (null quando não achou).
+ * Confere os filtros de ativos lidos do banco (classe e tipo).
+ * `refs` = { activeClass, activeType } (null quando não achou).
  * @returns {string|null} mensagem de erro
  */
 function validateAuditScope(scope, refs) {
-    if (!refs.unit) return 'Unidade não encontrada.';
-    if (scope.dep_id_fk) {
-        if (!refs.department) return 'Setor não encontrado.';
-        if (Number(refs.department.unit_id_fk) !== Number(scope.unit_id_fk)) return 'O setor informado não pertence à unidade.';
-    }
     if (scope.id_active_class_fk && !refs.activeClass) return 'Classe de ativo não encontrada.';
     if (scope.active_type_id_fk) {
         if (!refs.activeType) return 'Tipo de ativo não encontrado.';
@@ -615,7 +584,6 @@ module.exports = {
     appendUnexpectedAsset,
     lockedStatusMessage,
     normalizeActiveIds,
-    normalizeOpenAudit,
     validateAuditScope,
     validateTransferDestination,
     isSameDepartment,

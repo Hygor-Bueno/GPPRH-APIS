@@ -2,12 +2,14 @@
  * @fileoverview Casos de uso — Auditoria de Ativos / Inventário (GAPP).
  *
  * - Usuários (`user_open_id_fk`, `user_register_id_fk`, `user_finish_id_fk`)
- *   são sempre o `gapp_user.user_id` do usuário autenticado — nunca do body.
- * - Escopo: só ativos e auditorias do `work_group_fk` do usuário.
- * - Abertura: unidade obrigatória e setor opcional dizem onde a auditoria
- *   acontece, mas NÃO filtram ativos; só classe/tipo filtram. Com
- *   `active_ids` só os escolhidos (precisam ser da classe/tipo); sem, todos
- *   os ativos do grupo na classe/tipo entram automaticamente.
+ *   são sempre o `_user.id` do usuário autenticado (`req.user.id`) — nunca do
+ *   body. O `gapp_user` só serve para achar o grupo de trabalho.
+ * - Grupo: só ativos e auditorias do `work_group_fk` do usuário.
+ * - Abertura: nome, prazo opcional e escopo = lojas do Protheus (empresa,
+ *   filial, centro de custo opcional), conferidas no Protheus. O escopo só
+ *   registra onde a auditoria acontece; os ativos são filtrados por
+ *   classe/tipo. Com `active_ids` só os escolhidos (da classe/tipo); sem,
+ *   todos os ativos do grupo na classe/tipo.
  * - O cadastro original (`gapp_active`) nunca é alterado pela auditoria; a
  *   origem da transferência é lida dele.
  * - Depois da abertura, toda escrita roda em `repository.runLocked`
@@ -22,11 +24,12 @@
 const { AppError } = require('../../../../../errors/app.error');
 const {
     AUDIT_STATUS, AUDIT_STATUS_LABEL, MAX_ACTIVES_PER_AUDIT,
-    lockedStatusMessage, normalizeOpenAudit, validateAuditScope, validateTransferDestination,
+    lockedStatusMessage, validateAuditScope, validateTransferDestination,
     isSameDepartment, toSnapshotAsset,
     normalizeRegistration, findDuplicateIdentifiers,
     buildReview, buildFinalData, buildCanceledData, verifyFinalData, itemsFromFinalData,
 } = require('../../../domain/gapp/active-audit/active-audit.rules');
+const { normalizeOpenAudit, scopeNameError, isOverdue, dateKey } = require('../../../domain/gapp/active-audit/audit-opening.rules');
 
 /** Pares (tipo, valor) dos itens com identificador — para buscar conflitos no histórico. */
 const identifierPairs = items => items
@@ -54,7 +57,39 @@ function identifierInUseError(other, auditId) {
     });
 }
 
-const withStatusLabel = audit => audit && ({ ...audit, status_label: AUDIT_STATUS_LABEL[audit.status_audit] ?? null });
+/**
+ * Cabeçalho para a API: rótulo do status e prazo vencido. O prazo (DATE) sai
+ * como 'AAAA-MM-DD' — como Date viraria meia-noite em UTC no JSON e o front
+ * mostraria o dia anterior.
+ */
+const present = (audit, now) => audit && ({
+    ...audit,
+    date_deadline: dateKey(audit.date_deadline),
+    status_label: AUDIT_STATUS_LABEL[audit.status_audit] ?? null,
+    is_overdue: isOverdue(audit, now),
+});
+
+/** Escolhidos que não vieram: não existem, são de outro grupo ou fora da classe/tipo. */
+function assertChosenFound(rows, activeIds) {
+    const found = new Set(rows.map(row => Number(row.active_id)));
+    const missing = activeIds.filter(id => !found.has(id));
+    if (!missing.length) return;
+    throw new AppError(`Ativo(s) não encontrado(s) ou fora do tipo/classe selecionados: ${missing.join(', ')}.`, 404, {
+        code: 'GAPP_AUDIT_ACTIVE_NOT_FOUND', details: { active_ids: missing },
+    });
+}
+
+/** "Todos os ativos": ao menos um e no máximo o teto. */
+function assertAutoSelection(rows) {
+    if (!rows.length) {
+        throw new AppError('Nenhum ativo encontrado para o tipo/classe selecionados.', 404, { code: 'GAPP_AUDIT_NO_ACTIVES' });
+    }
+    if (rows.length > MAX_ACTIVES_PER_AUDIT) {
+        throw new AppError(`A seleção tem mais de ${MAX_ACTIVES_PER_AUDIT} ativos. Refine por tipo ou classe, ou escolha os ativos.`, 400, {
+            code: 'GAPP_AUDIT_TOO_MANY_ACTIVES',
+        });
+    }
+}
 
 const isClosed = status => [AUDIT_STATUS.FINISHED, AUDIT_STATUS.CANCELED].includes(Number(status));
 
@@ -63,10 +98,15 @@ class GappActiveAuditUseCases {
      * @param {Object} deps
      * @param {import('./ports/active-audit-repository.port').ActiveAuditRepositoryPort} deps.repository
      * @param {import('../ports/gapp-user-repository.port').GappUserRepositoryPort} deps.userRepository
+     * @param {import('../../gtpp/ports/gtpp-scope-name-resolver.port').GtppScopeNameResolverPort} deps.scopeNameResolver
+     *        códigos do Protheus → nomes (o mesmo do escopo de tarefas do GTPP)
+     * @param {() => Date} [deps.now]
      */
-    constructor({ repository, userRepository }) {
+    constructor({ repository, userRepository, scopeNameResolver, now = () => new Date() }) {
         this.repository = repository;
         this.userRepository = userRepository;
+        this.scopeNameResolver = scopeNameResolver;
+        this.now = now;
     }
 
     /** @private @throws {AppError} 404 se o usuário autenticado não estiver no GAPP. */
@@ -94,65 +134,54 @@ class GappActiveAuditUseCases {
     // ─── Etapa 1 — Abertura ─────────────────────────────────────────
 
     /**
-     * Abre a auditoria com a fotografia dos ativos previstos.
-     * @param {{ unit_id_fk: number, dep_id_fk?: number, id_active_class_fk?: number,
+     * Abre a auditoria (cabeçalho + lojas do escopo) com a fotografia dos ativos.
+     * @param {{ audit_name: string, date_deadline?: string, scope: Array<{ company_code: string,
+     *           branch_code: string, cost_center_code?: string }>, id_active_class_fk?: number,
      *           active_type_id_fk?: number, active_ids?: number[] }} data
      */
     async openAudit(data, currentUser) {
         const gappUser = await this._resolveGappUser(currentUser);
-
-        const { value, error } = normalizeOpenAudit(data);
+        const { value, error } = normalizeOpenAudit(data, this.now());
         if (error) throw new AppError(error, 400);
-        const { scope, active_ids: activeIds } = value;
 
-        const refs = await this.repository.findRefs(scope);
-        const scopeError = validateAuditScope(scope, refs);
-        if (scopeError) throw new AppError(scopeError, 400, { code: 'GAPP_AUDIT_INVALID_SCOPE' });
+        await this._assertOpeningRefs(value);
+        const rows = await this._activesForAudit(value, gappUser);
+        const initialData = { filters: value.filters, assets: rows.map(toSnapshotAsset) };
+        const { insertId } = await this.repository.createAudit({
+            audit: {
+                audit_name: value.name,
+                date_deadline: value.deadline,
+                user_open_id_fk: currentUser.id,
+                id_active_class_fk: value.filters.id_active_class_fk,
+                initial_data: initialData,
+                quantity_active: rows.length,
+            },
+            scope: value.scope,
+        });
+        return this.getAuditById(insertId, currentUser);
+    }
 
-        // Sem lista: todos do escopo, buscando um a mais que o teto para saber se estourou.
+    /** @private Classe/tipo no GAPP e lojas no Protheus (código sem nome = não existe). */
+    async _assertOpeningRefs({ filters, scope }) {
+        const [refs, named] = await Promise.all([
+            this.repository.findRefs(filters),
+            this.scopeNameResolver.resolve(scope),
+        ]);
+        const message = validateAuditScope(filters, refs) ?? scopeNameError(named);
+        if (message) throw new AppError(message, 400, { code: 'GAPP_AUDIT_INVALID_SCOPE' });
+    }
+
+    /** @private Ativos dos filtros (sem lista: busca um a mais que o teto para saber se estourou). */
+    async _activesForAudit({ filters, active_ids: activeIds }, gappUser) {
         const rows = await this.repository.findActivesForAudit({
-            scope,
+            scope: filters,
             workGroupFk: gappUser.work_group_fk,
             activeIds,
             limit: activeIds ? activeIds.length : MAX_ACTIVES_PER_AUDIT + 1,
         });
-
-        if (activeIds) {
-            const found = new Set(rows.map(row => Number(row.active_id)));
-            const missing = activeIds.filter(id => !found.has(id));
-            if (missing.length) {
-                throw new AppError(
-                    `Ativo(s) não encontrado(s) ou fora do tipo/classe selecionados: ${missing.join(', ')}.`,
-                    404,
-                    { code: 'GAPP_AUDIT_ACTIVE_NOT_FOUND', details: { active_ids: missing } }
-                );
-            }
-        } else {
-            if (!rows.length) {
-                throw new AppError('Nenhum ativo encontrado para o tipo/classe selecionados.', 404, {
-                    code: 'GAPP_AUDIT_NO_ACTIVES',
-                });
-            }
-            if (rows.length > MAX_ACTIVES_PER_AUDIT) {
-                throw new AppError(
-                    `A seleção tem mais de ${MAX_ACTIVES_PER_AUDIT} ativos. Refine por tipo ou classe, ou escolha os ativos.`,
-                    400,
-                    { code: 'GAPP_AUDIT_TOO_MANY_ACTIVES' }
-                );
-            }
-        }
-
-        const initialData = { scope, assets: rows.map(toSnapshotAsset) };
-        const { insertId } = await this.repository.createAudit({
-            user_open_id_fk: gappUser.user_id,
-            unit_id_fk: scope.unit_id_fk,
-            dep_id_fk: scope.dep_id_fk,
-            id_active_class_fk: scope.id_active_class_fk,
-            initial_data: initialData,
-            quantity_active: initialData.assets.length,
-        });
-
-        return this.getAuditById(insertId, currentUser);
+        if (activeIds) assertChosenFound(rows, activeIds);
+        else assertAutoSelection(rows);
+        return rows;
     }
 
     // ─── Consulta / histórico ───────────────────────────────────────
@@ -161,11 +190,25 @@ class GappActiveAuditUseCases {
     async listAudits(filters, currentUser) {
         const gappUser = await this._resolveGappUser(currentUser);
         const result = await this.repository.list({ ...filters, work_group_fk: gappUser.work_group_fk });
-        return { ...result, items: result.items.map(withStatusLabel) };
+        const now = this.now();
+        return { ...result, items: await this._withScope(result.items.map(audit => present(audit, now))) };
     }
 
     /**
-     * Cabeçalho + initial_data + final_data + conferências.
+     * @private Lojas do escopo de cada auditoria, com os nomes do Protheus.
+     * Uma consulta para a página inteira; nome que o Protheus não devolver fica null.
+     */
+    async _withScope(audits) {
+        if (!audits.length) return audits;
+        const rows = await this.scopeNameResolver.resolve(await this.repository.findScopes(audits.map(audit => audit.audit_id)));
+        return audits.map(audit => ({
+            ...audit,
+            scope: rows.filter(row => Number(row.audit_id_fk) === Number(audit.audit_id)),
+        }));
+    }
+
+    /**
+     * Cabeçalho + escopo + initial_data + final_data + conferências.
      * Aberta: conferências da temporária. Encerrada: do `final_data`
      * (a temporária foi limpa), no mesmo formato.
      */
@@ -175,7 +218,8 @@ class GappActiveAuditUseCases {
         const items = isClosed(audit.status_audit)
             ? await this._closedItems(audit)
             : await this.repository.listItems(audit.audit_id);
-        return { ...withStatusLabel(audit), items };
+        const [withScope] = await this._withScope([present(audit, this.now())]);
+        return { ...withScope, items };
     }
 
     /** @private Conferências do final_data; nomes faltantes (formato antigo) são resolvidos no gapp_user. */
@@ -261,7 +305,7 @@ class GappActiveAuditUseCases {
                 if (other) throw identifierInUseError(other, tx.audit.audit_id);
             }
 
-            const payload = { ...value, active_id_fk: activeId, user_register_id_fk: gappUser.user_id };
+            const payload = { ...value, active_id_fk: activeId, user_register_id_fk: currentUser.id };
             if (isUpdate) await tx.updateItem(payload);
             else await tx.insertItem(payload);
 
@@ -359,7 +403,7 @@ class GappActiveAuditUseCases {
             const history = await tx.findIdentifierHistory(identifierPairs(items));
             const finalData = buildFinalData(audit.audit_id, tx.audit.initial_data, items, history);
 
-            await this._closeAndClear(tx, { finalData, userId: gappUser.user_id, status: AUDIT_STATUS.FINISHED, items });
+            await this._closeAndClear(tx, { finalData, userId: currentUser.id, status: AUDIT_STATUS.FINISHED, items });
         });
 
         return this.getAuditById(audit.audit_id, currentUser);
@@ -380,7 +424,7 @@ class GappActiveAuditUseCases {
             const items = await tx.listItems();
             const finalData = buildCanceledData(audit.audit_id, tx.audit.initial_data, items, data?.reason);
 
-            await this._closeAndClear(tx, { finalData, userId: gappUser.user_id, status: AUDIT_STATUS.CANCELED, items });
+            await this._closeAndClear(tx, { finalData, userId: currentUser.id, status: AUDIT_STATUS.CANCELED, items });
         });
 
         return this.getAuditById(audit.audit_id, currentUser);

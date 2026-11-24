@@ -471,10 +471,12 @@ const listAssetTermTemplateQuerySchema = {
 // Valores aceitos de identifier_type/asset_condition/lifecycle_status também
 // ficam no domínio; vínculos (setor ∈ unidade, classe ∈ tipo) são lidos no banco.
 
-// Abertura: unidade obrigatória; sem `active_ids` entram todos os ativos do escopo.
+// Abertura: nome obrigatório; `scope` (lista de lojas do Protheus) e
+// `active_ids` são conferidos no domínio (audit-opening.rules). Sem
+// `active_ids` entram todos os ativos da classe/tipo.
 const openActiveAuditSchema = {
-    unit_id_fk:         { type: 'number', required: true, min: 1 },
-    dep_id_fk:          { type: 'number', min: 1 },
+    audit_name:         { type: 'string', required: true, maxLength: 150 },
+    date_deadline:      { type: 'string', pattern: DATE_PATTERN },
     id_active_class_fk: { type: 'number', min: 1 },
     active_type_id_fk:  { type: 'number', min: 1 },
 };
@@ -519,9 +521,9 @@ const cancelActiveAuditSchema = {
 const listActiveAuditQuerySchema = {
     audit_id:     { type: 'number', min: 1 },
     active_id:    { type: 'number', min: 1 },
+    audit_name:   { type: 'string', maxLength: 150 },
     status_audit: { type: 'number', enum: [0, 1, 2, 3] },
-    unit_id_fk:   { type: 'number', min: 1 },
-    dep_id_fk:    { type: 'number', min: 1 },
+    branch_code:  { type: 'string', maxLength: 12 },
     date_start:   { type: 'string', pattern: DATE_PATTERN },
     date_end:     { type: 'string', pattern: DATE_PATTERN },
     page:         { type: 'number', min: 1 },

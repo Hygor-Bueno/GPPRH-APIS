@@ -11,10 +11,10 @@
 
 class ActiveAuditRepositoryPort {
     /**
-     * Ativos do grupo dentro do escopo (unidade, setor, classe, tipo).
-     * Com `activeIds` → só esses; sem → todos do escopo, até `limit`.
+     * Ativos do grupo filtrados por classe/tipo (`scope` = filtros de ativos).
+     * Com `activeIds` → só esses; sem → todos, até `limit`.
      * @param {{ scope: object, workGroupFk: number, activeIds?: number[]|null, limit: number }} params
-     * @returns {Promise<object[]>} linhas de gapp_active com nomes de classe, tipo, unidade e setor
+     * @returns {Promise<object[]>} linhas de gapp_active com nomes de classe, tipo e setor
      */
     findActivesForAudit(params) { throw new Error('Not implemented'); }
 
@@ -26,13 +26,22 @@ class ActiveAuditRepositoryPort {
     findRefs(refs) { throw new Error('Not implemented'); }
 
     /**
-     * @param {{ user_open_id_fk: number, unit_id_fk: number, dep_id_fk?: number, id_active_class_fk?: number,
-     *           initial_data: object, quantity_active: number }} data
+     * Cabeçalho + lojas do escopo, na mesma transação.
+     * @param {{ audit: { audit_name: string, date_deadline: string|null, user_open_id_fk: number,
+     *           id_active_class_fk?: number|null, initial_data: object, quantity_active: number },
+     *           scope: Array<{ company_code: string, branch_code: string, cost_center_code: string|null }> }} data
      * @returns {Promise<{ insertId: number }>}
      */
     createAudit(data) { throw new Error('Not implemented'); }
 
-    /** @param {number[]} userIds @returns {Promise<Array<{ user_id: number, name: string }>>} */
+    /**
+     * Lojas do escopo (códigos do Protheus) das auditorias.
+     * @param {number[]} auditIds
+     * @returns {Promise<Array<{ audit_id_fk: number, company_code: string, branch_code: string, cost_center_code: string|null }>>}
+     */
+    findScopes(auditIds) { throw new Error('Not implemented'); }
+
+    /** Nomes do `_user`. @param {number[]} userIds @returns {Promise<Array<{ user_id: number, name: string }>>} */
     findUserNames(userIds) { throw new Error('Not implemented'); }
 
     /** @param {object} filters inclui `work_group_fk` */

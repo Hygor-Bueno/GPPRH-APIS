@@ -1,6 +1,7 @@
 const { GappActiveAuditIdentifyUseCases } = require('../gapp-active-audit-identify.use-cases');
 const { AUDIT_STATUS } = require('../../../../domain/gapp/active-audit/active-audit.rules');
 
+// _user.id de quem está logado; o gapp_user (user_id 10) só dá o grupo.
 const CURRENT_USER = { id: 1 };
 const INITIAL = { assets: [{ active_id: 120, brand: 'Dell' }] };
 const AUDIT = { audit_id: 15, status_audit: AUDIT_STATUS.IN_PROGRESS, initial_data: INITIAL };
@@ -56,7 +57,7 @@ describe('addUnexpected', () => {
     test('acrescenta como não previsto, com quem incluiu', async () => {
         const { useCases, tx } = makeDeps();
         const asset = await useCases.addUnexpected(15, 300, CURRENT_USER);
-        expect(asset).toMatchObject({ active_id: 300, is_expected: false, added_by: 10 });
+        expect(asset).toMatchObject({ active_id: 300, is_expected: false, added_by: 1 });
         const saved = tx.updateInitialData.mock.calls[0][0];
         expect(saved.assets.map(item => item.active_id)).toEqual([120, 300]);
     });

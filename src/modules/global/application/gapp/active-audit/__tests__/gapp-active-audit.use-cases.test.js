@@ -1,8 +1,10 @@
 const { GappActiveAuditUseCases } = require('../gapp-active-audit.use-cases');
 const { AUDIT_STATUS } = require('../../../../domain/gapp/active-audit/active-audit.rules');
 
-const GAPP_USER = { user_id: 10, work_group_fk: 5 };
-const CURRENT_USER = { id: 1 };
+// O gravado é o _user.id (req.user.id = 10); o gapp_user (77) só dá o grupo de trabalho.
+const GAPP_USER = { user_id: 77, work_group_fk: 5 };
+const CURRENT_USER = { id: 10 };
+const NOW = () => new Date(2026, 10, 24, 10, 0);
 const INITIAL = { assets: [{ active_id: 120, brand: 'Dell' }, { active_id: 121, brand: 'Lenovo' }] };
 const REFS = { unit: { unit_id: 3 }, department: { dep_id: 30, unit_id_fk: 3 }, activeClass: null, activeType: null };
 const AUDIT = { audit_id: 15, status_audit: AUDIT_STATUS.OPEN, initial_data: INITIAL, final_data: null };
@@ -10,7 +12,17 @@ const ITEM = {
     active_id_fk: 120, identifier_type: 'SERIAL', identifier_value: 'SN1',
     asset_condition: 'GOOD', lifecycle_status: 'IN_USE', additional_items: { charger: true }, observations: null,
 };
-const OPEN_BODY = { unit_id_fk: 3, dep_id_fk: 30 };
+const SCOPE = [{ company_code: '02', branch_code: '0202' }, { company_code: '02', branch_code: '0203', cost_center_code: '101' }];
+const OPEN_BODY = { audit_name: ' Inventário de notebooks ', date_deadline: '2026-12-10', scope: SCOPE };
+/** Resolver do Protheus: nome para todo código, exceto os da lista `missing`. */
+const makeResolver = (missing = []) => ({
+    resolve: jest.fn(async rows => rows.map(row => ({
+        ...row,
+        company_name: missing.includes(row.company_code) ? null : `Empresa ${row.company_code}`,
+        branch_name: missing.includes(row.branch_code) ? null : `Loja ${row.branch_code}`,
+        cost_center_name: row.cost_center_code && !missing.includes(row.cost_center_code) ? `CC ${row.cost_center_code}` : null,
+    }))),
+});
 
 function makeTx(overrides = {}) {
     return {
@@ -36,7 +48,7 @@ function makeTx(overrides = {}) {
     };
 }
 
-function makeDeps({ repository = {}, tx = makeTx(), gappUser = GAPP_USER } = {}) {
+function makeDeps({ repository = {}, tx = makeTx(), gappUser = GAPP_USER, resolver = makeResolver() } = {}) {
     const repo = {
         findRefs: jest.fn().mockResolvedValue(REFS),
         findUserNames: jest.fn().mockResolvedValue([]),
@@ -45,6 +57,7 @@ function makeDeps({ repository = {}, tx = makeTx(), gappUser = GAPP_USER } = {})
             { active_id: 121, brand: 'Lenovo' },
         ]),
         createAudit: jest.fn().mockResolvedValue({ insertId: 15 }),
+        findScopes: jest.fn().mockResolvedValue([{ audit_id_fk: 15, company_code: '02', branch_code: '0202', cost_center_code: null }]),
         list: jest.fn().mockResolvedValue({ items: [{ audit_id: 15, status_audit: 0 }], total: 1, page: 1, limit: 20 }),
         findById: jest.fn().mockResolvedValue(AUDIT),
         listItems: jest.fn().mockResolvedValue([]),
@@ -53,7 +66,8 @@ function makeDeps({ repository = {}, tx = makeTx(), gappUser = GAPP_USER } = {})
         ...repository,
     };
     const userRepository = { findAuthByAccessCode: jest.fn().mockResolvedValue(gappUser) };
-    return { repo, tx, useCases: new GappActiveAuditUseCases({ repository: repo, userRepository }) };
+    const useCases = new GappActiveAuditUseCases({ repository: repo, userRepository, scopeNameResolver: resolver, now: NOW });
+    return { repo, tx, resolver, useCases };
 }
 
 describe('GappActiveAuditUseCases', () => {
@@ -67,6 +81,17 @@ describe('GappActiveAuditUseCases', () => {
         const result = await useCases.listAudits({ work_group_fk: 999, page: 2 }, CURRENT_USER);
         expect(repo.list).toHaveBeenCalledWith({ work_group_fk: 5, page: 2 });
         expect(result.items[0].status_label).toBe('ABERTA');
+        expect(repo.findScopes).toHaveBeenCalledWith([15]);
+        expect(result.items[0].scope).toEqual([expect.objectContaining({ branch_code: '0202', branch_name: 'Loja 0202' })]);
+    });
+
+    test('detalhe: prazo como AAAA-MM-DD e vencido só em aberta/em andamento', async () => {
+        const deadline = new Date(2026, 10, 20); // como o mysql2 lê DATE: meia-noite local
+        const { useCases } = makeDeps({ repository: { findById: jest.fn().mockResolvedValue({ ...AUDIT, date_deadline: deadline }) } });
+        const audit = await useCases.getAuditById(15, CURRENT_USER);
+        expect(audit).toMatchObject({ date_deadline: '2026-11-20', is_overdue: true, scope: [expect.objectContaining({ company_name: 'Empresa 02' })] });
+        const closed = makeDeps({ repository: { findById: jest.fn().mockResolvedValue({ ...AUDIT, status_audit: 2, date_deadline: deadline }) } });
+        expect((await closed.useCases.getAuditById(15, CURRENT_USER)).is_overdue).toBe(false);
     });
 
     test('auditoria de outro grupo é 404', async () => {
@@ -75,49 +100,47 @@ describe('GappActiveAuditUseCases', () => {
     });
 
     describe('openAudit', () => {
-        test('com lista: grava escopo, fotografia e o usuário GAPP como responsável', async () => {
-            const { useCases, repo } = makeDeps();
+        test('com lista: grava nome, prazo, escopo do Protheus, fotografia e o _user como responsável', async () => {
+            const { useCases, repo, resolver } = makeDeps();
             await useCases.openAudit({ ...OPEN_BODY, active_ids: [120, 121, 120], user_open_id_fk: 999 }, CURRENT_USER);
+            expect(resolver.resolve).toHaveBeenCalledWith([
+                { company_code: '02', branch_code: '0202', cost_center_code: null },
+                { company_code: '02', branch_code: '0203', cost_center_code: '101' },
+            ]);
             expect(repo.findActivesForAudit).toHaveBeenCalledWith({
-                scope: { unit_id_fk: 3, dep_id_fk: 30, id_active_class_fk: null, active_type_id_fk: null },
-                workGroupFk: 5, activeIds: [120, 121], limit: 2,
+                scope: { id_active_class_fk: null, active_type_id_fk: null }, workGroupFk: 5, activeIds: [120, 121], limit: 2,
             });
-            const created = repo.createAudit.mock.calls[0][0];
-            expect(created).not.toHaveProperty('selection_mode');
-            expect(created).not.toHaveProperty('active_type_id_fk');
-            expect(repo.createAudit).toHaveBeenCalledWith(expect.objectContaining({
-                user_open_id_fk: 10,
-                unit_id_fk: 3, dep_id_fk: 30, id_active_class_fk: null,
-                quantity_active: 2,
-                initial_data: expect.objectContaining({ assets: [
+            const { audit, scope } = repo.createAudit.mock.calls[0][0];
+            expect(audit).toMatchObject({
+                audit_name: 'Inventário de notebooks', date_deadline: '2026-12-10', user_open_id_fk: 10,
+                id_active_class_fk: null, quantity_active: 2,
+                initial_data: { filters: { id_active_class_fk: null, active_type_id_fk: null }, assets: [
                     expect.objectContaining({ active_id: 120, brand: 'Dell', value_purchase: 4500 }),
                     expect.objectContaining({ active_id: 121, brand: 'Lenovo' }),
-                ] }),
-            }));
+                ] },
+            });
+            expect(audit).not.toHaveProperty('unit_id_fk');
+            expect(scope).toHaveLength(2);
         });
 
-        test('com lista: ativo inexistente, de outro grupo ou fora do escopo → 404 com os ids', async () => {
+        test('com lista: ativo inexistente, de outro grupo ou fora da classe/tipo → 404 com os ids', async () => {
             const { useCases, repo } = makeDeps();
             await expect(useCases.openAudit({ ...OPEN_BODY, active_ids: [120, 121, 300] }, CURRENT_USER))
                 .rejects.toMatchObject({ statusCode: 404, details: { active_ids: [300] } });
             expect(repo.createAudit).not.toHaveBeenCalled();
         });
 
-        test('sem active_ids: todos os ativos do escopo, até o teto + 1', async () => {
+        test('sem active_ids: todos os ativos da classe, até o teto + 1', async () => {
             const refs = { ...REFS, activeClass: { id_active_class: 7, active_type_id_fk: 2 } };
             const { useCases, repo } = makeDeps({ repository: { findRefs: jest.fn().mockResolvedValue(refs) } });
             await useCases.openAudit({ ...OPEN_BODY, id_active_class_fk: 7, active_ids: [] }, CURRENT_USER);
             expect(repo.findActivesForAudit).toHaveBeenCalledWith(expect.objectContaining({
-                activeIds: null, limit: 1001,
-                scope: expect.objectContaining({ unit_id_fk: 3, id_active_class_fk: 7 }),
+                activeIds: null, limit: 1001, scope: { id_active_class_fk: 7, active_type_id_fk: null },
             }));
-            expect(repo.createAudit).toHaveBeenCalledWith(expect.objectContaining({
-                id_active_class_fk: 7, quantity_active: 2,
-                initial_data: expect.objectContaining({ scope: expect.objectContaining({ id_active_class_fk: 7 }) }),
-            }));
+            expect(repo.createAudit.mock.calls[0][0].audit).toMatchObject({ id_active_class_fk: 7, quantity_active: 2 });
         });
 
-        test('sem lista e sem nenhum ativo no escopo → 404', async () => {
+        test('sem lista e sem nenhum ativo → 404', async () => {
             const { useCases, repo } = makeDeps({ repository: { findActivesForAudit: jest.fn().mockResolvedValue([]) } });
             await expect(useCases.openAudit(OPEN_BODY, CURRENT_USER)).rejects.toMatchObject({ statusCode: 404, code: 'GAPP_AUDIT_NO_ACTIVES' });
             expect(repo.createAudit).not.toHaveBeenCalled();
@@ -129,21 +152,30 @@ describe('GappActiveAuditUseCases', () => {
             await expect(useCases.openAudit(OPEN_BODY, CURRENT_USER)).rejects.toMatchObject({ statusCode: 400, code: 'GAPP_AUDIT_TOO_MANY_ACTIVES' });
         });
 
-        test('sem unidade → 400', async () => {
-            const { useCases, repo } = makeDeps();
-            await expect(useCases.openAudit({ active_ids: [120] }, CURRENT_USER)).rejects.toMatchObject({ statusCode: 400 });
+        test('sem escopo → 400 antes de consultar qualquer coisa', async () => {
+            const { useCases, repo, resolver } = makeDeps();
+            await expect(useCases.openAudit({ ...OPEN_BODY, scope: [] }, CURRENT_USER)).rejects.toMatchObject({ statusCode: 400 });
+            expect(resolver.resolve).not.toHaveBeenCalled();
             expect(repo.findActivesForAudit).not.toHaveBeenCalled();
         });
 
-        test('setor de outra unidade → 400', async () => {
-            const refs = { ...REFS, department: { dep_id: 30, unit_id_fk: 99 } };
+        test('loja que o Protheus não conhece → 400 GAPP_AUDIT_INVALID_SCOPE e não grava', async () => {
+            const { useCases, repo } = makeDeps({ resolver: makeResolver(['101']) });
+            await expect(useCases.openAudit(OPEN_BODY, CURRENT_USER))
+                .rejects.toMatchObject({ statusCode: 400, code: 'GAPP_AUDIT_INVALID_SCOPE', message: expect.stringMatching(/Centro de custo 101/) });
+            expect(repo.createAudit).not.toHaveBeenCalled();
+        });
+
+        test('classe de outro tipo → 400', async () => {
+            const refs = { activeClass: { id_active_class: 7, active_type_id_fk: 9 }, activeType: { active_type_id: 2 } };
             const { useCases } = makeDeps({ repository: { findRefs: jest.fn().mockResolvedValue(refs) } });
-            await expect(useCases.openAudit(OPEN_BODY, CURRENT_USER)).rejects.toMatchObject({ statusCode: 400, code: 'GAPP_AUDIT_INVALID_SCOPE' });
+            await expect(useCases.openAudit({ ...OPEN_BODY, id_active_class_fk: 7, active_type_id_fk: 2 }, CURRENT_USER))
+                .rejects.toMatchObject({ statusCode: 400, code: 'GAPP_AUDIT_INVALID_SCOPE' });
         });
     });
 
     describe('registerItem', () => {
-        test('grava com o usuário GAPP e passa a auditoria para EM ANDAMENTO', async () => {
+        test('grava com o _user e passa a auditoria para EM ANDAMENTO', async () => {
             const { useCases, tx } = makeDeps();
             await useCases.registerItem(15, { ...ITEM, user_register_id_fk: 999 }, CURRENT_USER);
             expect(tx.insertItem).toHaveBeenCalledWith(expect.objectContaining({
@@ -348,7 +380,7 @@ describe('GappActiveAuditUseCases', () => {
         expect(tx.deleteItems).toHaveBeenCalled();
     });
 
-    test('auditoria encerrada: conferências vêm do final_data (nome antigo resolvido no gapp_user)', async () => {
+    test('auditoria encerrada: conferências vêm do final_data (nome resolvido no _user)', async () => {
         const closed = {
             ...AUDIT, status_audit: AUDIT_STATUS.FINISHED,
             final_data: { items: [{ active_id: 120, identifier_type: 'SERIAL', identifier_value: 'SN1', condition: 'GOOD', user_register_id: 10, transfer: null }] },

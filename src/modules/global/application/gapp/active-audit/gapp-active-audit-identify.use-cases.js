@@ -74,7 +74,7 @@ class GappActiveAuditIdentifyUseCases {
     async addUnexpected(auditId, activeId, currentUser) {
         const { gappUser, audit } = await this._scope(auditId, currentUser);
         const row = await this._findActive(activeId, gappUser.work_group_fk);
-        const asset = toUnexpectedAsset(row, gappUser.user_id);
+        const asset = toUnexpectedAsset(row, currentUser.id); // _user.id de quem incluiu
 
         await this.repository.runLocked(audit.audit_id, async tx => {
             if (!tx.audit) throw new AppError('Auditoria não encontrada.', 404);

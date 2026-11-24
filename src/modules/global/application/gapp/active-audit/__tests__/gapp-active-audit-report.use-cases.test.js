@@ -1,7 +1,11 @@
 const { GappActiveAuditReportUseCases } = require('../gapp-active-audit-report.use-cases');
 
 const AUDIT = {
-    audit_id: 15, status_audit: 2, unit_name: 'Loja <1>', dep_name: null, desc_active_class: 'Notebook',
+    audit_id: 15, audit_name: 'Inventário <notebooks>', status_audit: 2, desc_active_class: 'Notebook', date_deadline: '2026-11-30',
+    scope: [
+        { company_code: '02', company_name: 'Frugal', branch_code: '0202', branch_name: 'Loja <1>', cost_center_code: null },
+        { company_code: '02', company_name: null, branch_code: '0203', branch_name: null, cost_center_code: '101', cost_center_name: null },
+    ],
     date_open: new Date(2026, 10, 20, 9, 5), date_finish: new Date(2026, 10, 21, 17, 0),
     user_open_name: 'Ana', user_finish_name: 'Beto',
     initial_data: { assets: [
@@ -23,7 +27,6 @@ function makeDeps({ audit = AUDIT, review = REVIEW } = {}) {
     const useCases = new GappActiveAuditReportUseCases({
         auditUseCases,
         repository: { findUserNames: jest.fn().mockResolvedValue([{ user_id: 10, name: 'Carla' }]) },
-        userRepository: { findAuthByAccessCode: jest.fn().mockResolvedValue({ user_id: 10, work_group_fk: 1 }) },
         renderer,
         now: () => new Date(2026, 10, 24, 8, 30),
     });
@@ -47,7 +50,9 @@ describe('GappActiveAuditReportUseCases', () => {
         const { useCases, renderer } = makeDeps();
         await useCases.generateReport(15, { id: 7 });
         const { html } = renderer.renderPdf.mock.calls[0][0];
-        expect(html).toContain('Loja &lt;1&gt; · Unidade inteira');
+        expect(html).toContain('Inventário &lt;notebooks&gt;');
+        expect(html).toContain('Frugal &gt; Loja &lt;1&gt; &gt; filial inteira; 02 &gt; 0203 &gt; 101');
+        expect(html).toContain('<b>Prazo:</b> 30/11/2026');
         expect(html).toContain('<b>2</b><span>Previstos</span>');
         expect(html).toContain('<b>1</b><span>Pendentes</span>');
         expect(html).toContain('<b>1</b><span>Não previstos</span>');

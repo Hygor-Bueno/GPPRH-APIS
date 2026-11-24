@@ -15,7 +15,7 @@ const { AppError } = require('../../../../errors/app.error');
 const { ActiveAuditRepositoryPort } = require('../../application/gapp/active-audit/ports/active-audit-repository.port');
 const {
     sqlListActivesForAudit, sqlFindUnit, sqlFindDepartment, sqlFindActiveClass, sqlFindActiveType,
-    sqlInsertAudit, buildInsertAuditParams,
+    sqlInsertAudit, buildInsertAuditParams, sqlInsertAuditScope, buildAuditScopeRows, sqlListAuditScopes,
     sqlListAudits, sqlCountAudits, sqlGetAuditById, sqlListAuditItems, sqlListUserNames,
     sqlIdentifierHistory, sqlLockAudit, sqlGetAuditItem, sqlGetActiveLocation, sqlFindItemByIdentifier, buildFindItemByIdentifierParams,
     sqlInsertAuditItem, buildInsertAuditItemParams,
@@ -98,9 +98,20 @@ class MysqlActiveAuditRepository extends ActiveAuditRepositoryPort {
         }
     }
 
-    async createAudit(data) {
-        const [result] = await this._query(sqlInsertAudit(), buildInsertAuditParams(data));
-        return { insertId: result.insertId };
+    /** Cabeçalho e lojas do escopo na mesma transação: não existe auditoria sem escopo. */
+    createAudit({ audit, scope }) {
+        return this._inTransaction(async conn => {
+            const [result] = await conn.query(sqlInsertAudit(), buildInsertAuditParams(audit));
+            await conn.query(sqlInsertAuditScope(), [buildAuditScopeRows(result.insertId, scope)]);
+            return { insertId: result.insertId };
+        });
+    }
+
+    /** Lojas (códigos do Protheus) das auditorias informadas. */
+    async findScopes(auditIds) {
+        if (!auditIds.length) return [];
+        const [rows] = await this._query(sqlListAuditScopes(), [auditIds]);
+        return rows;
     }
 
     async findUserNames(userIds) {
@@ -135,15 +146,19 @@ class MysqlActiveAuditRepository extends ActiveAuditRepositoryPort {
         }
     }
 
-    async runLocked(auditId, fn) {
+    runLocked(auditId, fn) {
+        return this._inTransaction(async conn => {
+            const [[locked]] = await conn.query(sqlLockAudit(), [auditId]);
+            return fn(this._bindTransaction(conn, auditId, parseAudit(locked) ?? null));
+        });
+    }
+
+    /** @private Transação numa conexão própria: COMMIT no fim, ROLLBACK em qualquer erro. */
+    async _inTransaction(fn) {
         const conn = await poolGlobal.getConnection();
         try {
             await conn.beginTransaction();
-
-            const [[locked]] = await conn.query(sqlLockAudit(), [auditId]);
-            const tx = this._bindTransaction(conn, auditId, parseAudit(locked) ?? null);
-
-            const result = await fn(tx);
+            const result = await fn(conn);
             await conn.commit();
             return result;
         } catch (error) {

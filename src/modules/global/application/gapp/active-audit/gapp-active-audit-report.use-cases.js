@@ -20,14 +20,12 @@ class GappActiveAuditReportUseCases {
      * @param {Object} deps
      * @param {import('./gapp-active-audit.use-cases').GappActiveAuditUseCases} deps.auditUseCases
      * @param {import('./ports/active-audit-repository.port').ActiveAuditRepositoryPort} deps.repository
-     * @param {import('../ports/gapp-user-repository.port').GappUserRepositoryPort} deps.userRepository
      * @param {{ renderPdf: (input: object) => Promise<Buffer> }} deps.renderer
      * @param {() => Date} [deps.now]
      */
-    constructor({ auditUseCases, repository, userRepository, renderer, now = () => new Date() }) {
+    constructor({ auditUseCases, repository, renderer, now = () => new Date() }) {
         this.auditUseCases = auditUseCases;
         this.repository = repository;
-        this.userRepository = userRepository;
         this.renderer = renderer;
         this.now = now;
     }
@@ -50,11 +48,9 @@ class GappActiveAuditReportUseCases {
         return { buffer, fileName: `relatorio-auditoria-${audit.audit_id}.pdf` };
     }
 
-    /** @private Nome de quem gerou, para o rodapé (o token não traz o nome do GAPP). */
+    /** @private Nome de quem gerou (_user), para o rodapé. */
     async _viewerName(currentUser) {
-        const gappUser = await this.userRepository.findAuthByAccessCode(currentUser?.id);
-        if (!gappUser) return null;
-        const [row] = await this.repository.findUserNames([gappUser.user_id]);
+        const [row] = await this.repository.findUserNames([currentUser.id]);
         return row?.name ?? null;
     }
 }

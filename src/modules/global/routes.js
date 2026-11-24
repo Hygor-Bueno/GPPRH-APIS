@@ -2853,18 +2853,20 @@ router.put('/gapp/asset-term-template/:id',
     asyncHandler(gappAssetTermTemplateController.updateTemplate));
 
 // ─── GAPP — Auditoria de ativos / inventário ──────────────────────────────────
-// gapp_active_audit (cabeçalho + local/escopo + JSON inicial/final) e
+// gapp_active_audit (cabeçalho: nome, prazo, filtro de classe, JSON inicial/final),
+// gapp_active_audit_scope (lojas do Protheus: empresa, filial, centro de custo) e
 // gapp_active_audit_temp (uma conferência por ativo enquanto a auditoria está
 // aberta — limpa na finalização/cancelamento, depois de consolidada e conferida
 // no final_data). O cadastro em gapp_active nunca é alterado.
 // Status: 0 ABERTA · 1 EM ANDAMENTO · 2 FINALIZADA · 3 CANCELADA.
-// DDL: gapp-active-audit-deploy.sql / -migration*.sql (fora do repo)
+// Usuários gravados são do sistema (_user.id). DDL: gapp-active-audit-deploy.sql (rev. 4, fora do repo)
 
 /**
  * @route GET /gapp/active-audit
  * @description Histórico de auditorias do grupo de trabalho do usuário, com paginação.
- * Filtros: audit_id, status_audit, unit_id_fk, dep_id_fk, active_id (auditorias que incluíram o ativo),
- * date_start/date_end (AAAA-MM-DD, sobre date_open), page, limit.
+ * Filtros: audit_id, audit_name (trecho), status_audit, branch_code (filial do Protheus no escopo),
+ * active_id (auditorias que incluíram o ativo), date_start/date_end (AAAA-MM-DD, sobre date_open), page, limit.
+ * Cada item traz `scope` (lojas com nomes do Protheus), `date_deadline` (AAAA-MM-DD) e `is_overdue`.
  * @access Requer `GAPP_VIEW_ACTIVE_AUDIT`
  */
 router.get('/gapp/active-audit',
@@ -2908,10 +2910,11 @@ router.get('/gapp/active-audit/:id/report',
 
 /**
  * @route POST /gapp/active-audit
- * @description Abre a auditoria. Body: { unit_id_fk, dep_id_fk?, id_active_class_fk?,
- * active_type_id_fk?, active_ids? }. Com active_ids → só esses (precisam estar no
- * escopo); sem → todos os ativos do grupo no escopo (máx. 1000). O tipo só filtra
- * (não é coluna da auditoria — vem da classe).
+ * @description Abre a auditoria. Body: { audit_name, date_deadline? (AAAA-MM-DD, >= hoje),
+ * scope: [{ company_code, branch_code, cost_center_code? }] (1 a 50 lojas do Protheus, conferidas
+ * lá; sem centro de custo = filial inteira), id_active_class_fk?, active_type_id_fk?, active_ids? }.
+ * O escopo só registra onde a auditoria acontece; os ativos são filtrados por classe/tipo.
+ * Com active_ids → só esses; sem → todos os ativos do grupo na classe/tipo (máx. 1000).
  * @access Requer `GAPP_CREATE_ACTIVE_AUDIT`
  */
 router.post('/gapp/active-audit',

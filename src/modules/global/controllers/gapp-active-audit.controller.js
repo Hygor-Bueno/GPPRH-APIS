@@ -5,11 +5,18 @@ const { GappActiveAuditIdentifyUseCases } = require('../application/gapp/active-
 const { MysqlActiveIdentifierRepository } = require('../infrastructure/gapp/mysql-active-identifier.repository');
 const { GappActiveAuditReportUseCases } = require('../application/gapp/active-audit/gapp-active-audit-report.use-cases');
 const { PuppeteerTaskDossierRenderer } = require('../infrastructure/gtpp/puppeteer-task-dossier.renderer');
+const { ProtheusUseCases } = require('../../protheus/application/protheus.use-cases');
+const { SqlServerProtheusRepository } = require('../../protheus/infrastructure/sqlserver-protheus.repository');
+const { ProtheusGtppScopeNameResolver } = require('../infrastructure/gtpp/protheus-gtpp-scope-name.resolver');
 const { respond } = require('../../../utils/respond');
 
 const useCases = new GappActiveAuditUseCases({
     repository: new MysqlActiveAuditRepository(),
     userRepository: new MysqlGappUserRepository(),
+    // Mesmo tradutor de códigos do escopo de tarefas do GTPP: confere as lojas na abertura e dá os nomes na leitura
+    scopeNameResolver: new ProtheusGtppScopeNameResolver({
+        protheusUseCases: new ProtheusUseCases({ repository: new SqlServerProtheusRepository() }),
+    }),
 });
 
 const identifyUseCases = new GappActiveAuditIdentifyUseCases({
@@ -22,7 +29,6 @@ const identifyUseCases = new GappActiveAuditIdentifyUseCases({
 const reportUseCases = new GappActiveAuditReportUseCases({
     auditUseCases: useCases,
     repository: new MysqlActiveAuditRepository(),
-    userRepository: new MysqlGappUserRepository(),
     renderer: new PuppeteerTaskDossierRenderer({
         errors: {
             busy: { message: 'Há muitos relatórios sendo gerados agora. Tente novamente em instantes.', code: 'GAPP_AUDIT_REPORT_BUSY' },
@@ -59,7 +65,7 @@ async function addUnexpectedAsset(req, res) {
 
 /**
  * GET /gapp/active-audit
- * Query: ?audit_id&status_audit&unit_id_fk&dep_id_fk&active_id&date_start&date_end&page&limit (todos opcionais)
+ * Query: ?audit_id&audit_name&status_audit&branch_code&active_id&date_start&date_end&page&limit (todos opcionais)
  */
 async function listAudits(req, res) {
     const result = await useCases.listAudits(req.query, req.user);
@@ -80,7 +86,8 @@ async function getReview(req, res) {
 
 /**
  * POST /gapp/active-audit
- * Body: { unit_id_fk, dep_id_fk?, id_active_class_fk?, active_type_id_fk?, active_ids? }
+ * Body: { audit_name, date_deadline?, scope: [{ company_code, branch_code, cost_center_code? }],
+ *         id_active_class_fk?, active_type_id_fk?, active_ids? }
  */
 async function openAudit(req, res) {
     const result = await useCases.openAudit(req.body ?? {}, req.user);
