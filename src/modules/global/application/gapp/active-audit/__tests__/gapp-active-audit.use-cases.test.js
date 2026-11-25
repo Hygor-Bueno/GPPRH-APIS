@@ -7,7 +7,8 @@ const CURRENT_USER = { id: 10 };
 const NOW = () => new Date(2026, 10, 24, 10, 0);
 const INITIAL = { assets: [{ active_id: 120, brand: 'Dell' }, { active_id: 121, brand: 'Lenovo' }] };
 const REFS = { unit: { unit_id: 3 }, department: { dep_id: 30, unit_id_fk: 3 }, activeClass: null, activeType: null };
-const AUDIT = { audit_id: 15, status_audit: AUDIT_STATUS.OPEN, initial_data: INITIAL, final_data: null };
+// Aberta pelo próprio usuário (10): finalizar/cancelar/conferir são dele.
+const AUDIT = { audit_id: 15, user_open_id_fk: 10, status_audit: AUDIT_STATUS.OPEN, initial_data: INITIAL, final_data: null };
 const ITEM = {
     active_id_fk: 120, identifier_type: 'SERIAL', identifier_value: 'SN1',
     asset_condition: 'GOOD', lifecycle_status: 'IN_USE', additional_items: { charger: true }, observations: null,
@@ -61,6 +62,7 @@ function makeDeps({ repository = {}, tx = makeTx(), gappUser = GAPP_USER, resolv
         ]),
         createAudit: jest.fn().mockResolvedValue({ insertId: 15 }),
         findScopes: jest.fn().mockResolvedValue([{ audit_id_fk: 15, company_code: '02', branch_code: '0202', cost_center_code: null }]),
+        findAuditUsers: jest.fn().mockResolvedValue([]),
         list: jest.fn().mockResolvedValue({ items: [{ audit_id: 15, status_audit: 0 }], total: 1, page: 1, limit: 20 }),
         findById: jest.fn().mockResolvedValue(AUDIT),
         listItems: jest.fn().mockResolvedValue([]),

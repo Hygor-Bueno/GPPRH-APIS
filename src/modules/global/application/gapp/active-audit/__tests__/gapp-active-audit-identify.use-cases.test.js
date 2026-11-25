@@ -4,7 +4,7 @@ const { AUDIT_STATUS } = require('../../../../domain/gapp/active-audit/active-au
 // _user.id de quem está logado; o gapp_user (user_id 10) só dá o grupo.
 const CURRENT_USER = { id: 1 };
 const INITIAL = { assets: [{ active_id: 120, brand: 'Dell' }] };
-const AUDIT = { audit_id: 15, status_audit: AUDIT_STATUS.IN_PROGRESS, initial_data: INITIAL };
+const AUDIT = { audit_id: 15, user_open_id_fk: 1, status_audit: AUDIT_STATUS.IN_PROGRESS, initial_data: INITIAL };
 const QUERY = { identifier_type: 'PATRIMONIO', identifier_value: ' 000123 ' };
 
 function makeDeps({ repository = {}, owner = { identifier_id: 1, active_id_fk: 120 }, tx } = {}) {
@@ -20,6 +20,14 @@ function makeDeps({ repository = {}, owner = { identifier_id: 1, active_id_fk: 1
     const useCases = new GappActiveAuditIdentifyUseCases({ repository: repo, identifierRepository, userRepository });
     return { useCases, repo, identifierRepository, tx: lockedTx };
 }
+
+describe('acesso', () => {
+    test('incluir não previsto: quem não abriu nem é responsável → 403', async () => {
+        const { useCases, tx } = makeDeps({ repository: { findById: jest.fn().mockResolvedValue({ ...AUDIT, user_open_id_fk: 2 }) } });
+        await expect(useCases.addUnexpected(15, 300, CURRENT_USER)).rejects.toMatchObject({ statusCode: 403, code: 'GAPP_AUDIT_NOT_ASSIGNED' });
+        expect(tx.updateInitialData).not.toHaveBeenCalled();
+    });
+});
 
 describe('identify', () => {
     test('identificador de ativo previsto → in_audit com a fotografia da abertura', async () => {

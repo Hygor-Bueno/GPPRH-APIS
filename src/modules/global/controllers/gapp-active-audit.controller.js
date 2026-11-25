@@ -3,6 +3,7 @@ const { MysqlActiveAuditRepository } = require('../infrastructure/gapp/mysql-act
 const { MysqlGappUserRepository } = require('../infrastructure/gapp/mysql-gapp-user.repository');
 const { GappActiveAuditIdentifyUseCases } = require('../application/gapp/active-audit/gapp-active-audit-identify.use-cases');
 const { MysqlActiveIdentifierRepository } = require('../infrastructure/gapp/mysql-active-identifier.repository');
+const { GappActiveAuditAssignmentUseCases } = require('../application/gapp/active-audit/gapp-active-audit-assignment.use-cases');
 const { GappActiveAuditReportUseCases } = require('../application/gapp/active-audit/gapp-active-audit-report.use-cases');
 const { PuppeteerTaskDossierRenderer } = require('../infrastructure/gtpp/puppeteer-task-dossier.renderer');
 const { ProtheusUseCases } = require('../../protheus/application/protheus.use-cases');
@@ -22,6 +23,12 @@ const useCases = new GappActiveAuditUseCases({
 const identifyUseCases = new GappActiveAuditIdentifyUseCases({
     repository: new MysqlActiveAuditRepository(),
     identifierRepository: new MysqlActiveIdentifierRepository(),
+    userRepository: new MysqlGappUserRepository(),
+});
+
+const assignmentUseCases = new GappActiveAuditAssignmentUseCases({
+    auditUseCases: useCases,
+    repository: new MysqlActiveAuditRepository(),
     userRepository: new MysqlGappUserRepository(),
 });
 
@@ -125,8 +132,21 @@ async function cancelAudit(req, res) {
     return respond.ok(res, result);
 }
 
+/** GET /gapp/active-audit/assignable-users — quem pode ser responsável (mesmo grupo de trabalho). */
+async function listAssignableUsers(req, res) {
+    const result = await assignmentUseCases.listAssignableUsers(req.user);
+    return respond.ok(res, result);
+}
+
+/** PUT /gapp/active-audit/:id/assignees — Body: { user_assigned_ids: number[] } ([] tira todos). Só quem abriu. */
+async function setAssignees(req, res) {
+    const result = await assignmentUseCases.setAssignees(req.params.id, req.body ?? {}, req.user);
+    return respond.ok(res, result);
+}
+
 module.exports = {
     listAudits, getAuditById, getReview, openAudit,
     registerItem, updateItem, finishAudit, cancelAudit,
     identifyAsset, addUnexpectedAsset, downloadAuditReport,
+    listAssignableUsers, setAssignees,
 };

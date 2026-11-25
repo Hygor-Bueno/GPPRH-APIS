@@ -17,6 +17,7 @@
 'use strict';
 
 const { normalizeActiveIds } = require('./active-audit.rules');
+const { normalizeAssignees } = require('./audit-access.rules');
 
 const MAX_NAME_LENGTH = 150;
 const MAX_SCOPE_ROWS = 50;
@@ -133,18 +134,19 @@ function normalizeOpeningIds(value) {
 }
 
 /**
- * Corpo da abertura.
- * @returns {{ value?: { name, deadline, scope, filters, active_ids }, error?: string }}
+ * Corpo da abertura. `requesterId` (quem abre) sai da lista de responsáveis.
+ * @returns {{ value?: { name, deadline, scope, filters, active_ids, assignees }, error?: string }}
  */
-function normalizeOpenAudit(data = {}, now = new Date()) {
+function normalizeOpenAudit(data = {}, now = new Date(), requesterId = null) {
     const name = text(data.audit_name);
     if (!name) return { error: 'Informe o nome da auditoria.' };
     if (name.length > MAX_NAME_LENGTH) return { error: `O nome da auditoria deve ter no máximo ${MAX_NAME_LENGTH} caracteres.` };
-    const steps = [normalizeDeadline(data.date_deadline, now), normalizeScope(data.scope), normalizeFilters(data), normalizeOpeningIds(data.active_ids)];
+    const steps = [normalizeDeadline(data.date_deadline, now), normalizeScope(data.scope), normalizeFilters(data),
+        normalizeOpeningIds(data.active_ids), normalizeAssignees(data.user_assigned_ids, requesterId)];
     const failed = steps.find(step => step.error);
     if (failed) return { error: failed.error };
-    const [deadline, scope, filters, ids] = steps;
-    return { value: { name, deadline: deadline.value, scope: scope.rows, filters: filters.filters, active_ids: ids.ids } };
+    const [deadline, scope, filters, ids, assignees] = steps;
+    return { value: { name, deadline: deadline.value, scope: scope.rows, filters: filters.filters, active_ids: ids.ids, assignees: assignees.value } };
 }
 
 /** Prazo vencido: aberta/em andamento com prazo antes de hoje. */

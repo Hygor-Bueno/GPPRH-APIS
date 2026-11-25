@@ -102,7 +102,7 @@ function renderCover(audit) {
 <h1>${esc(audit.audit_name || `Auditoria nº ${audit.audit_id}`)} <span class="badge">${esc(STATUS[audit.status_audit] ?? '—')}</span></h1>
 <p class="meta"><b>Escopo:</b> ${esc(scope)}</p>
 <p class="meta"><b>Classe:</b> ${esc(cls)} · <b>Prazo:</b> ${esc(deadlineLabel(audit))}</p>
-<p class="meta">Aberta em ${esc(fmtDateTime(audit.date_open))} por ${esc(audit.user_open_name ?? '—')}${esc(closed)}</p>
+<p class="meta">Aberta em ${esc(fmtDateTime(audit.date_open))} por ${esc(audit.user_open_name ?? '—')}${audit.assignees?.length ? ` · responsáveis: ${esc(audit.assignees.map(user => user.name).join(', '))}` : ''}${esc(closed)}</p>
 </section>`;
 }
 

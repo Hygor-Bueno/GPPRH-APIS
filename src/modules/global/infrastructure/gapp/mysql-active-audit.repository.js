@@ -21,8 +21,16 @@ const {
     sqlInsertAuditItem, buildInsertAuditItemParams,
     sqlUpdateAuditItem, buildUpdateAuditItemParams,
     sqlUpdateAuditStatus, sqlCloseAudit, sqlGetFinalData, sqlDeleteAuditItems, sqlUpdateInitialData,
-    sqlMoveActive, sqlDeactivateActives,
+    sqlMoveActive, sqlDeactivateActives, sqlListAssignableUsers, sqlFindAssignableUsers,
+    sqlListAuditUsers, sqlInsertAuditUsers, sqlDeleteAuditUsersExcept, sqlDeleteAllAuditUsers,
 } = require('../../repositories/mysql/gapp-active-audit.queries');
+
+/** Grava a lista de responsáveis: tira quem saiu e inclui quem entrou (quem fica mantém o date_link). */
+async function saveAuditUsers(conn, auditId, userIds) {
+    if (!userIds.length) return conn.query(sqlDeleteAllAuditUsers(), [auditId]);
+    await conn.query(sqlDeleteAuditUsersExcept(), [auditId, userIds]);
+    return conn.query(sqlInsertAuditUsers(), [userIds.map(userId => [auditId, userId])]);
+}
 
 /** O mysql2 já devolve coluna JSON como objeto; o parse cobre driver/config que devolva texto. */
 function parseJson(value) {
@@ -99,13 +107,33 @@ class MysqlActiveAuditRepository extends ActiveAuditRepositoryPort {
         }
     }
 
-    /** Cabeçalho e lojas do escopo na mesma transação: não existe auditoria sem escopo. */
-    createAudit({ audit, scope }) {
+    /** Cabeçalho, lojas do escopo e responsáveis na mesma transação: não existe auditoria sem escopo. */
+    createAudit({ audit, scope, assignees = [] }) {
         return this._inTransaction(async conn => {
             const [result] = await conn.query(sqlInsertAudit(), buildInsertAuditParams(audit));
             await conn.query(sqlInsertAuditScope(), [buildAuditScopeRows(result.insertId, scope)]);
+            if (assignees.length) await saveAuditUsers(conn, result.insertId, assignees);
             return { insertId: result.insertId };
         });
+    }
+
+    async listAssignableUsers(workGroupFk) {
+        const [rows] = await this._query(sqlListAssignableUsers(), [workGroupFk]);
+        return rows;
+    }
+
+    /** Ids elegíveis entre os informados. */
+    async findAssignableUsers(userIds, workGroupFk) {
+        if (!userIds.length) return [];
+        const [rows] = await this._query(sqlFindAssignableUsers(), [workGroupFk, userIds]);
+        return rows.map(row => Number(row.user_id));
+    }
+
+    /** Responsáveis (nome e foto) das auditorias informadas. */
+    async findAuditUsers(auditIds) {
+        if (!auditIds.length) return [];
+        const [rows] = await this._query(sqlListAuditUsers(), [auditIds]);
+        return rows;
     }
 
     /** Lojas (códigos do Protheus) das auditorias informadas. */
@@ -202,6 +230,11 @@ class MysqlActiveAuditRepository extends ActiveAuditRepositoryPort {
             async updateItem(data) {
                 const [result] = await conn.query(sqlUpdateAuditItem(), buildUpdateAuditItemParams(auditId, data));
                 return { updated: result.affectedRows };
+            },
+
+            /** Troca a lista de responsáveis (vazia = nenhum). */
+            async saveAssignees(userIds) {
+                await saveAuditUsers(conn, auditId, userIds);
             },
 
             async updateStatus(from, to) {

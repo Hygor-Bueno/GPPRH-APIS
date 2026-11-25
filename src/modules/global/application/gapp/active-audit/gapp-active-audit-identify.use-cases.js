@@ -19,6 +19,7 @@ const { normalizeIdentifier } = require('../active-identifier/gapp-active-identi
 const {
     lockedStatusMessage, toSnapshotAsset, toUnexpectedAsset, appendUnexpectedAsset, MAX_ACTIVES_PER_AUDIT,
 } = require('../../../domain/gapp/active-audit/active-audit.rules');
+const { ACCESS_ERROR, canRegister, NOT_ASSIGNED_MESSAGE } = require('../../../domain/gapp/active-audit/audit-access.rules');
 
 const findInAudit = (initialData, activeId) =>
     (initialData?.assets ?? []).find(asset => Number(asset.active_id) === Number(activeId)) ?? null;
@@ -70,9 +71,10 @@ class GappActiveAuditIdentifyUseCases {
         return { in_audit: Boolean(planned), asset, identifier: { identifier_type: value.type, identifier_value: value.value } };
     }
 
-    /** Inclui o ativo como não previsto e devolve a fotografia gravada. */
+    /** Inclui o ativo como não previsto (só quem abriu ou o responsável) e devolve a fotografia gravada. */
     async addUnexpected(auditId, activeId, currentUser) {
         const { gappUser, audit } = await this._scope(auditId, currentUser);
+        if (!canRegister(audit, currentUser.id)) throw new AppError(NOT_ASSIGNED_MESSAGE, 403, { code: ACCESS_ERROR.NOT_ASSIGNED });
         const row = await this._findActive(activeId, gappUser.work_group_fk);
         const asset = toUnexpectedAsset(row, currentUser.id); // _user.id de quem incluiu
 

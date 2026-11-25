@@ -141,6 +141,8 @@ const AUDIT_FROM = `
 const AUDIT_SUMMARY_COLUMNS = `
     au.audit_id, au.audit_name, au.user_open_id_fk, uopen.name AS user_open_name,
     au.user_finish_id_fk, ufinish.name AS user_finish_name,
+    (SELECT GROUP_CONCAT(aus.user_id_fk) FROM global.gapp_active_audit_user aus
+      WHERE aus.audit_id_fk = au.audit_id) AS assignee_ids,
     au.id_active_class_fk, acl.desc_active_class, acl.active_type_id_fk, aty.desc_active_type,
     au.quantity_active, au.date_open, au.date_deadline, au.date_finish, au.status_audit,
     CASE WHEN au.status_audit IN (2, 3)
@@ -373,6 +375,53 @@ function sqlUpdateInitialData() {
     return 'UPDATE global.gapp_active_audit SET initial_data = ?, quantity_active = ? WHERE audit_id = ? AND status_audit IN (0, 1)';
 }
 
+// ─── Responsável pela execução ──────────────────────────────────────
+
+/**
+ * Quem pode ser responsável: usuário ativo do sistema que está no GAPP no
+ * grupo de trabalho informado (_user.id = gapp_user.access_code). `file_id` é
+ * a foto, como no vínculo de usuários das tarefas do GTPP.
+ * Params: [work_group_fk]
+ */
+const ASSIGNABLE_USERS_FROM = `
+    FROM global._user u
+    JOIN global.gapp_user g  ON g.access_code = u.id
+    JOIN global.gapp_level l ON l.level_id = g.level_id_fk
+    WHERE l.group_id_fk = ? AND u.ad_status = 'active'
+`;
+
+function sqlListAssignableUsers() {
+    return `SELECT DISTINCT u.id AS user_id, u.name, u.file_id ${ASSIGNABLE_USERS_FROM} ORDER BY u.name`;
+}
+
+/** Quais dos ids são elegíveis? Params: [work_group_fk, userIds] */
+function sqlFindAssignableUsers() {
+    return `SELECT DISTINCT u.id AS user_id ${ASSIGNABLE_USERS_FROM} AND u.id IN (?)`;
+}
+
+/** Responsáveis de várias auditorias, com nome e foto. Params: [auditIds] */
+function sqlListAuditUsers() {
+    return `
+        SELECT aus.audit_id_fk, u.id AS user_id, u.name, u.file_id
+        FROM global.gapp_active_audit_user aus
+        JOIN global._user u ON u.id = aus.user_id_fk
+        WHERE aus.audit_id_fk IN (?)
+        ORDER BY aus.audit_id_fk, u.name
+    `;
+}
+
+/**
+ * Responsáveis num INSERT só; quem já estava fica como está (mantém o date_link).
+ * Sem INSERT IGNORE: ele também calaria erro de FK. Params: [[[audit_id, user_id], ...]]
+ */
+const sqlInsertAuditUsers = () => `
+    INSERT INTO global.gapp_active_audit_user (audit_id_fk, user_id_fk) VALUES ?
+    ON DUPLICATE KEY UPDATE user_id_fk = user_id_fk`;
+
+/** Tira os responsáveis que não estão mais na lista. Params: [audit_id, keepIds] (lista vazia: use sqlDeleteAllAuditUsers) */
+const sqlDeleteAuditUsersExcept = () => 'DELETE FROM global.gapp_active_audit_user WHERE audit_id_fk = ? AND user_id_fk NOT IN (?)';
+const sqlDeleteAllAuditUsers = () => 'DELETE FROM global.gapp_active_audit_user WHERE audit_id_fk = ?';
+
 // ─── Correções no cadastro (opcionais, na finalização) ──────────────
 // Só os dois campos — o cadastro completo passa pela sp_gapp_save_active_v3.
 
@@ -432,5 +481,11 @@ module.exports = {
     sqlUpdateInitialData,
     sqlMoveActive,
     sqlDeactivateActives,
+    sqlListAssignableUsers,
+    sqlFindAssignableUsers,
+    sqlListAuditUsers,
+    sqlInsertAuditUsers,
+    sqlDeleteAuditUsersExcept,
+    sqlDeleteAllAuditUsers,
     sqlDeleteAuditItems,
 };

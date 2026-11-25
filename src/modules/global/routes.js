@@ -2860,7 +2860,8 @@ router.put('/gapp/asset-term-template/:id',
 // aberta — limpa na finalização/cancelamento, depois de consolidada e conferida
 // no final_data). O cadastro em gapp_active nunca é alterado.
 // Status: 0 ABERTA · 1 EM ANDAMENTO · 2 FINALIZADA · 3 CANCELADA.
-// Usuários gravados são do sistema (_user.id). DDL: gapp-active-audit-deploy.sql (rev. 4, fora do repo)
+// Usuários gravados são do sistema (_user.id). DDL: gapp-active-audit-deploy.sql (rev. 6, fora do repo)
+// Finalizar/cancelar: só quem abriu. Conferir: quem abriu e os responsáveis (gapp_active_audit_user).
 
 /**
  * @route GET /gapp/active-audit
@@ -2875,6 +2876,17 @@ router.get('/gapp/active-audit',
     canAll(['GAPP_VIEW_ACTIVE_AUDIT']),
     validate(listActiveAuditQuerySchema, 'query'),
     asyncHandler(gappActiveAuditController.listAudits));
+
+/**
+ * @route GET /gapp/active-audit/assignable-users
+ * @description Usuários ativos do grupo de trabalho que podem ser responsáveis por uma auditoria.
+ * Fica antes de /:id para não ser capturada por ela.
+ * @access Requer `GAPP_VIEW_ACTIVE_AUDIT`
+ */
+router.get('/gapp/active-audit/assignable-users',
+    authMiddleware,
+    canAll(['GAPP_VIEW_ACTIVE_AUDIT']),
+    asyncHandler(gappActiveAuditController.listAssignableUsers));
 
 /**
  * @route GET /gapp/active-audit/:id
@@ -2916,6 +2928,7 @@ router.get('/gapp/active-audit/:id/report',
  * lá; sem centro de custo = filial inteira), id_active_class_fk?, active_type_id_fk?, active_ids? }.
  * O escopo só registra onde a auditoria acontece; os ativos são filtrados por classe/tipo.
  * Com active_ids → só esses; sem → todos os ativos do grupo na classe/tipo (máx. 1000).
+ * user_assigned_ids? (lista de _user.id do grupo) = responsáveis, que conferem junto.
  * @access Requer `GAPP_CREATE_ACTIVE_AUDIT`
  */
 router.post('/gapp/active-audit',
@@ -2956,6 +2969,7 @@ router.post('/gapp/active-audit/:id/assets',
  * asset_condition (GOOD|REGULAR|BAD|UNUSABLE),
  * lifecycle_status (IN_USE|IN_STOCK|IN_MAINTENANCE|DISCARDED), additional_items?, observations?,
  * is_transfer?, transfer_reason?, transfer_unit_id_fk?, transfer_dep_id_fk? }
+ * Só quem abriu e os responsáveis registram (403 `GAPP_AUDIT_NOT_ASSIGNED`).
  * @access Requer `GAPP_REGISTER_ACTIVE_AUDIT`
  */
 router.post('/gapp/active-audit/:id/items',
@@ -2982,7 +2996,7 @@ router.put('/gapp/active-audit/:id/items/:activeId',
  * corrige o cadastro na mesma transação: used_in dos transferidos (só se o cadastro
  * ainda estiver na origem) e status_active = 0 dos descartados; o resultado fica em
  * final_data.corrections ({ applied, moved, skipped, deactivated }).
- * @access Requer `GAPP_FINISH_ACTIVE_AUDIT`
+ * @access Requer `GAPP_FINISH_ACTIVE_AUDIT` e ser quem abriu (403 `GAPP_AUDIT_NOT_REQUESTER`)
  */
 router.patch('/gapp/active-audit/:id/finish',
     authMiddleware,
@@ -2994,13 +3008,26 @@ router.patch('/gapp/active-audit/:id/finish',
  * @route PATCH /gapp/active-audit/:id/cancel
  * @description Cancela a auditoria. Body: { reason? }. As conferências vão para o
  * final_data e a temporária é limpa (mesma transação).
- * @access Requer `GAPP_FINISH_ACTIVE_AUDIT`
+ * @access Requer `GAPP_FINISH_ACTIVE_AUDIT` e ser quem abriu (403 `GAPP_AUDIT_NOT_REQUESTER`)
  */
 router.patch('/gapp/active-audit/:id/cancel',
     authMiddleware,
     canAll(['GAPP_FINISH_ACTIVE_AUDIT']),
     validate(cancelActiveAuditSchema),
     asyncHandler(gappActiveAuditController.cancelAudit));
+
+/**
+ * @route PUT /gapp/active-audit/:id/assignees
+ * @description Grava a lista de responsáveis (aberta ou em andamento). Body:
+ * { user_assigned_ids: number[] } — usuários ativos do mesmo grupo (até 50); [] tira todos.
+ * Quem abriu é ignorado na lista (já confere). 403 `GAPP_AUDIT_NOT_REQUESTER` se não for
+ * quem abriu; 409 `GAPP_AUDIT_LOCKED` se encerrada; 400 `GAPP_AUDIT_INVALID_ASSIGNEE`.
+ * @access Requer `GAPP_CREATE_ACTIVE_AUDIT` (e ser quem abriu)
+ */
+router.put('/gapp/active-audit/:id/assignees',
+    authMiddleware,
+    canAll(['GAPP_CREATE_ACTIVE_AUDIT']),
+    asyncHandler(gappActiveAuditController.setAssignees));
 
 // ─── MGPP ─ Rotas do modulo metas gerentes ─────────────────
 

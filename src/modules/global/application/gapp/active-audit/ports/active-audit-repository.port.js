@@ -29,7 +29,8 @@ class ActiveAuditRepositoryPort {
      * Cabeçalho + lojas do escopo, na mesma transação.
      * @param {{ audit: { audit_name: string, date_deadline: string|null, user_open_id_fk: number,
      *           id_active_class_fk?: number|null, initial_data: object, quantity_active: number },
-     *           scope: Array<{ company_code: string, branch_code: string, cost_center_code: string|null }> }} data
+     *           scope: Array<{ company_code: string, branch_code: string, cost_center_code: string|null }>,
+     *           assignees?: number[] }} data - `assignees` = responsáveis (_user.id)
      * @returns {Promise<{ insertId: number }>}
      */
     createAudit(data) { throw new Error('Not implemented'); }
@@ -40,6 +41,15 @@ class ActiveAuditRepositoryPort {
      * @returns {Promise<Array<{ audit_id_fk: number, company_code: string, branch_code: string, cost_center_code: string|null }>>}
      */
     findScopes(auditIds) { throw new Error('Not implemented'); }
+
+    /** Usuários ativos do grupo que podem ser responsáveis. @returns {Promise<Array<{ user_id, name, file_id }>>} */
+    listAssignableUsers(workGroupFk) { throw new Error('Not implemented'); }
+
+    /** Quais dos ids podem ser responsáveis (ativos e do grupo)? @returns {Promise<number[]>} */
+    findAssignableUsers(userIds, workGroupFk) { throw new Error('Not implemented'); }
+
+    /** Responsáveis das auditorias. @returns {Promise<Array<{ audit_id_fk, user_id, name, file_id }>>} */
+    findAuditUsers(auditIds) { throw new Error('Not implemented'); }
 
     /** Nomes do `_user`. @param {number[]} userIds @returns {Promise<Array<{ user_id: number, name: string }>>} */
     findUserNames(userIds) { throw new Error('Not implemented'); }
@@ -70,7 +80,7 @@ class ActiveAuditRepositoryPort {
      * `findItemByIdentifier(type, value, ignoreActiveId)` procura em todas as
      * auditorias abertas e finalizadas e devolve `{ active_id_fk, audit_id_fk }`.
      * `tx` expõe: findItem, findActiveLocation, findRefs, findItemByIdentifier,
-     * insertItem, updateItem, updateStatus, listItems, findIdentifierHistory,
+     * insertItem, updateItem, updateStatus, saveAssignees, listItems, findIdentifierHistory,
      * closeAudit, getFinalData (relê final_data), deleteItems (limpa a temporária)
      * e updateInitialData (inclui ativo não previsto; atualiza quantity_active).
      * `applyCorrections({ transfers, discarded, workGroupFk })` altera o cadastro

@@ -5,6 +5,9 @@
  *   são sempre o `_user.id` do usuário autenticado (`req.user.id`) — nunca do
  *   body. O `gapp_user` só serve para achar o grupo de trabalho.
  * - Grupo: só ativos e auditorias do `work_group_fk` do usuário.
+ * - Acesso (audit-access.rules): quem abriu finaliza, cancela e muda os
+ *   responsáveis (vários, `gapp_active_audit_user`); quem abriu e os
+ *   responsáveis conferem; o grupo todo vê.
  * - Abertura: nome, prazo opcional e escopo = lojas do Protheus (empresa,
  *   filial, centro de custo opcional), conferidas no Protheus. O escopo só
  *   registra onde a auditoria acontece; os ativos são filtrados por
@@ -31,6 +34,9 @@ const {
     buildReview, buildCorrections, buildFinalData, buildCanceledData, verifyFinalData, itemsFromFinalData,
 } = require('../../../domain/gapp/active-audit/active-audit.rules');
 const { normalizeOpenAudit, scopeNameError, isOverdue, dateKey } = require('../../../domain/gapp/active-audit/audit-opening.rules');
+const {
+    ACCESS_ERROR, assigneeIds, isRequester, canRegister, notRequesterMessage, NOT_ASSIGNED_MESSAGE,
+} = require('../../../domain/gapp/active-audit/audit-access.rules');
 
 /** Pares (tipo, valor) dos itens com identificador — para buscar conflitos no histórico. */
 const identifierPairs = items => items
@@ -59,16 +65,32 @@ function identifierInUseError(other, auditId) {
 }
 
 /**
- * Cabeçalho para a API: rótulo do status e prazo vencido. O prazo (DATE) sai
- * como 'AAAA-MM-DD' — como Date viraria meia-noite em UTC no JSON e o front
- * mostraria o dia anterior.
+ * Cabeçalho para a API: rótulo do status, prazo vencido e o que QUEM PEDIU
+ * pode fazer (`is_requester`: finalizar/cancelar/atribuir; `can_register`:
+ * conferir). O prazo (DATE) sai como 'AAAA-MM-DD' — como Date viraria
+ * meia-noite em UTC no JSON e o front mostraria o dia anterior.
  */
-const present = (audit, now) => audit && ({
+const present = (audit, now, userId) => audit && ({
     ...audit,
     date_deadline: dateKey(audit.date_deadline),
     status_label: AUDIT_STATUS_LABEL[audit.status_audit] ?? null,
     is_overdue: isOverdue(audit, now),
+    assignee_ids: assigneeIds(audit),
+    is_requester: isRequester(audit, userId),
+    can_register: canRegister(audit, userId),
 });
+
+/** Só quem abriu: finalizar, cancelar, trocar o responsável. */
+function assertRequester(audit, currentUser, action) {
+    if (isRequester(audit, currentUser?.id)) return;
+    throw new AppError(notRequesterMessage(action), 403, { code: ACCESS_ERROR.NOT_REQUESTER });
+}
+
+/** Conferir: quem abriu ou o responsável. */
+function assertCanRegister(audit, currentUser) {
+    if (canRegister(audit, currentUser?.id)) return;
+    throw new AppError(NOT_ASSIGNED_MESSAGE, 403, { code: ACCESS_ERROR.NOT_ASSIGNED });
+}
 
 /** Escolhidos que não vieram: não existem, são de outro grupo ou fora da classe/tipo. */
 function assertChosenFound(rows, activeIds) {
@@ -152,10 +174,10 @@ class GappActiveAuditUseCases {
      */
     async openAudit(data, currentUser) {
         const gappUser = await this._resolveGappUser(currentUser);
-        const { value, error } = normalizeOpenAudit(data, this.now());
+        const { value, error } = normalizeOpenAudit(data, this.now(), currentUser.id);
         if (error) throw new AppError(error, 400);
 
-        await this._assertOpeningRefs(value);
+        await this._assertOpeningRefs(value, gappUser);
         const rows = await this._activesForAudit(value, gappUser);
         const initialData = { filters: value.filters, assets: rows.map(toSnapshotAsset) };
         const { insertId } = await this.repository.createAudit({
@@ -168,18 +190,31 @@ class GappActiveAuditUseCases {
                 quantity_active: rows.length,
             },
             scope: value.scope,
+            assignees: value.assignees,
         });
         return this.getAuditById(insertId, currentUser);
     }
 
-    /** @private Classe/tipo no GAPP e lojas no Protheus (código sem nome = não existe). */
-    async _assertOpeningRefs({ filters, scope }) {
+    /** @private Classe/tipo no GAPP, lojas no Protheus (código sem nome = não existe) e responsáveis do grupo. */
+    async _assertOpeningRefs({ filters, scope, assignees }, gappUser) {
         const [refs, named] = await Promise.all([
             this.repository.findRefs(filters),
             this.scopeNameResolver.resolve(scope),
+            this.assertAssignable(assignees, gappUser),
         ]);
         const message = validateAuditScope(filters, refs) ?? scopeNameError(named);
         if (message) throw new AppError(message, 400, { code: 'GAPP_AUDIT_INVALID_SCOPE' });
+    }
+
+    /** Responsáveis precisam ser usuários ativos do grupo de trabalho — senão nem veriam a auditoria. */
+    async assertAssignable(userIds, gappUser) {
+        if (!userIds.length) return;
+        const found = new Set(await this.repository.findAssignableUsers(userIds, gappUser.work_group_fk));
+        const invalid = userIds.filter(id => !found.has(id));
+        if (!invalid.length) return;
+        throw new AppError('Responsável inválido: escolha usuários ativos do seu grupo de trabalho no GAPP.', 400, {
+            code: ACCESS_ERROR.INVALID_ASSIGNEE, details: { user_ids: invalid },
+        });
     }
 
     /** @private Ativos dos filtros (sem lista: busca um a mais que o teto para saber se estourou). */
@@ -202,19 +237,26 @@ class GappActiveAuditUseCases {
         const gappUser = await this._resolveGappUser(currentUser);
         const result = await this.repository.list({ ...filters, work_group_fk: gappUser.work_group_fk });
         const now = this.now();
-        return { ...result, items: await this._withScope(result.items.map(audit => present(audit, now))) };
+        return { ...result, items: await this._withScope(result.items.map(audit => present(audit, now, currentUser.id))) };
     }
 
     /**
-     * @private Lojas do escopo de cada auditoria, com os nomes do Protheus.
-     * Uma consulta para a página inteira; nome que o Protheus não devolver fica null.
+     * @private Lojas do escopo (com os nomes do Protheus) e responsáveis (nome e
+     * foto) de cada auditoria. Uma consulta de cada para a página inteira; nome
+     * que o Protheus não devolver fica null.
      */
     async _withScope(audits) {
         if (!audits.length) return audits;
-        const rows = await this.scopeNameResolver.resolve(await this.repository.findScopes(audits.map(audit => audit.audit_id)));
+        const ids = audits.map(audit => audit.audit_id);
+        const [scopes, users] = await Promise.all([
+            this.repository.findScopes(ids).then(rows => this.scopeNameResolver.resolve(rows)),
+            this.repository.findAuditUsers(ids),
+        ]);
+        const ofAudit = (rows, audit) => rows.filter(row => Number(row.audit_id_fk) === Number(audit.audit_id));
         return audits.map(audit => ({
             ...audit,
-            scope: rows.filter(row => Number(row.audit_id_fk) === Number(audit.audit_id)),
+            scope: ofAudit(scopes, audit),
+            assignees: ofAudit(users, audit).map(({ user_id, name, file_id }) => ({ user_id, name, file_id })),
         }));
     }
 
@@ -229,7 +271,7 @@ class GappActiveAuditUseCases {
         const items = isClosed(audit.status_audit)
             ? await this._closedItems(audit)
             : await this.repository.listItems(audit.audit_id);
-        const [withScope] = await this._withScope([present(audit, this.now())]);
+        const [withScope] = await this._withScope([present(audit, this.now(), currentUser.id)]);
         return { ...withScope, items };
     }
 
@@ -285,6 +327,7 @@ class GappActiveAuditUseCases {
     async _saveItem(auditId, data, currentUser, { isUpdate }) {
         const gappUser = await this._resolveGappUser(currentUser);
         const audit = await this._getScopedAudit(auditId, gappUser);
+        assertCanRegister(audit, currentUser);
         const activeId = Number(data.active_id_fk);
 
         const expected = (audit.initial_data?.assets ?? []).some(asset => Number(asset.active_id) === activeId);
@@ -398,6 +441,7 @@ class GappActiveAuditUseCases {
     async finishAudit(auditId, data, currentUser) {
         const gappUser = await this._resolveGappUser(currentUser);
         const audit = await this._getScopedAudit(auditId, gappUser);
+        assertRequester(audit, currentUser, 'finalizá-la');
         const apply = data?.apply_corrections === true;
 
         await this.repository.runLocked(audit.audit_id, async tx => {
@@ -424,6 +468,7 @@ class GappActiveAuditUseCases {
     async cancelAudit(auditId, data, currentUser) {
         const gappUser = await this._resolveGappUser(currentUser);
         const audit = await this._getScopedAudit(auditId, gappUser);
+        assertRequester(audit, currentUser, 'cancelá-la');
 
         await this.repository.runLocked(audit.audit_id, async tx => {
             if (!tx.audit) throw new AppError('Auditoria não encontrada.', 404);
