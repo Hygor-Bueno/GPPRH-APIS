@@ -373,6 +373,23 @@ function sqlUpdateInitialData() {
     return 'UPDATE global.gapp_active_audit SET initial_data = ?, quantity_active = ? WHERE audit_id = ? AND status_audit IN (0, 1)';
 }
 
+// ─── Correções no cadastro (opcionais, na finalização) ──────────────
+// Só os dois campos — o cadastro completo passa pela sp_gapp_save_active_v3.
+
+/**
+ * Setor atual do ativo = destino da transferência, só se o cadastro ainda
+ * estiver na origem registrada (`<=>`: origem NULL = ativo sem setor).
+ * Params: [to_dep_id, active_id, work_group_fk, from_dep_id]
+ */
+function sqlMoveActive() {
+    return 'UPDATE global.gapp_active SET used_in = ? WHERE active_id = ? AND work_group_fk = ? AND used_in <=> ?';
+}
+
+/** Descartados ficam inativos (status_active = 0). Params: [activeIds, work_group_fk] */
+function sqlDeactivateActives() {
+    return 'UPDATE global.gapp_active SET status_active = 0 WHERE active_id IN (?) AND work_group_fk = ?';
+}
+
 /** Relê o que foi gravado (mesma transação) para conferir antes de limpar a temporária. */
 function sqlGetFinalData() {
     return 'SELECT status_audit, final_data FROM global.gapp_active_audit WHERE audit_id = ?';
@@ -413,5 +430,7 @@ module.exports = {
     sqlCloseAudit,
     sqlGetFinalData,
     sqlUpdateInitialData,
+    sqlMoveActive,
+    sqlDeactivateActives,
     sqlDeleteAuditItems,
 };

@@ -514,6 +514,12 @@ const addActiveAuditAssetSchema = {
     active_id: { type: 'number', required: true, min: 1 },
 };
 
+// Finalização: `apply_corrections` = aplicar no cadastro (gapp_active) as
+// transferências (used_in) e os descartes (status_active = 0) da conferência.
+const finishActiveAuditSchema = {
+    apply_corrections: { type: 'boolean' },
+};
+
 const cancelActiveAuditSchema = {
     reason: { type: 'string', maxLength: 500 },
 };
@@ -574,6 +580,7 @@ module.exports = {
     registerActiveAuditItemSchema,
     updateActiveAuditItemSchema,
     cancelActiveAuditSchema,
+    finishActiveAuditSchema,
     identifyActiveAuditQuerySchema,
     addActiveAuditAssetSchema,
     listActiveAuditQuerySchema

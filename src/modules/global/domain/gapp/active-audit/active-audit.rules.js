@@ -371,6 +371,30 @@ function toFinalItem(item) {
 
 const toFinalItems = items => items.map(toFinalItem);
 
+/**
+ * Correções que a finalização pode aplicar no cadastro (`gapp_active`), a
+ * partir das conferências — só se quem finaliza escolher:
+ * - transferido → `used_in` passa a ser o setor de destino;
+ * - ciclo de vida DISCARDED → `status_active = 0` (inativo).
+ * `from_dep_id` é a origem gravada na conferência: a atualização só acontece
+ * se o cadastro ainda estiver nela (quem mudou depois não é atropelado).
+ */
+function buildCorrections(items) {
+    const transfers = items
+        .filter(item => Number(item.is_transfer) === 1 && item.transfer_dep_id_fk != null)
+        .map(item => ({
+            active_id: Number(item.active_id_fk),
+            from_dep_id: item.transfer_origin_dep_id_fk ?? null,
+            from_dep_path: item.transfer_origin_dep_path ?? item.transfer_origin_dep_name ?? null,
+            to_dep_id: Number(item.transfer_dep_id_fk),
+            to_dep_path: item.transfer_dep_path ?? item.transfer_dep_name ?? null,
+        }));
+    const discarded = items
+        .filter(item => item.lifecycle_status === 'DISCARDED')
+        .map(item => ({ active_id: Number(item.active_id_fk) }));
+    return { transfers, discarded };
+}
+
 /** Contagem por valor, com todos os valores conhecidos zerados. */
 function countBy(items, field, known) {
     const counts = Object.fromEntries(known.map(value => [value, 0]));
@@ -445,6 +469,7 @@ function buildReview(initialData, items, history = []) {
         duplicates,
         divergences,
         has_divergence: divergences.length > 0,
+        corrections: buildCorrections(items),
         items: toFinalItems(items),
     };
 }
@@ -594,6 +619,7 @@ module.exports = {
     findDuplicateIdentifiers,
     findIdentifierConflicts,
     buildReview,
+    buildCorrections,
     buildFinalData,
     buildCanceledData,
     verifyFinalData,

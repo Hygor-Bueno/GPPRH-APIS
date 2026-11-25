@@ -110,9 +110,12 @@ async function updateItem(req, res) {
     return respond.ok(res, result);
 }
 
-/** PATCH /gapp/active-audit/:id/finish — consolida, confere e limpa a temporária. */
+/**
+ * PATCH /gapp/active-audit/:id/finish — Body: { apply_corrections? }
+ * Consolida, confere e limpa a temporária; com `apply_corrections`, corrige o cadastro dos ativos.
+ */
 async function finishAudit(req, res) {
-    const result = await useCases.finishAudit(req.params.id, req.user);
+    const result = await useCases.finishAudit(req.params.id, req.body ?? {}, req.user);
     return respond.ok(res, result);
 }
 

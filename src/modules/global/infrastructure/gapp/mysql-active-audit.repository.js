@@ -21,6 +21,7 @@ const {
     sqlInsertAuditItem, buildInsertAuditItemParams,
     sqlUpdateAuditItem, buildUpdateAuditItemParams,
     sqlUpdateAuditStatus, sqlCloseAudit, sqlGetFinalData, sqlDeleteAuditItems, sqlUpdateInitialData,
+    sqlMoveActive, sqlDeactivateActives,
 } = require('../../repositories/mysql/gapp-active-audit.queries');
 
 /** O mysql2 já devolve coluna JSON como objeto; o parse cobre driver/config que devolva texto. */
@@ -231,6 +232,22 @@ class MysqlActiveAuditRepository extends ActiveAuditRepositoryPort {
             async getFinalData() {
                 const [rows] = await conn.query(sqlGetFinalData(), [auditId]);
                 return rows[0] ? parseJson(rows[0].final_data) : null;
+            },
+
+            /**
+             * Correções no cadastro, na mesma transação da finalização (se ela
+             * falhar, voltam junto). Transferência cuja origem mudou é pulada.
+             */
+            async applyCorrections({ transfers, discarded, workGroupFk }) {
+                const moved = [];
+                const skipped = [];
+                for (const move of transfers) {
+                    const [result] = await conn.query(sqlMoveActive(), [move.to_dep_id, move.active_id, workGroupFk, move.from_dep_id]);
+                    (result.affectedRows ? moved : skipped).push(move.active_id);
+                }
+                const deactivated = discarded.map(item => item.active_id);
+                if (deactivated.length) await conn.query(sqlDeactivateActives(), [deactivated, workGroupFk]);
+                return { moved, skipped, deactivated };
             },
 
             async deleteItems() {

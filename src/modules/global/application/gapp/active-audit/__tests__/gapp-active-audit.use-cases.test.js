@@ -37,6 +37,9 @@ function makeTx(overrides = {}) {
         listItems: jest.fn().mockResolvedValue([]),
         findIdentifierHistory: jest.fn().mockResolvedValue([]),
         closeAudit: jest.fn().mockResolvedValue({ updated: 1 }),
+        applyCorrections: jest.fn(async ({ transfers, discarded }) => ({
+            moved: transfers.map(move => move.active_id), skipped: [], deactivated: discarded.map(item => item.active_id),
+        })),
         // Por padrão o banco devolve exatamente o que foi gravado.
         getFinalData: jest.fn(function getFinalData() {
             return Promise.resolve(JSON.parse(JSON.stringify(this.closeAudit.mock.calls.at(-1)[0].finalData)));
@@ -314,7 +317,7 @@ describe('GappActiveAuditUseCases', () => {
         test('consolida, confere o gravado, fecha como FINALIZADA e limpa a temporária', async () => {
             const tx = makeTx({ listItems: jest.fn().mockResolvedValue([ITEM]) });
             const { useCases } = makeDeps({ tx });
-            await useCases.finishAudit(15, CURRENT_USER);
+            await useCases.finishAudit(15, {}, CURRENT_USER);
 
             expect(tx.findIdentifierHistory).toHaveBeenCalledWith([['SERIAL', 'SN1']]);
             const { finalData, userId, status } = tx.closeAudit.mock.calls[0][0];
@@ -326,13 +329,40 @@ describe('GappActiveAuditUseCases', () => {
             expect(tx.deleteItems).toHaveBeenCalled();
         });
 
+        test('sem apply_corrections: não mexe no cadastro e registra que não aplicou', async () => {
+            const tx = makeTx({ listItems: jest.fn().mockResolvedValue([{ ...ITEM, lifecycle_status: 'DISCARDED' }]) });
+            const { useCases } = makeDeps({ tx });
+            await useCases.finishAudit(15, { apply_corrections: 'true' }, CURRENT_USER);
+            expect(tx.applyCorrections).not.toHaveBeenCalled();
+            expect(tx.closeAudit.mock.calls[0][0].finalData.corrections).toEqual({ applied: false });
+        });
+
+        test('com apply_corrections: transferido muda de setor e descartado fica inativo, antes de fechar', async () => {
+            const transferred = {
+                ...ITEM, active_id_fk: 121, identifier_value: 'SN2', is_transfer: 1, transfer_reason: 'x',
+                transfer_origin_dep_id_fk: 30, transfer_dep_id_fk: 40, transfer_dep_path: 'Frugal > Loja > TI',
+            };
+            const items = [{ ...ITEM, lifecycle_status: 'DISCARDED' }, transferred];
+            const tx = makeTx({ listItems: jest.fn().mockResolvedValue(items) });
+            const { useCases } = makeDeps({ tx });
+            await useCases.finishAudit(15, { apply_corrections: true }, CURRENT_USER);
+            expect(tx.applyCorrections).toHaveBeenCalledWith({
+                transfers: [expect.objectContaining({ active_id: 121, from_dep_id: 30, to_dep_id: 40 })],
+                discarded: [{ active_id: 120 }],
+                workGroupFk: 5,
+            });
+            expect(tx.applyCorrections.mock.invocationCallOrder[0]).toBeLessThan(tx.closeAudit.mock.invocationCallOrder[0]);
+            expect(tx.closeAudit.mock.calls[0][0].finalData.corrections)
+                .toEqual({ applied: true, moved: [121], skipped: [], deactivated: [120] });
+        });
+
         test('final_data gravado diferente → erro e NÃO limpa (rollback)', async () => {
             const tx = makeTx({
                 listItems: jest.fn().mockResolvedValue([ITEM]),
                 getFinalData: jest.fn().mockResolvedValue({ items: [] }),
             });
             const { useCases } = makeDeps({ tx });
-            await expect(useCases.finishAudit(15, CURRENT_USER))
+            await expect(useCases.finishAudit(15, {}, CURRENT_USER))
                 .rejects.toMatchObject({ statusCode: 500, code: 'GAPP_AUDIT_FINAL_DATA_MISMATCH' });
             expect(tx.deleteItems).not.toHaveBeenCalled();
         });
@@ -343,14 +373,14 @@ describe('GappActiveAuditUseCases', () => {
                 deleteItems: jest.fn().mockResolvedValue({ deleted: 2 }),
             });
             const { useCases } = makeDeps({ tx });
-            await expect(useCases.finishAudit(15, CURRENT_USER))
+            await expect(useCases.finishAudit(15, {}, CURRENT_USER))
                 .rejects.toMatchObject({ code: 'GAPP_AUDIT_CLEANUP_MISMATCH' });
         });
 
         test('identificador repetido na auditoria impede a finalização', async () => {
             const tx = makeTx({ listItems: jest.fn().mockResolvedValue([ITEM, { ...ITEM, active_id_fk: 121 }]) });
             const { useCases } = makeDeps({ tx });
-            await expect(useCases.finishAudit(15, CURRENT_USER)).rejects.toMatchObject({ statusCode: 409 });
+            await expect(useCases.finishAudit(15, {}, CURRENT_USER)).rejects.toMatchObject({ statusCode: 409 });
             expect(tx.closeAudit).not.toHaveBeenCalled();
             expect(tx.deleteItems).not.toHaveBeenCalled();
         });
@@ -358,13 +388,13 @@ describe('GappActiveAuditUseCases', () => {
         test('auditoria já finalizada → 409', async () => {
             const tx = makeTx({ audit: { audit_id: 15, status_audit: AUDIT_STATUS.FINISHED, initial_data: INITIAL } });
             const { useCases } = makeDeps({ tx });
-            await expect(useCases.finishAudit(15, CURRENT_USER)).rejects.toMatchObject({ statusCode: 409 });
+            await expect(useCases.finishAudit(15, {}, CURRENT_USER)).rejects.toMatchObject({ statusCode: 409 });
         });
 
         test('status mudou no meio (UPDATE não afetou) → 409 e não limpa', async () => {
             const tx = makeTx({ closeAudit: jest.fn().mockResolvedValue({ updated: 0 }) });
             const { useCases } = makeDeps({ tx });
-            await expect(useCases.finishAudit(15, CURRENT_USER)).rejects.toMatchObject({ statusCode: 409 });
+            await expect(useCases.finishAudit(15, {}, CURRENT_USER)).rejects.toMatchObject({ statusCode: 409 });
             expect(tx.deleteItems).not.toHaveBeenCalled();
         });
     });

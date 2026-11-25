@@ -10,8 +10,9 @@
  *   registra onde a auditoria acontece; os ativos são filtrados por
  *   classe/tipo. Com `active_ids` só os escolhidos (da classe/tipo); sem,
  *   todos os ativos do grupo na classe/tipo.
- * - O cadastro original (`gapp_active`) nunca é alterado pela auditoria; a
- *   origem da transferência é lida dele.
+ * - O cadastro original (`gapp_active`) só é alterado na finalização e se
+ *   quem finaliza escolher (`apply_corrections`): `used_in` dos transferidos
+ *   e `status_active = 0` dos descartados. A origem da transferência é lida dele.
  * - Depois da abertura, toda escrita roda em `repository.runLocked`
  *   (transação + `FOR UPDATE` na auditoria).
  * - Finalização/cancelamento: grava `final_data`, relê e confere contra a
@@ -27,7 +28,7 @@ const {
     lockedStatusMessage, validateAuditScope, validateTransferDestination,
     isSameDepartment, toSnapshotAsset,
     normalizeRegistration, findDuplicateIdentifiers,
-    buildReview, buildFinalData, buildCanceledData, verifyFinalData, itemsFromFinalData,
+    buildReview, buildCorrections, buildFinalData, buildCanceledData, verifyFinalData, itemsFromFinalData,
 } = require('../../../domain/gapp/active-audit/active-audit.rules');
 const { normalizeOpenAudit, scopeNameError, isOverdue, dateKey } = require('../../../domain/gapp/active-audit/audit-opening.rules');
 
@@ -89,6 +90,16 @@ function assertAutoSelection(rows) {
             code: 'GAPP_AUDIT_TOO_MANY_ACTIVES',
         });
     }
+}
+
+/** Identificador repetido dentro da auditoria impede a finalização. */
+function assertNoDuplicates(items) {
+    const duplicates = findDuplicateIdentifiers(items);
+    if (!duplicates.length) return;
+    throw new AppError('Há identificadores repetidos entre ativos desta auditoria. Corrija antes de finalizar.', 409, {
+        code: 'GAPP_AUDIT_IDENTIFIER_DUPLICATED',
+        details: { duplicates },
+    });
 }
 
 const isClosed = status => [AUDIT_STATUS.FINISHED, AUDIT_STATUS.CANCELED].includes(Number(status));
@@ -380,29 +391,26 @@ class GappActiveAuditUseCases {
      * Consolida as conferências em `final_data`, fecha a auditoria e limpa a
      * temporária (transacional). Pendentes e conflitos com auditorias
      * anteriores entram como divergência; identificador repetido dentro da
-     * auditoria impede a finalização.
+     * auditoria impede a finalização. Com `apply_corrections: true`, corrige
+     * o cadastro dos ativos na MESMA transação e registra em `final_data.corrections`.
+     * @param {{ apply_corrections?: boolean }} data
      */
-    async finishAudit(auditId, currentUser) {
+    async finishAudit(auditId, data, currentUser) {
         const gappUser = await this._resolveGappUser(currentUser);
         const audit = await this._getScopedAudit(auditId, gappUser);
+        const apply = data?.apply_corrections === true;
 
         await this.repository.runLocked(audit.audit_id, async tx => {
             if (!tx.audit) throw new AppError('Auditoria não encontrada.', 404);
             this._assertEditable(tx.audit.status_audit);
-
             const items = await tx.listItems();
-
-            const duplicates = findDuplicateIdentifiers(items);
-            if (duplicates.length) {
-                throw new AppError('Há identificadores repetidos entre ativos desta auditoria. Corrija antes de finalizar.', 409, {
-                    code: 'GAPP_AUDIT_IDENTIFIER_DUPLICATED',
-                    details: { duplicates },
-                });
-            }
+            assertNoDuplicates(items);
 
             const history = await tx.findIdentifierHistory(identifierPairs(items));
             const finalData = buildFinalData(audit.audit_id, tx.audit.initial_data, items, history);
-
+            finalData.corrections = apply
+                ? { applied: true, ...await tx.applyCorrections({ ...buildCorrections(items), workGroupFk: gappUser.work_group_fk }) }
+                : { applied: false };
             await this._closeAndClear(tx, { finalData, userId: currentUser.id, status: AUDIT_STATUS.FINISHED, items });
         });
 

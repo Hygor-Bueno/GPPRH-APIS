@@ -73,6 +73,9 @@ class ActiveAuditRepositoryPort {
      * insertItem, updateItem, updateStatus, listItems, findIdentifierHistory,
      * closeAudit, getFinalData (relê final_data), deleteItems (limpa a temporária)
      * e updateInitialData (inclui ativo não previsto; atualiza quantity_active).
+     * `applyCorrections({ transfers, discarded, workGroupFk })` altera o cadastro
+     * (`used_in` dos transferidos cuja origem não mudou; `status_active = 0` dos
+     * descartados) e devolve `{ moved, skipped, deactivated }` (ids).
      *
      * @template T
      * @param {number} auditId

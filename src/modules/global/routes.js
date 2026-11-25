@@ -121,6 +121,7 @@ const {
     registerActiveAuditItemSchema,
     updateActiveAuditItemSchema,
     cancelActiveAuditSchema,
+    finishActiveAuditSchema,
     identifyActiveAuditQuerySchema,
     addActiveAuditAssetSchema,
     listActiveAuditQuerySchema
@@ -2977,12 +2978,16 @@ router.put('/gapp/active-audit/:id/items/:activeId',
 /**
  * @route PATCH /gapp/active-audit/:id/finish
  * @description Consolida as conferências em final_data, confere o gravado, finaliza e
- * limpa a tabela temporária (tudo numa transação).
+ * limpa a tabela temporária (tudo numa transação). Body: { apply_corrections? } — true
+ * corrige o cadastro na mesma transação: used_in dos transferidos (só se o cadastro
+ * ainda estiver na origem) e status_active = 0 dos descartados; o resultado fica em
+ * final_data.corrections ({ applied, moved, skipped, deactivated }).
  * @access Requer `GAPP_FINISH_ACTIVE_AUDIT`
  */
 router.patch('/gapp/active-audit/:id/finish',
     authMiddleware,
     canAll(['GAPP_FINISH_ACTIVE_AUDIT']),
+    validate(finishActiveAuditSchema),
     asyncHandler(gappActiveAuditController.finishAudit));
 
 /**

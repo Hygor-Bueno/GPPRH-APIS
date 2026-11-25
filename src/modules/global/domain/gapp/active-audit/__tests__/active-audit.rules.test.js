@@ -1,7 +1,7 @@
 const {
     AUDIT_STATUS, lockedStatusMessage, normalizeActiveIds, validateAuditScope,
     validateTransferDestination, isSameDepartment, normalizeRegistration,
-    findDuplicateIdentifiers, findIdentifierConflicts, buildReview, buildFinalData, buildCanceledData,
+    findDuplicateIdentifiers, findIdentifierConflicts, buildReview, buildCorrections, buildFinalData, buildCanceledData,
     verifyFinalData, itemsFromFinalData,
 } = require('../active-audit.rules');
 
@@ -170,6 +170,19 @@ describe('active-audit.rules', () => {
         const review = buildReview(initial, [item(300)]);
         expect(review).toMatchObject({ quantity_expected: 3, quantity_unexpected: 1, quantity_pending: 3 });
         expect(review.divergences).toContainEqual(expect.objectContaining({ type: 'UNEXPECTED', active_id: 300 }));
+    });
+
+    test('correções: transferido vai para o setor de destino; descartado fica inativo', () => {
+        const items = [
+            item(120, { lifecycle_status: 'DISCARDED' }),
+            item(121, { is_transfer: 1, transfer_reason: 'x', transfer_origin_dep_id_fk: null, transfer_dep_id_fk: 40, transfer_dep_name: 'TI' }),
+            item(122),
+        ];
+        expect(buildCorrections(items)).toEqual({
+            transfers: [{ active_id: 121, from_dep_id: null, from_dep_path: null, to_dep_id: 40, to_dep_path: 'TI' }],
+            discarded: [{ active_id: 120 }],
+        });
+        expect(buildReview(INITIAL, items).corrections.discarded).toHaveLength(1);
     });
 
     test('revisão conta o ciclo de vida', () => {
